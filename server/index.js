@@ -4,6 +4,12 @@ const path = require('path');
 const bodyParser = require('body-parser');
 const cors = require('cors');
 const app = express();
+// Serve the built frontend (after "npm run build")
+const distDir = path.join(__dirname, '..', 'dist');
+if (fs.existsSync(distDir)) {
+  app.use(express.static(distDir));
+}
+
 app.use(cors());
 app.use(bodyParser.json());
 
@@ -44,4 +50,11 @@ app.post('/api/checkout', async (req, res) => {
 });
 
 const port = process.env.PORT || 3000;
+// SPA fallback: send index.html for any unknown route
+app.get('*', (req, res) => {
+  const indexFile = path.join(distDir, 'index.html');
+  if (fs.existsSync(indexFile)) return res.sendFile(indexFile);
+  res.status(200).send('Build not found. Run "npm run build" during deploy.');
+});
+
 app.listen(port, ()=> console.log('API server running on', port));
