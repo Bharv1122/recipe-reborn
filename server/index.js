@@ -1,20 +1,17 @@
-
 import express from "express";
 import path from "path";
 import { fileURLToPath } from "url";
 
-// Resolve __dirname in ES modules
+// Fix __dirname in ES modules
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 const app = express();
 const PORT = process.env.PORT || 8080;
 
-// Absolute path to your built Vite app
-const distDir = path.join(__dirname, "..", "dist");
-
-// Serve static files from the dist folder
-app.use(express.static(distDir, {
+// Serve files from the built "dist" folder
+const distPath = path.join(__dirname, "..", "dist");
+app.use(express.static(distPath, {
   setHeaders: (res, filePath) => {
     if (filePath.endsWith(".js")) {
       res.setHeader("Content-Type", "application/javascript");
@@ -22,12 +19,13 @@ app.use(express.static(distDir, {
   }
 }));
 
-// SPA fallback: always return index.html
+// Handle all routes by sending back index.html
 app.get("*", (_req, res) => {
-  res.sendFile(path.join(distDir, "index.html"));
+  res.sendFile(path.join(distPath, "index.html"));
 });
 
-// Start the server
+// Start server
 app.listen(PORT, () => {
-  console.log(`✅ Server listening on port ${PORT}`);
+  console.log(`🚀 Server running on port ${PORT}`);
 });
+
