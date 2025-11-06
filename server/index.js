@@ -10,7 +10,7 @@ const app  = express();
 const PORT = process.env.PORT || 8080;
 
 // absolute path to your built app
-const distDir = path.join(__dirname, "..", "dist");
+const distDir = path.join(__dirname, "..");
 
 // serve static files from /dist, and make sure .js gets the right MIME type
 app.use(express.static(distDir, {
