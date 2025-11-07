@@ -4,26 +4,27 @@ import { fileURLToPath } from "url";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
+
 const app = express();
 const PORT = process.env.PORT || 8080;
 
-const distPath = path.join(__dirname, "..", "dist");
-
+// Set correct MIME types
 app.use(
-  express.static(distPath, {
-    setHeaders: (res, filePath) => {
+  express.static(path.join(__dirname, "..", "dist"), {
+    setHeaders(res, filePath) {
       if (filePath.endsWith(".js")) {
         res.setHeader("Content-Type", "application/javascript");
-      } else if (filePath.endsWith(".css")) {
+      }
+      if (filePath.endsWith(".css")) {
         res.setHeader("Content-Type", "text/css");
       }
     },
   })
 );
 
-// SPA fallback
+// Fallback for React Router
 app.get("*", (_req, res) => {
-  res.sendFile(path.join(distPath, "index.html"));
+  res.sendFile(path.join(__dirname, "..", "dist", "index.html"));
 });
 
 app.listen(PORT, () => {
