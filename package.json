@@ -3,11 +3,13 @@
   "version": "1.0.0",
   "private": true,
   "type": "module",
-  "scripts": {
-    "dev": "vite",
-    "start": "node server/index.js"
-    "build": "vite build",
-  },
+ "scripts": {
+  "start": "node server/index.js",
+  "build": "vite build",
+  "dev": "vite",
+  "preview": "vite preview"
+},
+
   "engines": {
     "node": ">=18 <23"
   },
