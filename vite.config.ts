@@ -3,8 +3,8 @@ import react from "@vitejs/plugin-react";
 
 export default defineConfig({
   plugins: [react()],
-  base: "/", // ensures correct asset paths in production
+  base: "./", // ✅ important: relative asset paths for production
   build: {
-    outDir: "dist", // output folder
+    outDir: "dist", // output folder for build
   },
 });
