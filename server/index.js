@@ -8,17 +8,11 @@ const __dirname = path.dirname(__filename);
 const app = express();
 const PORT = process.env.PORT || 8080;
 
-// Serve built static files from dist
+// ✅ Serve static files from the dist folder
 const distPath = path.join(__dirname, "..", "dist");
-app.use(express.static(distPath, {
-  setHeaders: (res, filePath) => {
-    if (filePath.endsWith(".js")) {
-      res.setHeader("Content-Type", "application/javascript");
-    }
-  }
-}));
+app.use(express.static(distPath));
 
-// Handle all routes (SPA fallback)
+// ✅ Send index.html on all other routes (for React Router)
 app.get("*", (_req, res) => {
   res.sendFile(path.join(distPath, "index.html"));
 });
