@@ -4,19 +4,29 @@ import { fileURLToPath } from "url";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
-
 const app = express();
 const PORT = process.env.PORT || 8080;
 
-// ✅ Serve static files from the dist folder
+// Serve static assets from dist with correct MIME types
 const distPath = path.join(__dirname, "..", "dist");
-app.use(express.static(distPath));
+app.use(
+  express.static(distPath, {
+    setHeaders: (res, filePath) => {
+      if (filePath.endsWith(".js")) {
+        res.setHeader("Content-Type", "application/javascript");
+      } else if (filePath.endsWith(".css")) {
+        res.setHeader("Content-Type", "text/css");
+      }
+    },
+  })
+);
 
-// ✅ Send index.html on all other routes (for React Router)
+// SPA fallback: always return index.html
 app.get("*", (_req, res) => {
   res.sendFile(path.join(distPath, "index.html"));
 });
 
 app.listen(PORT, () => {
-  console.log(`🚀 Server running on port ${PORT}`);
+  console.log(`Server running at http://localhost:${PORT}`);
 });
+
