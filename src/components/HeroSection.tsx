@@ -1,7 +1,7 @@
 "use client";
 
 import React from "react";
-import HeroLogo from "./HeroLogo";
+import Image from "next/image";
 import Link from "next/link";
 
 export default function HeroSection() {
@@ -16,7 +16,14 @@ export default function HeroSection() {
       <div className="text-center space-y-8 max-w-4xl mx-auto">
         {/* Logo with food, utensils, chef hat, and text positioned underneath */}
         <div className="flex flex-col items-center">
-          <HeroLogo className="w-80 h-auto md:w-96 lg:w-[450px] drop-shadow-2xl" />
+          <Image
+            src="/logo.png"
+            alt="Recipe Reborn Logo"
+            width={450}
+            height={450}
+            className="w-80 h-auto md:w-96 lg:w-[450px] drop-shadow-2xl"
+            priority
+          />
         </div>
 
         {/* Tagline */}
