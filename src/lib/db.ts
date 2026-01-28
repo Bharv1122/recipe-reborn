@@ -1,9 +1,5 @@
-import fs from 'fs';
-import path from 'path';
 import bcrypt from 'bcryptjs';
-
-const DATA_DIR = path.join(process.cwd(), 'data');
-const USERS_FILE = path.join(DATA_DIR, 'users.json');
+import { Redis } from '@upstash/redis';
 
 export interface User {
   id: string;
@@ -13,28 +9,61 @@ export interface User {
   createdAt: string;
 }
 
-function ensureDataDir() {
-  if (!fs.existsSync(DATA_DIR)) {
-    fs.mkdirSync(DATA_DIR, { recursive: true });
+// Initialize Redis client only if environment variables are set
+let redis: Redis | null = null;
+
+function getRedis(): Redis | null {
+  if (redis) return redis;
+  
+  const url = process.env.UPSTASH_REDIS_REST_URL || process.env.KV_REST_API_URL;
+  const token = process.env.UPSTASH_REDIS_REST_TOKEN || process.env.KV_REST_API_TOKEN;
+  
+  if (url && token) {
+    redis = new Redis({ url, token });
+    return redis;
   }
-  if (!fs.existsSync(USERS_FILE)) {
-    fs.writeFileSync(USERS_FILE, JSON.stringify([]));
-  }
+  
+  return null;
 }
 
-function getUsers(): User[] {
-  ensureDataDir();
-  const data = fs.readFileSync(USERS_FILE, 'utf-8');
-  return JSON.parse(data);
+// In-memory fallback for development/testing when Redis is not configured
+const inMemoryUsers: Map<string, User> = new Map();
+
+async function getUsers(): Promise<User[]> {
+  const client = getRedis();
+  
+  if (client) {
+    try {
+      const users = await client.get<User[]>('users');
+      return users || [];
+    } catch (error) {
+      console.error('Redis get error:', error);
+      return [];
+    }
+  }
+  
+  // Fallback to in-memory
+  return Array.from(inMemoryUsers.values());
 }
 
-function saveUsers(users: User[]) {
-  ensureDataDir();
-  fs.writeFileSync(USERS_FILE, JSON.stringify(users, null, 2));
+async function saveUsers(users: User[]): Promise<void> {
+  const client = getRedis();
+  
+  if (client) {
+    try {
+      await client.set('users', users);
+    } catch (error) {
+      console.error('Redis set error:', error);
+    }
+  }
+  
+  // Also update in-memory for fallback
+  inMemoryUsers.clear();
+  users.forEach(u => inMemoryUsers.set(u.email.toLowerCase(), u));
 }
 
 export async function createUser(email: string, password: string, name: string): Promise<User | null> {
-  const users = getUsers();
+  const users = await getUsers();
   
   // Check if user already exists
   if (users.find(u => u.email.toLowerCase() === email.toLowerCase())) {
@@ -53,13 +82,13 @@ export async function createUser(email: string, password: string, name: string):
   };
   
   users.push(newUser);
-  saveUsers(users);
+  await saveUsers(users);
   
   return newUser;
 }
 
 export async function verifyUser(email: string, password: string): Promise<User | null> {
-  const users = getUsers();
+  const users = await getUsers();
   const user = users.find(u => u.email.toLowerCase() === email.toLowerCase());
   
   if (!user) {
@@ -75,6 +104,6 @@ export async function verifyUser(email: string, password: string): Promise<User 
 }
 
 export function getUserByEmail(email: string): User | null {
-  const users = getUsers();
-  return users.find(u => u.email.toLowerCase() === email.toLowerCase()) || null;
+  // Note: This is synchronous and only works with in-memory data
+  return inMemoryUsers.get(email.toLowerCase()) || null;
 }
