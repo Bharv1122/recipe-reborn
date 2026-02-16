@@ -16,6 +16,7 @@ export default function Header() {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
   const [menuOpen, setMenuOpen] = useState(false);
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   useEffect(() => {
     async function checkAuth() {
@@ -39,11 +40,23 @@ export default function Header() {
       await fetch("/api/auth/logout", { method: "POST" });
       setUser(null);
       setMenuOpen(false);
+      router.push("/");
       router.refresh();
     } catch (error) {
       console.error("Logout failed:", error);
     }
   };
+
+  const navLinks = user
+    ? [
+        { href: "/recipe-generator", label: "Recipe Generator" },
+        { href: "/my-recipes", label: "My Recipes" },
+        { href: "/about", label: "About" },
+      ]
+    : [
+        { href: "/features", label: "Features" },
+        { href: "/about", label: "About" },
+      ];
 
   return (
     <header
@@ -54,7 +67,7 @@ export default function Header() {
       }}
     >
       <div className="max-w-7xl mx-auto flex items-center justify-between">
-        {/* Logo on the left */}
+        {/* Logo */}
         <Link href="/" className="flex items-center">
           <Image
             src="/logo.png"
@@ -66,15 +79,43 @@ export default function Header() {
           />
         </Link>
 
-        {/* Auth buttons on the right */}
-        <div className="flex items-center gap-4">
+        {/* Desktop Navigation */}
+        <nav className="hidden md:flex items-center gap-6">
+          {navLinks.map((link) => (
+            <Link
+              key={link.href}
+              href={link.href}
+              className="text-white hover:text-white/80 font-medium transition-colors"
+            >
+              {link.label}
+            </Link>
+          ))}
+        </nav>
+
+        {/* Mobile Menu Button */}
+        <button
+          onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+          className="md:hidden text-white p-2"
+          aria-label="Toggle menu"
+        >
+          <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            {mobileMenuOpen ? (
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+            ) : (
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
+            )}
+          </svg>
+        </button>
+
+        {/* Auth buttons */}
+        <div className="hidden md:flex items-center gap-4">
           {loading ? (
             <div className="w-24 h-8 bg-white/20 rounded animate-pulse" />
           ) : user ? (
             <div className="relative">
               <button
                 onClick={() => setMenuOpen(!menuOpen)}
-                className="flex items-center gap-2 text-white hover:text-white/80 font-medium text-base md:text-lg transition-colors"
+                className="flex items-center gap-2 text-white hover:text-white/80 font-medium transition-colors"
               >
                 <span className="hidden sm:block">{user.name}</span>
                 <div className="w-9 h-9 bg-white rounded-full flex items-center justify-center text-emerald-700 font-semibold">
@@ -88,6 +129,20 @@ export default function Header() {
                     <p className="text-sm font-medium text-gray-900">{user.name}</p>
                     <p className="text-xs text-gray-500">{user.email}</p>
                   </div>
+                  <Link
+                    href="/dashboard"
+                    className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 transition-colors"
+                    onClick={() => setMenuOpen(false)}
+                  >
+                    Dashboard
+                  </Link>
+                  <Link
+                    href="/my-recipes"
+                    className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 transition-colors"
+                    onClick={() => setMenuOpen(false)}
+                  >
+                    My Recipes
+                  </Link>
                   <button
                     onClick={handleLogout}
                     className="w-full text-left px-4 py-2 text-sm text-red-600 hover:bg-red-50 transition-colors"
@@ -100,12 +155,12 @@ export default function Header() {
           ) : (
             <>
               <Link href="/login">
-                <button className="text-white hover:text-white/80 font-medium text-base md:text-lg transition-colors">
+                <button className="text-white hover:text-white/80 font-medium transition-colors">
                   Login
                 </button>
               </Link>
               <Link href="/signup">
-                <button className="bg-white text-emerald-700 hover:bg-emerald-50 font-semibold text-base md:text-lg px-5 py-2 rounded-md shadow-md hover:shadow-lg transition-all">
+                <button className="bg-white text-emerald-700 hover:bg-emerald-50 font-semibold px-5 py-2 rounded-md shadow-md hover:shadow-lg transition-all">
                   Sign Up
                 </button>
               </Link>
@@ -113,6 +168,48 @@ export default function Header() {
           )}
         </div>
       </div>
+
+      {/* Mobile Menu */}
+      {mobileMenuOpen && (
+        <div className="md:hidden mt-4 pb-4 border-t border-white/20 pt-4">
+          <nav className="flex flex-col gap-3">
+            {navLinks.map((link) => (
+              <Link
+                key={link.href}
+                href={link.href}
+                className="text-white hover:text-white/80 font-medium transition-colors"
+                onClick={() => setMobileMenuOpen(false)}
+              >
+                {link.label}
+              </Link>
+            ))}
+          </nav>
+          <div className="mt-4 flex flex-col gap-3">
+            {!loading && !user && (
+              <>
+                <Link href="/login" onClick={() => setMobileMenuOpen(false)}>
+                  <button className="w-full text-white hover:text-white/80 font-medium transition-colors text-left">
+                    Login
+                  </button>
+                </Link>
+                <Link href="/signup" onClick={() => setMobileMenuOpen(false)}>
+                  <button className="w-full bg-white text-emerald-700 hover:bg-emerald-50 font-semibold px-5 py-2 rounded-md shadow-md">
+                    Sign Up
+                  </button>
+                </Link>
+              </>
+            )}
+            {user && (
+              <button
+                onClick={handleLogout}
+                className="text-white/80 hover:text-white font-medium transition-colors text-left"
+              >
+                Sign Out
+              </button>
+            )}
+          </div>
+        </div>
+      )}
     </header>
   );
 }
