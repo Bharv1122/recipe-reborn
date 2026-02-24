@@ -14,34 +14,64 @@ interface User {
 interface DashboardStats {
   totalRecipes: number;
   recipesThisWeek: number;
-  favoritesCuisine: string;
+  favoriteCuisine: string;
+}
+
+interface RecentRecipe {
+  id: string;
+  title: string;
+  createdAt: string;
 }
 
 export default function Dashboard() {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
-  const [stats] = useState<DashboardStats>({
-    totalRecipes: 12,
-    recipesThisWeek: 3,
-    favoritesCuisine: "Mediterranean"
+  const [stats, setStats] = useState<DashboardStats>({
+    totalRecipes: 0,
+    recipesThisWeek: 0,
+    favoriteCuisine: "None yet"
   });
+  const [recentRecipes, setRecentRecipes] = useState<RecentRecipe[]>([]);
 
   useEffect(() => {
-    const checkAuth = async () => {
+    const loadDashboard = async () => {
       try {
-        const response = await fetch("/api/auth/me");
-        if (response.ok) {
-          const data = await response.json();
-          setUser(data.user);
+        // Check auth
+        const authResponse = await fetch("/api/auth/me");
+        if (authResponse.ok) {
+          const authData = await authResponse.json();
+          setUser(authData.user);
+          
+          // Load stats
+          const statsResponse = await fetch("/api/recipes/stats");
+          if (statsResponse.ok) {
+            const statsData = await statsResponse.json();
+            setStats(statsData.stats);
+            setRecentRecipes(statsData.recentRecipes || []);
+          }
         }
       } catch (error) {
-        console.error("Auth check failed:", error);
+        console.error("Dashboard load failed:", error);
       } finally {
         setLoading(false);
       }
     };
-    checkAuth();
+    loadDashboard();
   }, []);
+
+  const formatTimeAgo = (dateString: string) => {
+    const date = new Date(dateString);
+    const now = new Date();
+    const diffMs = now.getTime() - date.getTime();
+    const diffHours = Math.floor(diffMs / (1000 * 60 * 60));
+    const diffDays = Math.floor(diffHours / 24);
+    
+    if (diffHours < 1) return "Just now";
+    if (diffHours < 24) return `${diffHours} hour${diffHours > 1 ? 's' : ''} ago`;
+    if (diffDays === 1) return "Yesterday";
+    if (diffDays < 7) return `${diffDays} days ago`;
+    return date.toLocaleDateString();
+  };
 
   if (loading) {
     return (
@@ -121,7 +151,7 @@ export default function Dashboard() {
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-sm text-gray-500 mb-1">Favorite Cuisine</p>
-                  <p className="text-xl font-bold text-gray-900">{stats.favoritesCuisine}</p>
+                  <p className="text-xl font-bold text-gray-900">{stats.favoriteCuisine}</p>
                 </div>
                 <div className="w-12 h-12 bg-amber-100 rounded-lg flex items-center justify-center">
                   <svg className="w-6 h-6 text-amber-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -175,39 +205,32 @@ export default function Dashboard() {
           <div className="bg-white rounded-xl shadow-md p-6">
             <h2 className="text-xl font-semibold text-gray-900 mb-4">Recent Activity</h2>
             <div className="space-y-4">
-              <div className="flex items-center gap-4 p-3 bg-gray-50 rounded-lg">
-                <div className="w-10 h-10 bg-emerald-100 rounded-full flex items-center justify-center">
-                  <svg className="w-5 h-5 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
-                  </svg>
+              {recentRecipes.length > 0 ? (
+                recentRecipes.map((recipe) => (
+                  <Link key={recipe.id} href={`/recipe/${recipe.id}`} className="block">
+                    <div className="flex items-center gap-4 p-3 bg-gray-50 hover:bg-gray-100 rounded-lg transition-colors">
+                      <div className="w-10 h-10 bg-emerald-100 rounded-full flex items-center justify-center">
+                        <svg className="w-5 h-5 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z" />
+                        </svg>
+                      </div>
+                      <div className="flex-1">
+                        <p className="font-medium text-gray-900">Saved recipe</p>
+                        <p className="text-sm text-gray-500">{recipe.title} - {formatTimeAgo(recipe.createdAt)}</p>
+                      </div>
+                    </div>
+                  </Link>
+                ))
+              ) : (
+                <div className="text-center py-8">
+                  <p className="text-gray-500 mb-4">No recipes saved yet</p>
+                  <Link href="/recipe-generator">
+                    <button className="bg-emerald-600 hover:bg-emerald-700 text-white font-semibold py-2 px-4 rounded-lg transition-colors">
+                      Generate Your First Recipe
+                    </button>
+                  </Link>
                 </div>
-                <div className="flex-1">
-                  <p className="font-medium text-gray-900">Generated new recipe</p>
-                  <p className="text-sm text-gray-500">Mediterranean Quinoa Bowl - 2 hours ago</p>
-                </div>
-              </div>
-              <div className="flex items-center gap-4 p-3 bg-gray-50 rounded-lg">
-                <div className="w-10 h-10 bg-blue-100 rounded-full flex items-center justify-center">
-                  <svg className="w-5 h-5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z" />
-                  </svg>
-                </div>
-                <div className="flex-1">
-                  <p className="font-medium text-gray-900">Saved recipe</p>
-                  <p className="text-sm text-gray-500">Asian Stir-Fry Chicken - Yesterday</p>
-                </div>
-              </div>
-              <div className="flex items-center gap-4 p-3 bg-gray-50 rounded-lg">
-                <div className="w-10 h-10 bg-purple-100 rounded-full flex items-center justify-center">
-                  <svg className="w-5 h-5 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
-                  </svg>
-                </div>
-                <div className="flex-1">
-                  <p className="font-medium text-gray-900">Account created</p>
-                  <p className="text-sm text-gray-500">Welcome to Recipe Reborn!</p>
-                </div>
-              </div>
+              )}
             </div>
           </div>
         </div>

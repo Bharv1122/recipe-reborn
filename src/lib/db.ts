@@ -107,3 +107,133 @@ export function getUserByEmail(email: string): User | null {
   // Note: This is synchronous and only works with in-memory data
   return inMemoryUsers.get(email.toLowerCase()) || null;
 }
+
+// ==================== RECIPE STORAGE ====================
+
+export interface Recipe {
+  id: string;
+  userId: string;
+  title: string;
+  description: string;
+  ingredients: string[];
+  instructions: string[];
+  cookTime: string;
+  servings: number;
+  nutritionInfo: {
+    calories: string;
+    protein: string;
+    carbs: string;
+    fat: string;
+  };
+  tags: string[];
+  createdAt: string;
+}
+
+// In-memory fallback for recipes
+const inMemoryRecipes: Map<string, Recipe> = new Map();
+
+async function getRecipes(): Promise<Recipe[]> {
+  const client = getRedis();
+  
+  if (client) {
+    try {
+      const recipes = await client.get<Recipe[]>('recipes');
+      return recipes || [];
+    } catch (error) {
+      console.error('Redis get recipes error:', error);
+      return [];
+    }
+  }
+  
+  return Array.from(inMemoryRecipes.values());
+}
+
+async function saveRecipes(recipes: Recipe[]): Promise<void> {
+  const client = getRedis();
+  
+  if (client) {
+    try {
+      await client.set('recipes', recipes);
+    } catch (error) {
+      console.error('Redis set recipes error:', error);
+    }
+  }
+  
+  // Also update in-memory
+  inMemoryRecipes.clear();
+  recipes.forEach(r => inMemoryRecipes.set(r.id, r));
+}
+
+export async function createRecipe(userId: string, recipeData: Omit<Recipe, 'id' | 'userId' | 'createdAt'>): Promise<Recipe> {
+  const recipes = await getRecipes();
+  
+  const newRecipe: Recipe = {
+    ...recipeData,
+    id: crypto.randomUUID(),
+    userId,
+    createdAt: new Date().toISOString(),
+  };
+  
+  recipes.push(newRecipe);
+  await saveRecipes(recipes);
+  
+  return newRecipe;
+}
+
+export async function getRecipesByUserId(userId: string): Promise<Recipe[]> {
+  const recipes = await getRecipes();
+  return recipes.filter(r => r.userId === userId).sort((a, b) => 
+    new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+  );
+}
+
+export async function getRecipeById(recipeId: string): Promise<Recipe | null> {
+  const recipes = await getRecipes();
+  return recipes.find(r => r.id === recipeId) || null;
+}
+
+export async function deleteRecipe(recipeId: string, userId: string): Promise<boolean> {
+  const recipes = await getRecipes();
+  const recipeIndex = recipes.findIndex(r => r.id === recipeId && r.userId === userId);
+  
+  if (recipeIndex === -1) {
+    return false;
+  }
+  
+  recipes.splice(recipeIndex, 1);
+  await saveRecipes(recipes);
+  
+  return true;
+}
+
+export async function getUserRecipeStats(userId: string): Promise<{
+  totalRecipes: number;
+  recipesThisWeek: number;
+  favoriteCuisine: string;
+}> {
+  const recipes = await getRecipesByUserId(userId);
+  
+  const oneWeekAgo = new Date();
+  oneWeekAgo.setDate(oneWeekAgo.getDate() - 7);
+  
+  const recipesThisWeek = recipes.filter(r => 
+    new Date(r.createdAt) >= oneWeekAgo
+  ).length;
+  
+  // Find most common cuisine from tags
+  const cuisineCounts: Record<string, number> = {};
+  recipes.forEach(r => {
+    r.tags.forEach(tag => {
+      cuisineCounts[tag] = (cuisineCounts[tag] || 0) + 1;
+    });
+  });
+  
+  const favoriteCuisine = Object.entries(cuisineCounts)
+    .sort((a, b) => b[1] - a[1])[0]?.[0] || 'None yet';
+  
+  return {
+    totalRecipes: recipes.length,
+    recipesThisWeek,
+    favoriteCuisine,
+  };
+}

@@ -15,34 +15,6 @@ interface SavedRecipe {
   tags: string[];
 }
 
-// Mock data for demonstration
-const mockRecipes: SavedRecipe[] = [
-  {
-    id: "1",
-    title: "Mediterranean Quinoa Bowl",
-    description: "A healthy and delicious quinoa bowl with fresh vegetables and feta cheese.",
-    cookTime: "30 min",
-    createdAt: "2026-02-14",
-    tags: ["Vegetarian", "Mediterranean"]
-  },
-  {
-    id: "2",
-    title: "Asian Stir-Fry Chicken",
-    description: "Quick and easy stir-fry with tender chicken and crisp vegetables.",
-    cookTime: "25 min",
-    createdAt: "2026-02-12",
-    tags: ["High-Protein", "Asian"]
-  },
-  {
-    id: "3",
-    title: "Vegan Buddha Bowl",
-    description: "Nutritious plant-based bowl packed with grains, legumes, and vegetables.",
-    cookTime: "35 min",
-    createdAt: "2026-02-10",
-    tags: ["Vegan", "Gluten-Free"]
-  }
-];
-
 export default function MyRecipes() {
   const router = useRouter();
   const [recipes, setRecipes] = useState<SavedRecipe[]>([]);
@@ -50,20 +22,26 @@ export default function MyRecipes() {
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedTag, setSelectedTag] = useState("");
   const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [deleteLoading, setDeleteLoading] = useState<string | null>(null);
 
   useEffect(() => {
     const checkAuthAndLoadRecipes = async () => {
       try {
-        const response = await fetch("/api/auth/me");
-        if (response.ok) {
+        const authResponse = await fetch("/api/auth/me");
+        if (authResponse.ok) {
           setIsAuthenticated(true);
-          // In production, fetch user's saved recipes from API
-          setRecipes(mockRecipes);
+          
+          // Fetch user's recipes from API
+          const recipesResponse = await fetch("/api/recipes");
+          if (recipesResponse.ok) {
+            const data = await recipesResponse.json();
+            setRecipes(data.recipes || []);
+          }
         } else {
           setIsAuthenticated(false);
         }
       } catch (error) {
-        console.error("Auth check failed:", error);
+        console.error("Failed to load recipes:", error);
         setIsAuthenticated(false);
       } finally {
         setLoading(false);
@@ -72,18 +50,47 @@ export default function MyRecipes() {
     checkAuthAndLoadRecipes();
   }, []);
 
-  const allTags = [...new Set(recipes.flatMap(r => r.tags))];
+  const allTags = [...new Set(recipes.flatMap(r => r.tags || []))];
 
   const filteredRecipes = recipes.filter(recipe => {
     const matchesSearch = recipe.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
                           recipe.description.toLowerCase().includes(searchQuery.toLowerCase());
-    const matchesTag = !selectedTag || recipe.tags.includes(selectedTag);
+    const matchesTag = !selectedTag || (recipe.tags || []).includes(selectedTag);
     return matchesSearch && matchesTag;
   });
 
-  const handleDelete = (id: string) => {
-    if (confirm("Are you sure you want to delete this recipe?")) {
-      setRecipes(recipes.filter(r => r.id !== id));
+  const handleDelete = async (id: string) => {
+    if (!confirm("Are you sure you want to delete this recipe?")) return;
+    
+    setDeleteLoading(id);
+    try {
+      const response = await fetch(`/api/recipes/${id}`, {
+        method: "DELETE",
+      });
+      
+      if (response.ok) {
+        setRecipes(recipes.filter(r => r.id !== id));
+      } else {
+        const data = await response.json();
+        alert(data.error || "Failed to delete recipe");
+      }
+    } catch (error) {
+      console.error("Delete error:", error);
+      alert("Failed to delete recipe");
+    } finally {
+      setDeleteLoading(null);
+    }
+  };
+
+  const handleView = (id: string) => {
+    router.push(`/recipe/${id}`);
+  };
+
+  const formatDate = (dateString: string) => {
+    try {
+      return new Date(dateString).toLocaleDateString();
+    } catch {
+      return dateString;
     }
   };
 
@@ -181,7 +188,7 @@ export default function MyRecipes() {
                     <p className="text-gray-600 text-sm mb-4 line-clamp-2">{recipe.description}</p>
                     
                     <div className="flex flex-wrap gap-2 mb-4">
-                      {recipe.tags.map(tag => (
+                      {(recipe.tags || []).map(tag => (
                         <span key={tag} className="bg-emerald-100 text-emerald-700 text-xs px-2 py-1 rounded-full">
                           {tag}
                         </span>
@@ -190,20 +197,31 @@ export default function MyRecipes() {
                     
                     <div className="flex items-center justify-between text-sm text-gray-500 mb-4">
                       <span>⏱️ {recipe.cookTime}</span>
-                      <span>{recipe.createdAt}</span>
+                      <span>{formatDate(recipe.createdAt)}</span>
                     </div>
                     
                     <div className="flex gap-2">
-                      <button className="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white font-medium py-2 px-4 rounded-lg transition-colors">
+                      <button
+                        onClick={() => handleView(recipe.id)}
+                        className="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white font-medium py-2 px-4 rounded-lg transition-colors"
+                      >
                         View
                       </button>
                       <button
                         onClick={() => handleDelete(recipe.id)}
-                        className="bg-red-100 hover:bg-red-200 text-red-600 font-medium py-2 px-4 rounded-lg transition-colors"
+                        disabled={deleteLoading === recipe.id}
+                        className="bg-red-100 hover:bg-red-200 text-red-600 font-medium py-2 px-4 rounded-lg transition-colors disabled:opacity-50"
                       >
-                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                        </svg>
+                        {deleteLoading === recipe.id ? (
+                          <svg className="animate-spin w-5 h-5" viewBox="0 0 24 24">
+                            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
+                            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                          </svg>
+                        ) : (
+                          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                          </svg>
+                        )}
                       </button>
                     </div>
                   </div>
@@ -212,7 +230,9 @@ export default function MyRecipes() {
             </div>
           ) : (
             <div className="text-center py-12">
-              <p className="text-gray-500 mb-4">No recipes found</p>
+              <p className="text-gray-500 mb-4">
+                {recipes.length === 0 ? "No recipes saved yet" : "No recipes found matching your search"}
+              </p>
               <Link href="/recipe-generator">
                 <button className="bg-emerald-600 hover:bg-emerald-700 text-white font-semibold py-3 px-6 rounded-lg transition-colors">
                   Generate Your First Recipe

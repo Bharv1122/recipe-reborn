@@ -1,8 +1,10 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { useRouter } from "next/navigation";
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
+import Link from "next/link";
 
 interface Recipe {
   title: string;
@@ -17,21 +19,44 @@ interface Recipe {
     carbs: string;
     fat: string;
   };
+  tags: string[];
 }
 
 export default function RecipeGenerator() {
+  const router = useRouter();
   const [ingredients, setIngredients] = useState("");
   const [dietaryPreference, setDietaryPreference] = useState("");
   const [cuisineType, setCuisineType] = useState("");
   const [loading, setLoading] = useState(false);
+  const [saving, setSaving] = useState(false);
   const [recipe, setRecipe] = useState<Recipe | null>(null);
+  const [isAuthenticated, setIsAuthenticated] = useState<boolean | null>(null);
+  const [saveMessage, setSaveMessage] = useState<{type: 'success' | 'error', text: string} | null>(null);
+
+  useEffect(() => {
+    const checkAuth = async () => {
+      try {
+        const response = await fetch("/api/auth/me");
+        setIsAuthenticated(response.ok);
+      } catch {
+        setIsAuthenticated(false);
+      }
+    };
+    checkAuth();
+  }, []);
 
   const handleGenerate = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
+    setSaveMessage(null);
     
     // Simulate AI generation (in production, this would call your AI API)
     await new Promise(resolve => setTimeout(resolve, 2000));
+    
+    // Build tags from selections
+    const tags: string[] = [];
+    if (dietaryPreference) tags.push(dietaryPreference);
+    if (cuisineType) tags.push(cuisineType);
     
     // Mock recipe response
     const mockRecipe: Recipe = {
@@ -52,17 +77,76 @@ export default function RecipeGenerator() {
         protein: "18g",
         carbs: "35g",
         fat: "12g"
-      }
+      },
+      tags
     };
     
     setRecipe(mockRecipe);
     setLoading(false);
   };
 
-  const handleSaveRecipe = () => {
-    // In production, this would save to the user's account
-    alert("Recipe saved to your collection!");
+  const handleSaveRecipe = async () => {
+    if (!recipe) return;
+    
+    setSaving(true);
+    setSaveMessage(null);
+    
+    try {
+      const response = await fetch("/api/recipes/save", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(recipe),
+      });
+      
+      const data = await response.json();
+      
+      if (response.ok) {
+        setSaveMessage({ type: 'success', text: 'Recipe saved successfully!' });
+      } else {
+        setSaveMessage({ type: 'error', text: data.error || 'Failed to save recipe' });
+      }
+    } catch {
+      setSaveMessage({ type: 'error', text: 'Network error. Please try again.' });
+    } finally {
+      setSaving(false);
+    }
   };
+
+  // Show loading while checking auth
+  if (isAuthenticated === null) {
+    return (
+      <main className="min-h-screen flex flex-col bg-gray-50">
+        <Header />
+        <div className="flex-1 pt-24 pb-12 px-4 flex items-center justify-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-emerald-600"></div>
+        </div>
+        <Footer />
+      </main>
+    );
+  }
+
+  // Require authentication
+  if (!isAuthenticated) {
+    return (
+      <main className="min-h-screen flex flex-col bg-gray-50">
+        <Header />
+        <div className="flex-1 pt-24 pb-12 px-4 flex items-center justify-center">
+          <div className="text-center">
+            <h1 className="text-2xl font-bold text-gray-900 mb-4">Sign In Required</h1>
+            <p className="text-gray-600 mb-6">Please sign in to use the AI Recipe Generator.</p>
+            <Link href="/login">
+              <button className="bg-emerald-600 hover:bg-emerald-700 text-white font-semibold py-3 px-6 rounded-lg transition-colors">
+                Sign In
+              </button>
+            </Link>
+          </div>
+        </div>
+        <Footer />
+      </main>
+    );
+  }
 
   return (
     <main className="min-h-screen flex flex-col bg-gray-50">
@@ -164,18 +248,41 @@ export default function RecipeGenerator() {
                 </div>
                 <button
                   onClick={handleSaveRecipe}
-                  className="bg-emerald-100 hover:bg-emerald-200 text-emerald-700 font-medium px-4 py-2 rounded-lg transition-colors flex items-center gap-2"
+                  disabled={saving}
+                  className="bg-emerald-100 hover:bg-emerald-200 text-emerald-700 font-medium px-4 py-2 rounded-lg transition-colors flex items-center gap-2 disabled:opacity-50"
                 >
-                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z" />
-                  </svg>
+                  {saving ? (
+                    <svg className="animate-spin h-5 w-5" viewBox="0 0 24 24">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                    </svg>
+                  ) : (
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z" />
+                    </svg>
+                  )}
                   Save
                 </button>
               </div>
+              
+              {/* Save Message */}
+              {saveMessage && (
+                <div className={`mb-4 p-3 rounded-lg ${saveMessage.type === 'success' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
+                  {saveMessage.text}
+                  {saveMessage.type === 'success' && (
+                    <Link href="/my-recipes" className="ml-2 underline">
+                      View My Recipes
+                    </Link>
+                  )}
+                </div>
+              )}
 
               <div className="flex flex-wrap gap-4 mb-6 text-sm">
                 <span className="bg-gray-100 px-3 py-1 rounded-full">⏱️ {recipe.cookTime}</span>
                 <span className="bg-gray-100 px-3 py-1 rounded-full">👥 {recipe.servings} servings</span>
+                {recipe.tags.map(tag => (
+                  <span key={tag} className="bg-emerald-100 text-emerald-700 px-3 py-1 rounded-full">{tag}</span>
+                ))}
               </div>
 
               {/* Nutrition Info */}
