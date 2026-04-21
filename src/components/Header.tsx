@@ -22,12 +22,19 @@ export default function Header() {
     async function checkAuth() {
       try {
         const response = await fetch("/api/auth/me");
-        if (response.ok) {
-          const data = await response.json();
+        if (!response.ok) {
+          throw new Error("Failed to check auth state");
+        }
+
+        const data = await response.json();
+        if (data?.authenticated && data?.user) {
           setUser(data.user);
+        } else {
+          setUser(null);
         }
       } catch (error) {
         console.error("Auth check failed:", error);
+        setUser(null);
       } finally {
         setLoading(false);
       }
@@ -160,7 +167,7 @@ export default function Header() {
                 </button>
               </Link>
               <Link href="/signup">
-                <button className="bg-white text-emerald-700 hover:bg-emerald-50 font-semibold px-5 py-2 rounded-md shadow-md hover:shadow-lg transition-all">
+                <button className="bg-emerald-600 text-white border border-emerald-700 hover:bg-emerald-700 font-semibold px-5 py-2 rounded-md shadow-md hover:shadow-lg transition-all">
                   Sign Up
                 </button>
               </Link>
@@ -193,7 +200,7 @@ export default function Header() {
                   </button>
                 </Link>
                 <Link href="/signup" onClick={() => setMobileMenuOpen(false)}>
-                  <button className="w-full bg-white text-emerald-700 hover:bg-emerald-50 font-semibold px-5 py-2 rounded-md shadow-md">
+                  <button className="w-full bg-emerald-600 text-white border border-emerald-700 hover:bg-emerald-700 font-semibold px-5 py-2 rounded-md shadow-md">
                     Sign Up
                   </button>
                 </Link>

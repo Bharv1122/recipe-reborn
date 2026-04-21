@@ -117,7 +117,7 @@ export default function Features() {
             </p>
             <div className="flex flex-col sm:flex-row gap-4 justify-center">
               <Link href="/signup">
-                <button className="bg-white text-emerald-700 hover:bg-emerald-50 font-bold px-8 py-3 rounded-lg transition-colors">
+                <button className="bg-orange-500 text-white border border-orange-600 hover:bg-orange-600 font-bold px-8 py-3 rounded-lg transition-colors shadow-md">
                   Get Started Free
                 </button>
               </Link>

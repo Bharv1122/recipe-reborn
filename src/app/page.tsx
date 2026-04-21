@@ -37,9 +37,9 @@ export default function Home() {
 
           {/* CTA Buttons */}
           <div className="flex flex-col sm:flex-row gap-4 justify-center items-center pt-4">
-            <Link href="/recipe-generator">
-              <button className="bg-white text-emerald-700 hover:bg-emerald-50 font-bold text-lg px-8 py-4 rounded-lg shadow-lg hover:shadow-xl transition-all">
-                Start Generating Recipes
+            <Link href="/signup">
+              <button className="bg-emerald-600 text-white border-2 border-emerald-700 hover:bg-emerald-700 font-bold text-lg px-8 py-4 rounded-lg shadow-lg hover:shadow-xl transition-all">
+                Get Started Free
               </button>
             </Link>
             <Link href="/features">

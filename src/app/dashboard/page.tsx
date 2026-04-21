@@ -38,17 +38,25 @@ export default function Dashboard() {
       try {
         // Check auth
         const authResponse = await fetch("/api/auth/me");
-        if (authResponse.ok) {
-          const authData = await authResponse.json();
-          setUser(authData.user);
-          
-          // Load stats
-          const statsResponse = await fetch("/api/recipes/stats");
-          if (statsResponse.ok) {
-            const statsData = await statsResponse.json();
-            setStats(statsData.stats);
-            setRecentRecipes(statsData.recentRecipes || []);
-          }
+        if (!authResponse.ok) {
+          setUser(null);
+          return;
+        }
+
+        const authData = await authResponse.json();
+        if (!authData?.authenticated || !authData?.user) {
+          setUser(null);
+          return;
+        }
+
+        setUser(authData.user);
+
+        // Load stats
+        const statsResponse = await fetch("/api/recipes/stats");
+        if (statsResponse.ok) {
+          const statsData = await statsResponse.json();
+          setStats(statsData.stats);
+          setRecentRecipes(statsData.recentRecipes || []);
         }
       } catch (error) {
         console.error("Dashboard load failed:", error);

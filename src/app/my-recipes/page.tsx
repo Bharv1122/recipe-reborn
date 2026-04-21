@@ -28,17 +28,24 @@ export default function MyRecipes() {
     const checkAuthAndLoadRecipes = async () => {
       try {
         const authResponse = await fetch("/api/auth/me");
-        if (authResponse.ok) {
-          setIsAuthenticated(true);
-          
-          // Fetch user's recipes from API
-          const recipesResponse = await fetch("/api/recipes");
-          if (recipesResponse.ok) {
-            const data = await recipesResponse.json();
-            setRecipes(data.recipes || []);
-          }
-        } else {
+        if (!authResponse.ok) {
           setIsAuthenticated(false);
+          return;
+        }
+
+        const authData = await authResponse.json();
+        const authenticated = Boolean(authData?.authenticated);
+        setIsAuthenticated(authenticated);
+
+        if (!authenticated) {
+          return;
+        }
+
+        // Fetch user's recipes from API
+        const recipesResponse = await fetch("/api/recipes");
+        if (recipesResponse.ok) {
+          const data = await recipesResponse.json();
+          setRecipes(data.recipes || []);
         }
       } catch (error) {
         console.error("Failed to load recipes:", error);

@@ -37,7 +37,13 @@ export default function RecipeGenerator() {
     const checkAuth = async () => {
       try {
         const response = await fetch("/api/auth/me");
-        setIsAuthenticated(response.ok);
+        if (!response.ok) {
+          setIsAuthenticated(false);
+          return;
+        }
+
+        const data = await response.json();
+        setIsAuthenticated(Boolean(data?.authenticated));
       } catch {
         setIsAuthenticated(false);
       }
