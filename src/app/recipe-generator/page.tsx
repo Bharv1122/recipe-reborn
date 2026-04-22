@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
 import Link from "next/link";
+import IngredientImageUpload from "@/components/IngredientImageUpload";
 
 interface Recipe {
   title: string;
@@ -164,12 +165,25 @@ export default function RecipeGenerator() {
             AI Recipe Generator
           </h1>
           <p className="text-gray-600 text-center mb-8">
-            Enter your ingredients and preferences to generate a healthy recipe
+            Upload a photo of an ingredient label — or type ingredients — and we&apos;ll transform it into a fresh, healthy recipe.
           </p>
 
           {/* Input Form */}
           <form onSubmit={handleGenerate} className="bg-white rounded-xl shadow-md p-6 mb-8">
             <div className="space-y-6">
+              {/* Image Upload (OCR) */}
+              <IngredientImageUpload
+                onIngredientsExtracted={(text) => setIngredients(text)}
+              />
+
+              <div className="flex items-center gap-3">
+                <div className="flex-1 h-px bg-gray-200" />
+                <span className="text-xs font-medium text-gray-400 uppercase">
+                  or type ingredients
+                </span>
+                <div className="flex-1 h-px bg-gray-200" />
+              </div>
+
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
                   Ingredients (comma-separated)
@@ -291,7 +305,27 @@ export default function RecipeGenerator() {
                 ))}
               </div>
 
+              {/* Health Improvement Banner */}
+              <div className="bg-gradient-to-r from-emerald-50 to-green-50 border border-emerald-200 rounded-lg p-4 mb-6">
+                <div className="flex items-start gap-3">
+                  <div className="flex-shrink-0 w-10 h-10 bg-emerald-600 rounded-full flex items-center justify-center">
+                    <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+                    </svg>
+                  </div>
+                  <div>
+                    <h4 className="font-semibold text-emerald-900">Your Fresh Upgrade</h4>
+                    <p className="text-sm text-emerald-800 mt-0.5">
+                      This recipe replaces processed ingredients with whole foods — no artificial colors, preservatives, or added sugars. 💚
+                    </p>
+                  </div>
+                </div>
+              </div>
+
               {/* Nutrition Info */}
+              <h3 className="text-sm font-semibold text-gray-700 uppercase tracking-wide mb-3">
+                Nutrition per serving
+              </h3>
               <div className="grid grid-cols-4 gap-4 mb-6">
                 <div className="text-center p-3 bg-emerald-50 rounded-lg">
                   <p className="text-lg font-semibold text-emerald-700">{recipe.nutritionInfo.calories}</p>
