@@ -1,163 +1,130 @@
-# Recipe Reborn 🍳
+# 🌱 Recipe Reborn
 
-Transform processed food ingredients into fresh, healthy recipes with the power of AI.
+> Transform processed food ingredient labels into fresh, healthy homemade recipes with AI.
 
-## 🌟 Features
-
-- **User Authentication**: Secure login and signup with JWT tokens
-- **Cloud Database**: Upstash Redis for reliable data storage
-- **Modern Stack**: Next.js 16, React 19, TypeScript, Tailwind CSS v4
-- **Production Ready**: Optimized for Vercel deployment
-
-## 🚀 Quick Start
-
-### Prerequisites
-
-- Node.js 18+ 
-- npm or yarn
-- Upstash Redis account (free tier available)
-
-### Installation
-
-1. **Clone the repository**
-   ```bash
-   git clone https://github.com/Bharv1122/recipe-reborn.git
-   cd recipe-reborn
-   ```
-
-2. **Install dependencies**
-   ```bash
-   npm install
-   ```
-
-3. **Set up environment variables**
-   ```bash
-   cp .env.example .env.local
-   ```
-   
-   Edit `.env.local` with your credentials:
-   - Get Redis credentials from [Upstash Console](https://console.upstash.com/redis)
-   - Generate a JWT secret: `openssl rand -base64 32`
-
-4. **Run development server**
-   ```bash
-   npm run dev
-   ```
-
-5. **Open in browser**
-   ```
-   http://localhost:3000
-   ```
-
-## 📁 Project Structure
-
-```
-recipe-reborn/
-├── src/
-│   ├── app/                 # Next.js App Router
-│   │   ├── api/auth/        # Authentication API routes
-│   │   ├── login/           # Login page
-│   │   ├── signup/          # Signup page
-│   │   ├── layout.tsx       # Root layout
-│   │   ├── page.tsx         # Home page
-│   │   └── globals.css      # Global styles
-│   ├── components/          # React components
-│   │   ├── Header.tsx       # Navigation header
-│   │   ├── HeroSection.tsx  # Landing hero
-│   │   └── HeroLogo.tsx     # Logo component
-│   └── lib/                 # Utilities
-│       ├── auth.ts          # JWT authentication
-│       └── db.ts            # Database operations
-├── public/                  # Static assets
-│   └── logo.png             # App logo
-├── data/                    # Local data (development)
-│   └── users.json           # Sample users
-├── .env.example             # Environment template
-├── next.config.ts           # Next.js configuration
-├── tsconfig.json            # TypeScript config
-├── tailwind.config.js       # Tailwind CSS config
-└── package.json             # Dependencies
-```
-
-## 🔐 Authentication Flow
-
-1. **Signup**: Creates user with hashed password in Redis
-2. **Login**: Validates credentials, issues JWT token
-3. **Session**: HTTP-only cookie stores JWT (7-day expiry)
-4. **Logout**: Clears authentication cookie
-
-## 🛠️ Tech Stack
-
-| Technology | Version | Purpose |
-|------------|---------|----------|
-| Next.js | 16.1.4 | React framework |
-| React | 19.2.3 | UI library |
-| TypeScript | 5.x | Type safety |
-| Tailwind CSS | 4.x | Styling |
-| Upstash Redis | 1.36.1 | Database |
-| bcryptjs | 3.0.3 | Password hashing |
-| jose | 6.1.3 | JWT handling |
-
-## 🚀 Deployment (Vercel)
-
-1. **Connect to Vercel**
-   - Import your GitHub repository
-   - Framework preset: Next.js
-
-2. **Configure Environment Variables**
-   ```
-   JWT_SECRET=your-production-secret
-   UPSTASH_REDIS_REST_URL=your-redis-url
-   UPSTASH_REDIS_REST_TOKEN=your-redis-token
-   ```
-
-3. **Deploy**
-   - Automatic deployments on every push to main
-
-## 📝 API Routes
-
-| Endpoint | Method | Description |
-|----------|--------|-------------|
-| `/api/auth/signup` | POST | Create new user |
-| `/api/auth/login` | POST | Authenticate user |
-
-### Signup Request
-```json
-{
-  "email": "user@example.com",
-  "password": "password123",
-  "name": "John Doe"
-}
-```
-
-### Login Request
-```json
-{
-  "email": "user@example.com",
-  "password": "password123"
-}
-```
-
-## 🧪 Test Account
-
-For development (when using in-memory storage):
-```
-Email: test@test.com
-Password: (check data/users.json - password is hashed)
-```
-
-## 📄 License
-
-MIT License - see LICENSE file for details.
-
-## 🤝 Contributing
-
-1. Fork the repository
-2. Create feature branch (`git checkout -b feature/amazing`)
-3. Commit changes (`git commit -m 'Add amazing feature'`)
-4. Push to branch (`git push origin feature/amazing`)
-5. Open a Pull Request
+**Live:** [recipereborn.com](https://recipereborn.com)
 
 ---
 
-**Recipe Reborn** - Cook healthier, live better! 🥗
+## ✨ What It Does
+
+Upload a photo of any packaged food's ingredient label, and Recipe Reborn's AI will generate a fresh, nutritious recipe that replaces it — helping you move from processed to whole foods, one meal at a time.
+
+---
+
+## 🛠 Tech Stack
+
+- **Framework:** Next.js 16 (App Router, Turbopack)
+- **Language:** TypeScript 5
+- **UI:** React 19 + Tailwind CSS 4
+- **Database:** Upstash Redis (serverless)
+- **Auth:** JWT (jose) + bcryptjs
+- **Deploy:** Vercel (auto-deploy from `main`)
+
+---
+
+## 🚀 Quick Start (Local Development)
+
+### 1. Clone & Install
+```bash
+git clone https://github.com/Bharv1122/recipe-reborn.git
+cd recipe-reborn
+npm install
+```
+
+### 2. Set Up Environment
+```bash
+cp .env.example .env.local
+```
+
+Then fill in `.env.local`:
+- **`JWT_SECRET`** — run `openssl rand -base64 32` and paste the result
+- **Upstash Redis** — [create a free DB](https://console.upstash.com/redis), copy the REST URL + token
+
+### 3. Run
+```bash
+npm run dev
+```
+
+Open [http://localhost:3000](http://localhost:3000) 🎉
+
+---
+
+## 📜 Available Scripts
+
+| Command | What it does |
+|---------|--------------|
+| `npm run dev` | Start dev server (Turbopack) |
+| `npm run build` | Production build |
+| `npm start` | Run production server |
+| `npm run lint` | Lint code |
+
+---
+
+## 🌐 Deployment (Vercel)
+
+1. Push to GitHub
+2. Import repo at [vercel.com/new](https://vercel.com/new)
+3. Add environment variables in **Project Settings → Environment Variables**:
+   - `JWT_SECRET`
+   - `UPSTASH_REDIS_REST_URL`
+   - `UPSTASH_REDIS_REST_TOKEN`
+   - `NEXT_PUBLIC_GA_MEASUREMENT_ID` (optional)
+4. Deploy — every push to `main` auto-deploys
+
+---
+
+## 🔒 Security Features
+
+- ✅ JWT-based authentication (httpOnly cookies)
+- ✅ Bcrypt password hashing
+- ✅ Rate limiting on auth routes (5 signups / 10 logins per 10 min per IP)
+- ✅ Input validation & sanitization
+- ✅ Security headers (HSTS, X-Frame-Options, etc.)
+- ✅ CSRF-safe via SameSite cookies
+
+---
+
+## 📈 SEO & Analytics
+
+- ✅ Full Open Graph + Twitter Card metadata
+- ✅ Auto-generated `sitemap.xml` and `robots.txt`
+- ✅ Structured data (Schema.org)
+- ✅ Google Analytics 4 (opt-in via env var)
+- ✅ Mobile-friendly + PWA manifest
+
+---
+
+## 📂 Project Structure
+
+```
+src/
+├── app/              # Pages & API routes (App Router)
+│   ├── api/          # Serverless API endpoints
+│   ├── layout.tsx    # Root layout (SEO + GA)
+│   ├── sitemap.ts    # Auto-generated sitemap
+│   └── robots.ts     # Auto-generated robots.txt
+├── components/       # Reusable React components
+├── lib/              # Helpers (auth, db, rate-limit, validation)
+└── middleware.ts     # Security headers
+```
+
+---
+
+## 🤝 Contributing / Development
+
+This project uses **Claude Code CLI** for AI-assisted development.
+See [`CLAUDE.md`](./CLAUDE.md) for project context that Claude auto-reads.
+
+Typical workflow:
+```bash
+claude              # start Claude Code
+/effort xhigh       # use high effort for Opus 4.7
+/ultraplan <task>   # plan complex changes in the cloud
+```
+
+---
+
+## 📝 License
+
+Private project © 2026 Recipe Reborn.
