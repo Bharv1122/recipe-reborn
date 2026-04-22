@@ -1,0 +1,19 @@
+{
+  "name": "Recipe Reborn - AI Recipe Generator",
+  "short_name": "Recipe Reborn",
+  "description": "Transform processed foods into fresh, healthy recipes with AI",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#14AB42",
+  "orientation": "portrait",
+  "icons": [
+    {
+      "src": "/logo.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ],
+  "categories": ["food", "health", "lifestyle"]
+}
