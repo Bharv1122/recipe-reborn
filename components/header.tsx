@@ -4,7 +4,7 @@ import Link from 'next/link';
 import Image from 'next/image';
 import { useSession, signOut } from 'next-auth/react';
 import { Button } from '@/components/ui/button';
-import { ChefHat, LogOut, User, BookOpen, UserCircle, Calendar, ShoppingCart } from 'lucide-react';
+import { LogOut, User, BookOpen, UserCircle, Calendar, ShoppingCart } from 'lucide-react';
 
 export function Header() {
   const { data: session, status } = useSession() || {};
@@ -15,7 +15,7 @@ export function Header() {
         <div className="flex h-16 items-center justify-between">
           {/* Logo */}
           <Link href="/" className="flex items-center space-x-2 group">
-            <ChefHat className="h-8 w-8 text-white group-hover:text-orange-300 transition-all-smooth group-hover:scale-110" />
+            <Image src="/logo-mark.png" alt="Recipe Reborn emblem" width={32} height={32} className="h-8 w-8 rounded-full shadow group-hover:scale-110 transition-all-smooth" />
             <Image
               src="/logo-text-hero.png"
               alt="Recipe Reborn"

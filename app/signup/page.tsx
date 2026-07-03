@@ -1,6 +1,5 @@
 import { SignupForm } from './_components/signup-form';
 import Link from 'next/link';
-import { ChefHat } from 'lucide-react';
 import Image from 'next/image';
 
 export default function SignupPage() {
@@ -9,7 +8,7 @@ export default function SignupPage() {
       <div className="max-w-md w-full space-y-8">
         <div className="text-center">
           <Link href="/" className="inline-flex items-center space-x-2 group">
-            <ChefHat className="h-12 w-12 text-white group-hover:text-orange-300 transition-colors" />
+            <Image src="/logo-mark.png" alt="Recipe Reborn emblem" width={48} height={48} className="h-12 w-12 rounded-full shadow-md group-hover:scale-105 transition-transform" />
             <Image src="/logo-text-hero.png" alt="Recipe Reborn" width={220} height={52} className="h-12 w-auto" />
           </Link>
           <h2 className="mt-6 text-3xl font-extrabold text-white">

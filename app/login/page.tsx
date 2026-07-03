@@ -1,6 +1,5 @@
 import { LoginForm } from './_components/login-form';
 import Link from 'next/link';
-import { ChefHat } from 'lucide-react';
 import Image from 'next/image';
 
 export default function LoginPage() {
@@ -8,11 +7,17 @@ export default function LoginPage() {
     <div className="min-h-screen flex items-center justify-center py-12 px-4 sm:px-6 lg:px-8">
       <div className="max-w-md w-full space-y-8">
         <div className="text-center">
-          <Link href="/" className="inline-flex items-center space-x-2 group">
-            <ChefHat className="h-12 w-12 text-white group-hover:text-orange-300 transition-colors" />
-            <Image src="/logo-text-hero.png" alt="Recipe Reborn" width={220} height={52} className="h-12 w-auto" />
+          <Link href="/" className="inline-block group">
+            <Image
+              src="/logo.png"
+              alt="Recipe Reborn"
+              width={300}
+              height={300}
+              priority
+              className="mx-auto w-56 sm:w-64 h-auto group-hover:scale-[1.02] transition-transform [mask-image:radial-gradient(ellipse_74%_74%_at_50%_48%,black_66%,transparent_97%)]"
+            />
           </Link>
-          <h2 className="mt-6 text-3xl font-extrabold text-white">
+          <h2 className="mt-2 text-3xl font-extrabold text-white">
             Welcome back
           </h2>
           <p className="mt-2 text-sm text-emerald-50/90">

@@ -1,7 +1,7 @@
 import Link from 'next/link';
 import Image from 'next/image';
 import { Button } from '@/components/ui/button';
-import { ChefHat, Sparkles, Heart, Leaf } from 'lucide-react';
+import { Sparkles, Heart, Leaf } from 'lucide-react';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth-options';
 
@@ -171,7 +171,7 @@ export default async function HomePage() {
         <div className="grid grid-cols-1 md:grid-cols-3 gap-8 mb-8">
           <div>
             <div className="flex items-center space-x-2 mb-4">
-              <ChefHat className="h-6 w-6 text-white" />
+              <Image src="/logo-mark.png" alt="" width={24} height={24} className="h-6 w-6 rounded-full" />
               <span className="text-lg font-bold text-white">Recipe Reborn</span>
             </div>
             <p className="text-emerald-50/90 text-sm">

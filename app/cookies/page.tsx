@@ -1,5 +1,5 @@
 import Link from 'next/link';
-import { ChefHat } from 'lucide-react';
+import Image from 'next/image';
 
 export default function CookiesPage() {
   return (
@@ -8,7 +8,7 @@ export default function CookiesPage() {
         {/* Header */}
         <div className="text-center mb-12">
           <div className="inline-flex items-center space-x-3 mb-6">
-            <ChefHat className="h-12 w-12 text-white" />
+            <Image src="/logo-mark.png" alt="Recipe Reborn emblem" width={48} height={48} className="h-12 w-12 rounded-full shadow-md" />
             <h1 className="text-4xl font-bold text-white">Cookie Policy</h1>
           </div>
           <p className="text-emerald-50/90">Last updated: {new Date().toLocaleDateString()}</p>
