@@ -146,12 +146,12 @@ export default function AccountPage() {
       );
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-background to-secondary/20 py-12 px-4">
+    <div className="min-h-screen py-12 px-4">
       <div className="max-w-4xl mx-auto space-y-6">
         {/* Header */}
         <div className="text-center space-y-2">
-          <h1 className="text-4xl font-bold">Account Dashboard</h1>
-          <p className="text-muted-foreground">Manage your subscription and usage</p>
+          <h1 className="text-4xl font-bold text-white">Account Dashboard</h1>
+          <p className="text-emerald-50/90">Manage your subscription and usage</p>
         </div>
 
         {/* Subscription Status Card */}

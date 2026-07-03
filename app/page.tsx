@@ -1,4 +1,5 @@
 import Link from 'next/link';
+import Image from 'next/image';
 import { Button } from '@/components/ui/button';
 import { ChefHat, Sparkles, Heart, Leaf } from 'lucide-react';
 import { getServerSession } from 'next-auth';
@@ -8,17 +9,35 @@ export default async function HomePage() {
   const session = await getServerSession(authOptions);
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-emerald-50 via-white to-orange-50">
+    <div className="min-h-screen">
       {/* Hero Section */}
-      <section className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-20">
+      <section className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
         <div className="text-center space-y-8">
-          <div className="inline-flex items-center space-x-3 mb-6">
-            <ChefHat className="h-16 w-16 text-emerald-600" />
-            <h1 className="text-6xl font-bold bg-gradient-to-r from-emerald-600 to-orange-500 bg-clip-text text-transparent">
-              RecipeReborn
-            </h1>
+          <h1 className="sr-only">Recipe Reborn</h1>
+          {/* Emblem: cropped to the artwork and edge-faded so it melts into the
+              matching page green; the wordmark below is a transparent PNG. */}
+          <div
+            className="mx-auto w-full max-w-md sm:max-w-lg aspect-[4/3] overflow-hidden [mask-image:radial-gradient(ellipse_68%_75%_at_50%_50%,black_52%,transparent_78%)]"
+          >
+            <Image
+              src="/logo.png"
+              alt="Recipe Reborn — fresh vegetables bursting from a chef's hat"
+              width={520}
+              height={520}
+              priority
+              className="w-full h-auto object-cover object-top -translate-y-[2%]"
+            />
           </div>
-          <p className="text-2xl text-gray-700 max-w-3xl mx-auto">
+          <Image
+            src="/logo-text-hero.png"
+            alt=""
+            aria-hidden="true"
+            width={440}
+            height={104}
+            priority
+            className="mx-auto -mt-6 w-full max-w-sm sm:max-w-md h-auto drop-shadow-md"
+          />
+          <p className="text-2xl text-white max-w-3xl mx-auto drop-shadow-sm">
             Transform processed food ingredients into fresh, healthy recipes with the power of AI.
           </p>
           <div className="flex items-center justify-center gap-4 pt-6">
@@ -37,7 +56,7 @@ export default async function HomePage() {
                   </Button>
                 </Link>
                 <Link href="/login">
-                  <Button size="lg" variant="outline" className="text-lg px-8">
+                  <Button size="lg" variant="outline" className="text-lg px-8 bg-transparent border-white text-white hover:bg-white hover:text-emerald-700">
                     Sign In
                   </Button>
                 </Link>
@@ -49,8 +68,8 @@ export default async function HomePage() {
 
       {/* Features Section */}
       <section className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-20">
-        <h2 className="text-3xl font-bold text-center text-gray-900 mb-12">
-          Why Choose RecipeReborn?
+        <h2 className="text-3xl font-bold text-center text-white mb-12 drop-shadow-sm">
+          Why Choose Recipe Reborn?
         </h2>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
           <div className="bg-white p-8 rounded-lg shadow-lg hover:shadow-xl transition-shadow">
@@ -103,7 +122,7 @@ export default async function HomePage() {
       </section>
 
       {/* How It Works Section */}
-      <section className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-20 bg-white">
+      <section className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-16 my-4 bg-white rounded-2xl shadow-2xl">
         <h2 className="text-3xl font-bold text-center text-gray-900 mb-12">
           How It Works
         </h2>
@@ -148,41 +167,41 @@ export default async function HomePage() {
       </section>
 
       {/* Footer */}
-      <footer className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12 border-t">
+      <footer className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12 border-t border-white/20">
         <div className="grid grid-cols-1 md:grid-cols-3 gap-8 mb-8">
           <div>
             <div className="flex items-center space-x-2 mb-4">
-              <ChefHat className="h-6 w-6 text-emerald-600" />
-              <span className="text-lg font-bold text-gray-900">RecipeReborn</span>
+              <ChefHat className="h-6 w-6 text-white" />
+              <span className="text-lg font-bold text-white">Recipe Reborn</span>
             </div>
-            <p className="text-gray-600 text-sm">
+            <p className="text-emerald-50/90 text-sm">
               Transform processed food ingredients into fresh, healthy recipes with the power of AI.
             </p>
           </div>
           <div>
-            <h4 className="font-semibold text-gray-900 mb-4">Quick Links</h4>
-            <ul className="space-y-2 text-sm text-gray-600">
-              <li><Link href="/generator" className="hover:text-emerald-600">Generate Recipe</Link></li>
-              <li><Link href="/recipes" className="hover:text-emerald-600">My Recipes</Link></li>
+            <h4 className="font-semibold text-white mb-4">Quick Links</h4>
+            <ul className="space-y-2 text-sm text-emerald-50/90">
+              <li><Link href="/generator" className="hover:text-orange-300">Generate Recipe</Link></li>
+              <li><Link href="/recipes" className="hover:text-orange-300">My Recipes</Link></li>
               {!session && (
                 <>
-                  <li><Link href="/signup" className="hover:text-emerald-600">Sign Up</Link></li>
-                  <li><Link href="/login" className="hover:text-emerald-600">Sign In</Link></li>
+                  <li><Link href="/signup" className="hover:text-orange-300">Sign Up</Link></li>
+                  <li><Link href="/login" className="hover:text-orange-300">Sign In</Link></li>
                 </>
               )}
             </ul>
           </div>
           <div>
-            <h4 className="font-semibold text-gray-900 mb-4">Legal</h4>
-            <ul className="space-y-2 text-sm text-gray-600">
-              <li><Link href="/terms" className="hover:text-emerald-600">Terms of Service</Link></li>
-              <li><Link href="/privacy" className="hover:text-emerald-600">Privacy Policy</Link></li>
-              <li><Link href="/cookies" className="hover:text-emerald-600">Cookie Policy</Link></li>
+            <h4 className="font-semibold text-white mb-4">Legal</h4>
+            <ul className="space-y-2 text-sm text-emerald-50/90">
+              <li><Link href="/terms" className="hover:text-orange-300">Terms of Service</Link></li>
+              <li><Link href="/privacy" className="hover:text-orange-300">Privacy Policy</Link></li>
+              <li><Link href="/cookies" className="hover:text-orange-300">Cookie Policy</Link></li>
             </ul>
           </div>
         </div>
-        <div className="border-t pt-8 text-center text-gray-600 text-sm">
-          © {new Date().getFullYear()} RecipeReborn. All rights reserved. Transform processed to fresh.
+        <div className="border-t border-white/20 pt-8 text-center text-emerald-50/90 text-sm">
+          © {new Date().getFullYear()} Recipe Reborn. All rights reserved. Transform processed to fresh.
         </div>
       </footer>
     </div>

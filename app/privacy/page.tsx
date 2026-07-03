@@ -3,15 +3,15 @@ import { ChefHat } from 'lucide-react';
 
 export default function PrivacyPage() {
   return (
-    <div className="min-h-screen bg-gradient-to-br from-emerald-50 via-white to-orange-50">
+    <div className="min-h-screen">
       <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
         {/* Header */}
         <div className="text-center mb-12">
           <div className="inline-flex items-center space-x-3 mb-6">
-            <ChefHat className="h-12 w-12 text-emerald-600" />
-            <h1 className="text-4xl font-bold text-gray-900">Privacy Policy</h1>
+            <ChefHat className="h-12 w-12 text-white" />
+            <h1 className="text-4xl font-bold text-white">Privacy Policy</h1>
           </div>
-          <p className="text-gray-600">Last updated: {new Date().toLocaleDateString()}</p>
+          <p className="text-emerald-50/90">Last updated: {new Date().toLocaleDateString()}</p>
         </div>
 
         {/* Content */}

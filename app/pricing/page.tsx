@@ -119,14 +119,14 @@ export default function PricingPage() {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-emerald-50 via-white to-orange-50">
+    <div className="min-h-screen">
       {/* Header */}
       <div className="pt-20 pb-12 px-4">
         <div className="max-w-7xl mx-auto text-center">
-          <h1 className="text-5xl font-bold text-gray-900 mb-4">
+          <h1 className="text-5xl font-bold text-white mb-4">
             Choose Your Plan
           </h1>
-          <p className="text-xl text-gray-600 max-w-2xl mx-auto">
+          <p className="text-xl text-emerald-50/90 max-w-2xl mx-auto">
             Transform processed ingredients into fresh, healthy recipes with AI-powered recipe generation
           </p>
         </div>

@@ -62,10 +62,10 @@ export default function SharedRecipePage() {
 
   if (isLoading) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-emerald-50 via-white to-orange-50 flex items-center justify-center">
+      <div className="min-h-screen flex items-center justify-center">
         <div className="text-center">
           <Loader2 className="h-12 w-12 animate-spin text-emerald-600 mx-auto mb-4" />
-          <p className="text-gray-600">Loading recipe...</p>
+          <p className="text-white">Loading recipe...</p>
         </div>
       </div>
     );
@@ -73,7 +73,7 @@ export default function SharedRecipePage() {
 
   if (error || !recipe) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-emerald-50 via-white to-orange-50 flex items-center justify-center p-4">
+      <div className="min-h-screen flex items-center justify-center p-4">
         <Card className="max-w-md w-full shadow-lg border-0">
           <CardContent className="pt-6 text-center">
             <ChefHat className="h-16 w-16 text-gray-300 mx-auto mb-4" />
@@ -99,12 +99,12 @@ export default function SharedRecipePage() {
   const instructions = JSON.parse(recipe.instructions || '[]');
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-emerald-50 via-white to-orange-50 py-12 px-4">
+    <div className="min-h-screen py-12 px-4">
       <div className="max-w-4xl mx-auto">
         {/* Header */}
         <div className="text-center mb-8">
-          <h1 className="text-4xl font-bold text-gray-900 mb-2">RecipeReborn</h1>
-          <p className="text-gray-600">Shared Recipe</p>
+          <h1 className="text-4xl font-bold text-white mb-2">Recipe Reborn</h1>
+          <p className="text-emerald-50/90">Shared Recipe</p>
         </div>
 
         {/* Recipe Card */}

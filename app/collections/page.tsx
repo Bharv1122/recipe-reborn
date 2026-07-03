@@ -183,16 +183,16 @@ export default function CollectionsPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-background to-secondary/20 py-12 px-4">
+    <div className="min-h-screen py-12 px-4">
       <div className="max-w-6xl mx-auto space-y-6">
         {/* Header */}
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-4xl font-bold flex items-center gap-3">
+            <h1 className="text-4xl font-bold text-white flex items-center gap-3">
               <BookOpen className="h-10 w-10" />
               My Collections
             </h1>
-            <p className="text-muted-foreground mt-2">
+            <p className="text-emerald-50/90 mt-2">
               Organize your recipes into collections and share them as cookbooks
             </p>
           </div>

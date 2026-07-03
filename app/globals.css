@@ -2,6 +2,20 @@
 @tailwind components;
 @tailwind utilities;
 
+/* Brand background — matches the Recipe Reborn logo's green radial gradient
+   (#14AB42 bright center-top fading to #054E36 at the edges) so the logo
+   artwork blends seamlessly into every page. */
+body {
+  background: radial-gradient(
+      ellipse 120% 90% at 50% 0%,
+      #14ab42 0%,
+      #0b8540 40%,
+      #076b3b 70%,
+      #054e36 100%
+    )
+    fixed;
+}
+
 /* Custom Animations */
 @keyframes fadeIn {
   from {
