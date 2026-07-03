@@ -1,0 +1,245 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+    provider = "prisma-client-js"
+    binaryTargets = ["native", "rhel-openssl-3.0.x"]
+}
+
+datasource db {
+    provider  = "postgresql"
+    url       = env("DATABASE_URL")
+    directUrl = env("DIRECT_URL")
+}
+
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String? @db.Text
+  access_token      String? @db.Text
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String? @db.Text
+  session_state     String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model User {
+  id            String    @id @default(cuid())
+  name          String?
+  email         String?   @unique
+  emailVerified DateTime?
+  password      String?
+  image         String?
+  createdAt     DateTime  @default(now())
+  
+  // Subscription fields
+  subscriptionTier   String   @default("free") // "free", "premium", "pro"
+  subscriptionStatus String   @default("active") // "active", "canceled", "past_due"
+  stripeCustomerId   String?  @unique
+  stripeSubscriptionId String? @unique
+  currentPeriodEnd   DateTime?
+  generationCount    Int      @default(0)
+  lastGenerationReset DateTime @default(now())
+  
+  accounts      Account[]
+  sessions      Session[]
+  recipes       Recipe[]
+  folders       Folder[]
+  collections   Collection[]
+  mealPlans     MealPlan[]
+  shoppingLists ShoppingList[]
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+}
+
+model Folder {
+  id        String   @id @default(cuid())
+  userId    String
+  name      String
+  color     String?  @default("#3b82f6")
+  order     Int      @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user    User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  recipes Recipe[]
+
+  @@index([userId])
+  @@index([order])
+}
+
+model Recipe {
+  id                  String   @id @default(cuid())
+  userId              String
+  folderId            String?
+  title               String
+  originalIngredients String   @db.Text
+  freshIngredients    String   @db.Text
+  instructions        String   @db.Text
+  dietaryTags         String[] @default([])
+  prepTime            String?
+  cookTime            String?
+  servings            String?
+  rating              Int?     @default(0)
+  notes               String?  @db.Text
+  
+  // Sharing fields
+  isPublic            Boolean  @default(false)
+  shareToken          String?  @unique
+  viewCount           Int      @default(0)
+  
+  // Wine pairing
+  winePairing         String?  @db.Text // JSON string
+  
+  // Nutrition (per serving)
+  calories            Int?
+  protein             Float?   // grams
+  carbs               Float?   // grams
+  fat                 Float?   // grams
+  fiber               Float?   // grams
+  sodium              Int?     // mg
+  
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+  
+  user   User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  folder Folder? @relation(fields: [folderId], references: [id], onDelete: SetNull)
+  
+  @@index([userId])
+  @@index([folderId])
+  @@index([shareToken])
+  @@index([isPublic])
+  
+  collectionRecipes CollectionRecipe[]
+  mealPlanRecipes   MealPlanRecipe[]
+}
+
+model Collection {
+  id          String   @id @default(cuid())
+  userId      String
+  name        String
+  description String?  @db.Text
+  
+  // Sharing fields
+  isPublic    Boolean  @default(false)
+  shareToken  String?  @unique
+  viewCount   Int      @default(0)
+  
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  
+  user              User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  collectionRecipes CollectionRecipe[]
+  
+  @@index([userId])
+  @@index([shareToken])
+  @@index([isPublic])
+}
+
+model CollectionRecipe {
+  id           String   @id @default(cuid())
+  collectionId String
+  recipeId     String
+  order        Int      @default(0)
+  addedAt      DateTime @default(now())
+  
+  collection Collection @relation(fields: [collectionId], references: [id], onDelete: Cascade)
+  recipe     Recipe     @relation(fields: [recipeId], references: [id], onDelete: Cascade)
+  
+  @@unique([collectionId, recipeId])
+  @@index([collectionId])
+  @@index([recipeId])
+  @@index([order])
+}
+
+model MealPlan {
+  id            String   @id @default(cuid())
+  userId        String
+  name          String
+  weekStartDate DateTime // Start of the week for this meal plan
+  description   String?  @db.Text
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  
+  user            User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  mealPlanRecipes MealPlanRecipe[]
+  
+  @@index([userId])
+  @@index([weekStartDate])
+}
+
+model MealPlanRecipe {
+  id         String   @id @default(cuid())
+  mealPlanId String
+  recipeId   String
+  day        String   // "monday", "tuesday", etc.
+  mealType   String   // "breakfast", "lunch", "dinner", "snack"
+  servings   Int      @default(1) // Number of servings for this meal
+  order      Int      @default(0)
+  notes      String?  @db.Text
+  addedAt    DateTime @default(now())
+  
+  mealPlan MealPlan @relation(fields: [mealPlanId], references: [id], onDelete: Cascade)
+  recipe   Recipe   @relation(fields: [recipeId], references: [id], onDelete: Cascade)
+  
+  @@index([mealPlanId])
+  @@index([recipeId])
+  @@index([day])
+  @@index([mealType])
+}
+
+model ShoppingList {
+  id        String   @id @default(cuid())
+  userId    String
+  name      String
+  notes     String?  @db.Text
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  
+  user  User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  items ShoppingListItem[]
+  
+  @@index([userId])
+}
+
+model ShoppingListItem {
+  id             String  @id @default(cuid())
+  shoppingListId String
+  ingredient     String
+  quantity       String? // e.g., "2", "1/2", "3-4"
+  unit           String? // e.g., "cups", "tbsp", "lbs"
+  category       String? // e.g., "Produce", "Dairy", "Meat"
+  checked        Boolean @default(false)
+  recipeId       String? // Track which recipe this came from
+  recipeTitle    String? // Store recipe title for reference
+  notes          String? @db.Text
+  order          Int     @default(0)
+  
+  shoppingList ShoppingList @relation(fields: [shoppingListId], references: [id], onDelete: Cascade)
+  
+  @@index([shoppingListId])
+  @@index([category])
+  @@index([checked])
+}

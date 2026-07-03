@@ -1,167 +1,70 @@
 # CLAUDE.md — Recipe Reborn Project Context
 
-> This file is auto-read by Claude Code CLI at session start.
-> Front-loading context here saves tokens and improves output quality (Opus 4.7 best practice).
+> Auto-read by Claude Code at session start.
 
 ---
 
 ## 🎯 Project Overview
 
-**Recipe Reborn** is an AI app that transforms processed food ingredient labels into fresh, healthy homemade recipes.
+**Recipe Reborn** transforms processed food ingredient labels into fresh, healthy homemade recipes. Photograph a label (or paste ingredients / import a URL) → AI generates a whole-food recipe that replaces the packaged product.
 
-**Unique Value Proposition:** Users upload a photo of a packaged food's ingredient label → AI generates a fresh, nutritious recipe that replaces it.
-
-**Live URL:** https://recipereborn.com  
-**GitHub:** Bharv1122/recipe-reborn  
+**Live URL:** https://recipereborn.com
+**GitHub:** Bharv1122/recipe-reborn
 **Owner:** Beth (bethharvey11@gmail.com)
 
----
-
-## 🛠 Tech Stack
-
-- **Framework:** Next.js 16.1.4 (App Router, Turbopack)
-- **Language:** TypeScript 5 (strict mode)
-- **UI:** React 19.2.3 + Tailwind CSS 4
-- **Database:** Upstash Redis (serverless key-value)
-- **Auth:** JWT via `jose` + bcryptjs
-- **Deployment:** Vercel (auto-deploy from `main`)
-- **Analytics:** Google Analytics 4 (via env var)
-- **Package manager:** npm
-
-**Do NOT switch to:** yarn, pnpm, bun, or any other framework.
+**History:** Originally built on Abacus.AI (full-featured, formerly live with Stripe). Restored 2026-07-03 from the Dec 2025 handoff archive onto this repo (branch `restore-full-app`), modernized to Gemini + Supabase + Vercel. The interim "rebuild" (Next 16 + Redis + JWT) was replaced wholesale — do not consult old commits for architecture.
 
 ---
 
-## 📁 Project Structure
+## 🛠 Tech Stack (current — do not "upgrade" without asking Beth)
+
+- **Framework:** Next.js 14.2 (App Router) + React 18 + TypeScript
+- **DB:** Supabase Postgres via **Prisma** (project ref: `sdcvpykbizbsoekuafcf`, us-east-1)
+  - App uses transaction pooler (port 6543, `?pgbouncer=true&connection_limit=1`)
+  - Migrations use `DIRECT_URL` (session pooler, port 5432)
+- **Auth:** NextAuth v4 (credentials + Prisma adapter, JWT sessions)
+- **AI:** Gemini via OpenAI-compatible endpoint — ALL AI calls go through constants in `lib/ai.ts` (`MODEL_SMART`/`MODEL_FAST`). Never hardcode provider URLs in routes.
+- **Payments:** Stripe (products/prices already exist; free tier = 3 recipes/month)
+- **UI:** Tailwind + shadcn/ui (45+ components in `components/ui/`)
+- **Deploy:** Vercel (auto-deploy from `main`; domain attached)
+- **Package manager:** npm (install with `--legacy-peer-deps` — eslint 9 vs @typescript-eslint 7 conflict; build skips lint)
+
+## 📁 Key Structure
 
 ```
-src/
-├── app/                    # Next.js App Router pages
-│   ├── api/                # API routes (serverless functions)
-│   │   ├── auth/           # login, signup, logout, me
-│   │   └── recipes/        # CRUD for recipes
-│   ├── layout.tsx          # Root layout (SEO, GA, metadata)
-│   ├── sitemap.ts          # Auto-generated sitemap
-│   ├── robots.ts           # Auto-generated robots.txt
-│   └── [routes]/page.tsx   # Individual pages
-├── components/             # Shared React components
-├── lib/                    # Utilities (rate-limit, validation)
-└── middleware.ts           # Security headers
+app/                  # pages: generator, recipes, meal-planner, shopping-lists,
+                      # collections, pricing, account, share/[shareToken], legal
+app/api/              # ~40 routes; AI routes import from lib/ai.ts
+lib/ai.ts             # Gemini endpoint + model constants (single source of truth)
+lib/stripe.ts         # Stripe client + PRICING_PLANS
+lib/auth-options.ts   # NextAuth config
+prisma/schema.prisma  # 12 models; binaryTargets includes rhel-openssl-3.0.x for Vercel
 ```
 
----
+## ✅ Standards
 
-## 🎨 Design System
+1. TypeScript strict; `npm run build` must pass before pushing (build runs `prisma generate` first)
+2. Server components by default; `"use client"` only when needed
+3. All AI routes: import `AI_CHAT_URL`, `AI_API_KEY`, model constants from `@/lib/ai`
+4. Free-tier generation limits are enforced in `generate-recipe` and `import-recipe` routes — keep limit text and `TIER_LIMITS` in sync with `lib/stripe.ts` and pricing/account pages
+5. Never commit `.env` (gitignored); secrets live in Vercel env vars
 
-**Brand Color:** Emerald green
-- Primary: `#14AB42` (hero gradient top)
-- Dark: `#054E3A` (hero gradient bottom)
-- Accent: `emerald-600` / `emerald-700` (Tailwind)
+## 🚫 Gotchas
 
-**CTA Button Style:**
-```tsx
-className="bg-emerald-600 text-white border-2 border-emerald-700 hover:bg-emerald-700 font-bold text-lg px-8 py-4 rounded-lg shadow-lg hover:shadow-xl transition-all"
-```
+- `prisma migrate dev` hanging = pooled URL being used; migrations need `DIRECT_URL`
+- Windows: close dev server before `prisma generate` (EPERM on client DLL)
+- Stripe SDK pins `apiVersion: '2026-02-25.clover'` — update both `lib/stripe.ts` and `app/api/webhooks/stripe/route.ts` together if bumping the SDK
+- `app/api/transcribe-audio` is a 501 stub pending Phase 3a (Gemini audio / browser SpeechRecognition)
+- Supabase RLS: `postgres` role (Prisma) has `bypassrls` — enabling RLS on tables does not affect the app
 
-**NEVER** use white text on white backgrounds (this was the original bug — now fixed).
+## 🎯 Roadmap
 
----
+Phase 2 (relaunch): SEO/security graft from old `main`, Stripe re-wiring (3-recipe free tier, yearly price in webhook mapping, `allow_promotion_codes`), Vercel deploy.
+Phase 3: voice (browser SpeechRecognition + Gemini audio), barcode scan (OpenFoodFacts), USDA nutrition, "you saved $X" cost compare, Instacart shopping-list handoff.
+Full plan: `C:\Users\bethh\.claude\plans\ok-so-i-would-zesty-dewdrop.md`
 
-## ✅ Coding Standards
+## 🤝 Working With Beth
 
-1. **TypeScript strict** — no `any` unless justified in a comment
-2. **Server components by default** — only use `"use client"` when needed (hooks, events)
-3. **Tailwind classes** — no inline styles except for dynamic values (gradients)
-4. **Positive examples** over negative rules (Opus 4.7 prefers this)
-5. **Validate all API inputs** using `src/lib/validation.ts`
-6. **Rate-limit all public API routes** using `src/lib/rate-limit.ts`
-7. **No `console.log`** in production code — use proper error handling
-
----
-
-## 🎯 Current Priorities (Week 2)
-
-Ranked by impact:
-
-1. **🔴 HIGH: Image upload + OCR** — Users should upload a photo of an ingredient label and the AI extracts text. This is the CORE differentiator. Use:
-   - `next/image` for display
-   - Tesseract.js (free, runs in browser) or OpenAI Vision API
-   - Store uploads in Vercel Blob or Upstash
-
-2. **🟡 MEDIUM: Nutrition comparison view** — Show before/after nutritional breakdown side-by-side
-
-3. **🟡 MEDIUM: Recipe search/filter** on `/my-recipes` page
-
-4. **🟢 LOW: Shopping list generator** from saved recipes
-
----
-
-## 🚫 Known Issues / Gotchas
-
-- `JWT_SECRET` in `.env.example` is a placeholder — production uses Vercel env vars
-- Upstash free tier = 10k requests/day (watch usage when scaling)
-- Turbopack is enabled by default — don't revert to Webpack
-- Next.js 16 requires React 19 — don't downgrade
-
----
-
-## 🔁 Common Workflows
-
-### Adding a new page
-```bash
-# In Claude:
-/effort xhigh
-Create a new page at src/app/[name]/page.tsx with:
-- Proper SEO metadata export
-- Matches existing emerald design system
-- Mobile-responsive
-- Server component if possible
-```
-
-### Adding a new API route
-```bash
-# Always include:
-1. Rate limiting (import from @/lib/rate-limit)
-2. Input validation (import from @/lib/validation)
-3. Try/catch with proper status codes
-4. TypeScript types for request/response
-```
-
-### Before pushing to main
-```bash
-npm run build  # Must pass with zero errors
-npm run lint   # Must pass
-```
-
----
-
-## 🔐 Environment Variables
-
-Required (set in Vercel):
-```
-JWT_SECRET                        # openssl rand -base64 32
-UPSTASH_REDIS_REST_URL
-UPSTASH_REDIS_REST_TOKEN
-```
-
-Optional:
-```
-NEXT_PUBLIC_GA_MEASUREMENT_ID     # Google Analytics (G-XXXXXXXXXX)
-NEXT_PUBLIC_GOOGLE_SITE_VERIFICATION
-```
-
----
-
-## 🤝 Working With Me (Claude)
-
-When Beth (the owner) asks for help:
-
-- **She's new to coding** — explain the "why" briefly, not just the "what"
-- **Keep changes scoped** — don't refactor unrelated code
-- **Always run `npm run build` mentally** before claiming work is done
-- **Commit messages** should be clear and reference the feature (e.g., `feat: add image upload to recipe generator`)
-- **Use Plan mode first** (`Shift+Tab` twice) for any multi-file change
-
----
-
-*Last updated: April 21, 2026 by Abacus AI Agent*
+- She's new to coding — explain the "why" briefly, not just the "what"
+- Keep changes scoped; don't refactor unrelated code
+- Clear commit messages referencing the feature
