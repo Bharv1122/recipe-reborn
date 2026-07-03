@@ -142,7 +142,17 @@ export async function POST(req: Request) {
     }>();
 
     for (const recipe of recipes) {
-      const ingredients = recipe.freshIngredients.split('\n');
+      // freshIngredients is stored as a JSON-stringified array; older rows
+      // may be plain newline-separated text, so fall back to splitting.
+      let ingredients: string[];
+      try {
+        const parsed = JSON.parse(recipe.freshIngredients);
+        ingredients = Array.isArray(parsed)
+          ? parsed.map(String)
+          : recipe.freshIngredients.split('\n');
+      } catch {
+        ingredients = recipe.freshIngredients.split('\n');
+      }
       
       for (const ingredientLine of ingredients) {
         if (!ingredientLine.trim()) continue;
