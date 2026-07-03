@@ -11,11 +11,13 @@ import toast from 'react-hot-toast';
 interface PricingTier {
   name: string;
   price: string;
+  interval?: string;
   priceId: string | null;
   description: string;
   features: string[];
   icon: React.ReactNode;
   popular?: boolean;
+  badge?: string;
   buttonText: string;
 }
 
@@ -26,9 +28,9 @@ const pricingTiers: PricingTier[] = [
     priceId: null,
     description: 'Perfect for trying out RecipeReborn',
     features: [
-      '5 recipe generations per month',
+      '3 recipe generations per month',
       'Basic dietary customizations',
-      'Save up to 10 recipes',
+      'Save up to 20 recipes',
       'Search and filter recipes',
       'Personal notes and ratings',
     ],
@@ -38,6 +40,7 @@ const pricingTiers: PricingTier[] = [
   {
     name: 'Premium',
     price: '$9.99',
+    interval: 'month',
     priceId: process.env.NEXT_PUBLIC_STRIPE_PREMIUM_PRICE_ID || '',
     description: 'For home cooks who love healthy recipes',
     features: [
@@ -55,21 +58,23 @@ const pricingTiers: PricingTier[] = [
     buttonText: 'Start Premium',
   },
   {
-    name: 'Pro',
-    price: '$19.99',
-    priceId: process.env.NEXT_PUBLIC_STRIPE_PRO_PRICE_ID || '',
-    description: 'For professionals and food enthusiasts',
+    name: 'Premium Yearly',
+    price: '$99',
+    interval: 'year',
+    priceId: process.env.NEXT_PUBLIC_STRIPE_YEARLY_PRICE_ID || '',
+    description: 'Everything in Premium — pay once, save all year',
     features: [
       'Everything in Premium',
-      'Priority AI processing',
-      'Advanced wine pairing',
-      'Detailed nutrition analysis',
-      'Recipe analytics & insights',
-      'Priority support',
-      'Early access to new features',
+      'Unlimited recipe generations',
+      'All dietary customizations',
+      'Unlimited recipe storage',
+      'Wine pairing suggestions',
+      'Import recipes from URLs',
+      'Billed once per year',
     ],
     icon: <Zap className="h-6 w-6" />,
-    buttonText: 'Go Pro',
+    badge: 'Save 17%',
+    buttonText: 'Start Premium Yearly',
   },
 ];
 
@@ -141,6 +146,8 @@ export default function PricingPage() {
               className={`relative shadow-xl border-2 transition-all hover:shadow-2xl ${
                 tier.popular
                   ? 'border-emerald-500 transform scale-105'
+                  : tier.badge
+                  ? 'border-orange-500'
                   : 'border-gray-200'
               }`}
             >
@@ -151,7 +158,14 @@ export default function PricingPage() {
                   </span>
                 </div>
               )}
-              
+              {tier.badge && (
+                <div className="absolute -top-4 left-1/2 transform -translate-x-1/2">
+                  <span className="bg-orange-500 text-white px-4 py-1 rounded-full text-sm font-semibold">
+                    {tier.badge}
+                  </span>
+                </div>
+              )}
+
               <CardHeader className="text-center pb-4">
                 <div className="inline-flex items-center justify-center w-12 h-12 rounded-full bg-gradient-to-r from-emerald-500 to-orange-500 text-white mb-4 mx-auto">
                   {tier.icon}
@@ -163,8 +177,8 @@ export default function PricingPage() {
                   <span className="text-5xl font-bold text-gray-900">
                     {tier.price}
                   </span>
-                  {tier.price !== '$0' && (
-                    <span className="text-gray-600 ml-2">/month</span>
+                  {tier.interval && (
+                    <span className="text-gray-600 ml-2">/{tier.interval}</span>
                   )}
                 </div>
                 <p className="text-gray-600 mt-2">{tier.description}</p>
@@ -186,6 +200,8 @@ export default function PricingPage() {
                   className={`w-full text-white ${
                     tier.popular
                       ? 'bg-emerald-600 hover:bg-emerald-700'
+                      : tier.badge
+                      ? 'bg-orange-500 hover:bg-orange-600'
                       : 'bg-gray-900 hover:bg-gray-800'
                   }`}
                 >
@@ -249,7 +265,7 @@ export default function PricingPage() {
                 Is there a free trial?
               </h3>
               <p className="text-gray-600">
-                Our Free tier gives you access to core features without any credit card required. You can upgrade to Premium or Pro anytime to unlock more features.
+                Our Free tier gives you access to core features without any credit card required. You can upgrade to Premium (monthly or yearly) anytime to unlock more features.
               </p>
             </CardContent>
           </Card>

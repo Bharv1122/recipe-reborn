@@ -83,11 +83,16 @@ async function handleSubscriptionChange(subscription: Stripe.Subscription) {
   const priceId = subscription.items.data[0]?.price.id;
 
   // Determine tier based on price ID
+  // Both the monthly and yearly Premium prices map to the "premium" tier —
+  // yearly is a billing interval on the same product, not a separate tier.
   let tier = 'free';
-  if (priceId === process.env.STRIPE_PREMIUM_PRICE_ID) {
+  if (
+    priceId === process.env.STRIPE_PREMIUM_PRICE_ID ||
+    priceId === process.env.STRIPE_YEARLY_PRICE_ID
+  ) {
     tier = 'premium';
   } else if (priceId === process.env.STRIPE_PRO_PRICE_ID) {
-    tier = 'pro';
+    tier = 'pro'; // legacy — no longer sold, kept for grandfathered subscribers
   }
 
   const status =

@@ -18,6 +18,29 @@ interface VoiceChatProps {
   onIngredientExtracted?: (ingredients: string) => void;
 }
 
+// The Web Speech API's SpeechRecognition interface isn't part of the
+// standard DOM lib typings (it's still non-standard / vendor-prefixed on
+// some browsers), so we declare the minimal shape we use here rather than
+// pulling in a third-party @types package. `any` is used for the event
+// payloads for the same reason.
+interface MinimalSpeechRecognition {
+  continuous: boolean;
+  interimResults: boolean;
+  lang: string;
+  start: () => void;
+  stop: () => void;
+  onresult: ((event: any) => void) | null;
+  onerror: ((event: any) => void) | null;
+  onend: (() => void) | null;
+}
+
+declare global {
+  interface Window {
+    SpeechRecognition?: new () => MinimalSpeechRecognition;
+    webkitSpeechRecognition?: new () => MinimalSpeechRecognition;
+  }
+}
+
 export function VoiceChat({ onIngredientExtracted }: VoiceChatProps) {
   const [messages, setMessages] = useState<Message[]>([]);
   const [isRecording, setIsRecording] = useState(false);
@@ -26,6 +49,7 @@ export function VoiceChat({ onIngredientExtracted }: VoiceChatProps) {
   const [audioLevel, setAudioLevel] = useState(0);
   const [recordingDuration, setRecordingDuration] = useState(0);
   const [mode, setMode] = useState<'quick' | 'conversational'>('quick');
+  const [showTranscribeFallbackNotice, setShowTranscribeFallbackNotice] = useState(false);
 
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
@@ -34,6 +58,15 @@ export function VoiceChat({ onIngredientExtracted }: VoiceChatProps) {
   const animationFrameRef = useRef<number | null>(null);
   const recordingTimerRef = useRef<number | null>(null);
   const scrollAreaRef = useRef<HTMLDivElement>(null);
+  const speechRecognitionRef = useRef<MinimalSpeechRecognition | null>(null);
+
+  // Prefer the browser's built-in speech recognition (Chrome, Edge, Safari)
+  // over the MediaRecorder + server-transcription path. Computed once on
+  // mount since window.SpeechRecognition doesn't change at runtime.
+  const [isSpeechRecognitionSupported] = useState(() => {
+    if (typeof window === 'undefined') return false;
+    return Boolean(window.SpeechRecognition || window.webkitSpeechRecognition);
+  });
 
   // Cleanup on unmount
   useEffect(() => {
@@ -50,6 +83,9 @@ export function VoiceChat({ onIngredientExtracted }: VoiceChatProps) {
       if (mediaRecorderRef.current && mediaRecorderRef?.current?.state === 'recording') {
         mediaRecorderRef?.current?.stop();
       }
+      if (speechRecognitionRef.current) {
+        speechRecognitionRef?.current?.stop();
+      }
     };
   }, []);
 
@@ -63,7 +99,102 @@ export function VoiceChat({ onIngredientExtracted }: VoiceChatProps) {
     }
   }, [messages]);
 
+  // Handles a final transcript, regardless of which input path produced it
+  // (browser SpeechRecognition or the MediaRecorder -> /api/transcribe-audio
+  // fallback). Mirrors the behavior that used to live inline in
+  // transcribeAudio: extract ingredients in Quick Mode, or send to the
+  // conversational chat API otherwise.
+  const handleTranscript = async (transcribedText: string) => {
+    if (!transcribedText?.trim()) {
+      toast.error('No speech detected. Please try again.');
+      return;
+    }
+
+    const userMessage: Message = {
+      role: 'user',
+      content: transcribedText,
+      timestamp: new Date(),
+    };
+    setMessages((prev) => [...(prev ?? []), userMessage]);
+
+    if (mode === 'quick') {
+      onIngredientExtracted?.(transcribedText);
+      toast.success('Ingredients extracted! Check the Generate tab.');
+    } else {
+      await sendChatMessage([...messages, userMessage]);
+    }
+  };
+
+  const startSpeechRecognition = () => {
+    const SpeechRecognitionCtor = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (!SpeechRecognitionCtor) return;
+
+    setShowTranscribeFallbackNotice(false);
+
+    const recognition = new SpeechRecognitionCtor();
+    recognition.continuous = false;
+    recognition.interimResults = true;
+    recognition.lang = 'en-US';
+
+    recognition.onresult = (event: any) => {
+      const results = event?.results;
+      if (!results || results.length === 0) return;
+      const lastResult = results[results.length - 1];
+      const transcript = lastResult?.[0]?.transcript ?? '';
+      if (lastResult?.isFinal) {
+        setIsTranscribing(true);
+        handleTranscript(transcript).finally(() => setIsTranscribing(false));
+      }
+    };
+
+    recognition.onerror = (event: any) => {
+      setIsRecording(false);
+      setAudioLevel(0);
+      const errorType = event?.error;
+      if (errorType === 'not-allowed' || errorType === 'permission-denied') {
+        toast.error('Microphone access was denied. Please allow mic permissions and try again.');
+      } else if (errorType === 'no-speech') {
+        toast.error('No speech detected. Please try again.');
+      } else {
+        console.error('Speech recognition error:', errorType);
+        toast.error('Voice input hit a snag. Please try again or type your ingredients.');
+      }
+    };
+
+    recognition.onend = () => {
+      setIsRecording(false);
+      setAudioLevel(0);
+    };
+
+    speechRecognitionRef.current = recognition;
+
+    try {
+      recognition.start();
+      setIsRecording(true);
+      setRecordingDuration(0);
+      toast.success('Listening - speak clearly!');
+    } catch (error) {
+      console.error('Error starting speech recognition:', error);
+      toast.error('Failed to start voice input. Please try again.');
+      setIsRecording(false);
+    }
+  };
+
+  const stopSpeechRecognition = () => {
+    if (speechRecognitionRef.current) {
+      speechRecognitionRef?.current?.stop();
+    }
+  };
+
   const startRecording = async () => {
+    if (isSpeechRecognitionSupported) {
+      startSpeechRecognition();
+      return;
+    }
+    await startMediaRecorderFallback();
+  };
+
+  const startMediaRecorderFallback = async () => {
     try {
       const stream = await navigator?.mediaDevices?.getUserMedia({ audio: true });
 
@@ -121,13 +252,21 @@ export function VoiceChat({ onIngredientExtracted }: VoiceChatProps) {
       }, 1000);
 
       toast.success('Recording started - speak clearly!');
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error starting recording:', error);
-      toast.error('Failed to access microphone. Please check permissions.');
+      if (error?.name === 'NotAllowedError' || error?.name === 'PermissionDeniedError') {
+        toast.error('Microphone access was denied. Please allow mic permissions and try again.');
+      } else {
+        toast.error('Failed to access microphone. Please check permissions.');
+      }
     }
   };
 
   const stopRecording = () => {
+    if (isSpeechRecognitionSupported) {
+      stopSpeechRecognition();
+      return;
+    }
     if (mediaRecorderRef.current && mediaRecorderRef?.current?.state === 'recording') {
       mediaRecorderRef?.current?.stop();
       setIsRecording(false);
@@ -148,35 +287,21 @@ export function VoiceChat({ onIngredientExtracted }: VoiceChatProps) {
       });
 
       if (!response?.ok) {
+        // The transcribe-audio endpoint returns 501 on purpose while it's
+        // being upgraded (Phase 3a: Gemini audio). This is the expected
+        // fallback path for browsers without SpeechRecognition support, so
+        // show a friendly inline notice instead of a toast/console error.
+        if (response?.status === 501) {
+          setShowTranscribeFallbackNotice(true);
+          return;
+        }
         const errorData = await response?.json();
         throw new Error(errorData?.error ?? 'Failed to transcribe audio');
       }
 
       const data = await response.json();
       const transcribedText = data?.text ?? '';
-
-      if (!transcribedText?.trim()) {
-        toast.error('No speech detected. Please try again.');
-        return;
-      }
-
-      // Add user message
-      const userMessage: Message = {
-        role: 'user',
-        content: transcribedText,
-        timestamp: new Date(),
-      };
-      setMessages((prev) => [...(prev ?? []), userMessage]);
-
-      // Process the message based on mode
-      if (mode === 'quick') {
-        // In quick mode, extract ingredients and call the callback
-        onIngredientExtracted?.(transcribedText);
-        toast.success('Ingredients extracted! Check the Generate tab.');
-      } else {
-        // In conversational mode, send to chat API
-        await sendChatMessage([...messages, userMessage]);
-      }
+      await handleTranscript(transcribedText);
     } catch (error: any) {
       console.error('Transcription error:', error);
       toast.error(error?.message ?? 'Failed to transcribe audio');
@@ -313,6 +438,19 @@ export function VoiceChat({ onIngredientExtracted }: VoiceChatProps) {
           </p>
         </CardContent>
       </Card>
+
+      {/* Fallback notice: shown when browser SpeechRecognition isn't available
+          and the server-side transcription endpoint (/api/transcribe-audio)
+          is returning its expected 501 (full voice support lands in Phase 3a). */}
+      {showTranscribeFallbackNotice && (
+        <Card className="bg-amber-50 border-amber-200">
+          <CardContent className="pt-4">
+            <p className="text-sm text-amber-800">
+              🎙️ Voice input works in Chrome, Edge, or Safari — or just type your ingredients below.
+            </p>
+          </CardContent>
+        </Card>
+      )}
 
       {/* Chat History (only in conversational mode) */}
       {mode === 'conversational' && messages?.length > 0 && (

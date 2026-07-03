@@ -3,14 +3,15 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth-options';
 import { prisma } from '@/lib/db';
 import { AI_CHAT_URL, AI_API_KEY, MODEL_SMART } from '@/lib/ai';
+import { rateLimit } from '@/lib/rate-limit';
 
 export const dynamic = 'force-dynamic';
 
 // Tier limits
 const TIER_LIMITS = {
-  free: 10,
+  free: 3,
   premium: 100,
-  pro: Infinity,
+  pro: Infinity, // legacy fallback for grandfathered Pro subscribers; no longer sold
 };
 
 export async function POST(request: NextRequest) {
@@ -19,6 +20,14 @@ export async function POST(request: NextRequest) {
 
     if (!session?.user?.id) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
+    const { success } = await rateLimit(`generate-recipe:${session.user.id}`, 10, 60);
+    if (!success) {
+      return NextResponse.json(
+        { error: 'Too many requests. Please slow down and try again in a minute.' },
+        { status: 429 }
+      );
     }
 
     const body = await request.json();
@@ -78,7 +87,7 @@ export async function POST(request: NextRequest) {
           tier: user.subscriptionTier,
           message:
             user.subscriptionTier === 'free'
-              ? 'You have reached your free tier limit of 10 recipes per month. Upgrade to Premium for 100 recipes or Pro for unlimited recipes.'
+              ? 'You have reached your free tier limit of 3 recipes per month. Upgrade to Premium for 100 recipes per month.'
               : `You have reached your ${user.subscriptionTier} tier limit of ${limit} recipes this month.`,
         },
         { status: 403 }

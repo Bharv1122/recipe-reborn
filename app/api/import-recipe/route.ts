@@ -8,9 +8,9 @@ export const dynamic = 'force-dynamic';
 
 // Tier limits
 const TIER_LIMITS = {
-  free: 10,
+  free: 3,
   premium: 100,
-  pro: Infinity,
+  pro: Infinity, // legacy fallback for grandfathered Pro subscribers; no longer sold
 };
 
 // POST /api/import-recipe - Import recipe from URL
@@ -92,7 +92,7 @@ export async function POST(req: NextRequest) {
           tier: user.subscriptionTier,
           message:
             user.subscriptionTier === 'free'
-              ? 'You have reached your free tier limit of 10 recipes per month. Upgrade to Premium for 100 recipes or Pro for unlimited recipes.'
+              ? 'You have reached your free tier limit of 3 recipes per month. Upgrade to Premium for 100 recipes per month.'
               : `You have reached your ${user.subscriptionTier} tier limit of ${limit} recipes this month.`,
         },
         { status: 403 }

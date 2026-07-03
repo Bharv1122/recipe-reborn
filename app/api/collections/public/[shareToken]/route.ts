@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
+import { rateLimit, getClientIp } from '@/lib/rate-limit';
 
 export const dynamic = 'force-dynamic';
 
@@ -9,6 +10,15 @@ export async function GET(
   { params }: { params: { shareToken: string } }
 ) {
   try {
+    const ip = getClientIp(req);
+    const { success } = await rateLimit(`collections-public:${ip}`, 30, 60);
+    if (!success) {
+      return NextResponse.json(
+        { error: 'Too many requests. Please try again in a minute.' },
+        { status: 429 }
+      );
+    }
+
     const collection = await prisma.collection.findFirst({
       where: {
         shareToken: params.shareToken,

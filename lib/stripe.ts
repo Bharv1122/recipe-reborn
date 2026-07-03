@@ -16,7 +16,7 @@ export const PRICING_PLANS = {
     name: 'Free',
     price: 0,
     features: [
-      'Generate up to 10 recipes per month',
+      'Generate up to 3 recipes per month',
       'Save up to 20 recipes',
       'Basic recipe customization',
     ],
@@ -34,6 +34,17 @@ export const PRICING_PLANS = {
       'Priority support',
     ],
   },
+  premiumYearly: {
+    name: 'Premium Yearly',
+    priceId: process.env.STRIPE_YEARLY_PRICE_ID, // To be set in .env
+    price: 99,
+    features: [
+      'Everything in Premium',
+      'Save 17% vs. monthly billing',
+      'Billed once per year',
+    ],
+  },
+  // Legacy tier — grandfathered subscribers only; no longer sold on the pricing page.
   pro: {
     name: 'Pro',
     priceId: process.env.STRIPE_PRO_PRICE_ID, // To be set in .env

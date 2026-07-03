@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth/next';
 import { authOptions } from '@/lib/auth-options';
 import { AI_CHAT_URL, AI_API_KEY, MODEL_SMART } from '@/lib/ai';
+import { rateLimit } from '@/lib/rate-limit';
 
 export async function POST(req: Request) {
   try {
@@ -11,6 +12,14 @@ export async function POST(req: Request) {
       return NextResponse.json(
         { error: 'You must be logged in to extract recipes from photos' },
         { status: 401 }
+      );
+    }
+
+    const { success } = await rateLimit(`extract-recipe-from-photo:${session.user.email}`, 10, 60);
+    if (!success) {
+      return NextResponse.json(
+        { error: 'Too many requests. Please slow down and try again in a minute.' },
+        { status: 429 }
       );
     }
 

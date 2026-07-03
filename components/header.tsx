@@ -5,6 +5,7 @@ import Image from 'next/image';
 import { useSession, signOut } from 'next-auth/react';
 import { Button } from '@/components/ui/button';
 import { LogOut, User, BookOpen, UserCircle, Calendar, ShoppingCart } from 'lucide-react';
+import { MobileNav } from '@/components/mobile-nav';
 
 export function Header() {
   const { data: session, status } = useSession() || {};
@@ -26,8 +27,8 @@ export function Header() {
             />
           </Link>
 
-          {/* Navigation */}
-          <nav className="flex items-center space-x-2">
+          {/* Navigation (desktop) */}
+          <nav className="hidden lg:flex items-center space-x-2">
             {status === 'authenticated' ? (
               <>
                 <Link href="/generator">
@@ -94,6 +95,11 @@ export function Header() {
               </>
             )}
           </nav>
+
+          {/* Navigation (mobile) */}
+          <div className="lg:hidden">
+            <MobileNav isAuthenticated={status === 'authenticated'} />
+          </div>
         </div>
       </div>
     </header>

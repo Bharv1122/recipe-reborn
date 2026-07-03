@@ -29,9 +29,9 @@ interface UserData {
 }
 
 const TIER_LIMITS: Record<string, number> = {
-  free: 10,
+  free: 3,
   premium: 100,
-  pro: Infinity,
+  pro: Infinity, // legacy fallback for grandfathered Pro subscribers; no longer sold
 };
 
 const TIER_INFO = {
@@ -132,7 +132,7 @@ export default function AccountPage() {
   }
 
   const tierInfo = TIER_INFO[userData.subscriptionTier as keyof typeof TIER_INFO] || TIER_INFO.free;
-  const limit = TIER_LIMITS[userData.subscriptionTier] || 10;
+  const limit = TIER_LIMITS[userData.subscriptionTier] || 3;
   const usagePercent = limit === Infinity ? 0 : (userData.generationCount / limit) * 100;
   const daysUntilReset = userData.currentPeriodEnd
     ? Math.ceil(
@@ -243,7 +243,7 @@ export default function AccountPage() {
                 <Link href="/pricing" className="flex-1">
                   <Button variant="default" className="w-full" size="lg">
                     <Crown className="mr-2 h-5 w-5" />
-                    Upgrade to Pro
+                    Switch to Yearly & Save
                   </Button>
                 </Link>
               )}
@@ -262,7 +262,7 @@ export default function AccountPage() {
               <div className="p-4 border rounded-lg space-y-2">
                 <div className="font-semibold">Free</div>
                 <ul className="text-sm space-y-1 text-muted-foreground">
-                  <li>✓ 10 recipes/month</li>
+                  <li>✓ 3 recipes/month</li>
                   <li>✓ Basic features</li>
                   <li>✓ Recipe saving</li>
                   <li>✓ Folder organization</li>
@@ -281,17 +281,15 @@ export default function AccountPage() {
                   <li>✓ Priority support</li>
                 </ul>
               </div>
-              <div className="p-4 border-2 border-purple-500 rounded-lg space-y-2 bg-purple-500/5">
+              <div className="p-4 border-2 border-orange-500 rounded-lg space-y-2 bg-orange-500/5">
                 <div className="font-semibold flex items-center gap-2">
-                  <span>Pro</span>
-                  <Badge>$19.99/mo</Badge>
+                  <span>Premium Yearly</span>
+                  <Badge>$99/yr</Badge>
                 </div>
                 <ul className="text-sm space-y-1 text-muted-foreground">
-                  <li>✓ Unlimited recipes</li>
-                  <li>✓ All Premium features</li>
-                  <li>✓ Advanced AI features</li>
-                  <li>✓ Bulk exports</li>
-                  <li>✓ API access (coming soon)</li>
+                  <li>✓ Everything in Premium</li>
+                  <li>✓ Save 17% vs. monthly</li>
+                  <li>✓ Billed once per year</li>
                 </ul>
               </div>
             </div>
