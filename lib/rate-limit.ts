@@ -5,7 +5,12 @@ import { Redis } from "@upstash/redis";
  * Uses a sliding window approach via INCR + EXPIRE.
  */
 
-const redis = Redis.fromEnv();
+// Redis.fromEnv() throws when the Upstash env vars are missing, so guard the
+// init — without Redis configured, rateLimit() must fail open, not crash.
+const redis =
+  process.env.UPSTASH_REDIS_REST_URL && process.env.UPSTASH_REDIS_REST_TOKEN
+    ? Redis.fromEnv()
+    : null;
 
 export interface RateLimitResult {
   success: boolean;
@@ -26,6 +31,11 @@ export async function rateLimit(
   windowSeconds = 60
 ): Promise<RateLimitResult> {
   const key = `ratelimit:${identifier}`;
+
+  // No Redis configured (e.g. local dev without Upstash) — fail open.
+  if (!redis) {
+    return { success: true, remaining: limit, limit, reset: windowSeconds };
+  }
 
   try {
     const count = await redis.incr(key);

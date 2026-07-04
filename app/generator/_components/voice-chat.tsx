@@ -150,6 +150,10 @@ export function VoiceChat({ onIngredientExtracted }: VoiceChatProps) {
     recognition.onerror = (event: any) => {
       setIsRecording(false);
       setAudioLevel(0);
+      if (recordingTimerRef.current) {
+        clearInterval(recordingTimerRef.current);
+        recordingTimerRef.current = null;
+      }
       const errorType = event?.error;
       if (errorType === 'not-allowed' || errorType === 'permission-denied') {
         toast.error('Microphone access was denied. Please allow mic permissions and try again.');
@@ -164,6 +168,10 @@ export function VoiceChat({ onIngredientExtracted }: VoiceChatProps) {
     recognition.onend = () => {
       setIsRecording(false);
       setAudioLevel(0);
+      if (recordingTimerRef.current) {
+        clearInterval(recordingTimerRef.current);
+        recordingTimerRef.current = null;
+      }
     };
 
     speechRecognitionRef.current = recognition;
@@ -172,6 +180,9 @@ export function VoiceChat({ onIngredientExtracted }: VoiceChatProps) {
       recognition.start();
       setIsRecording(true);
       setRecordingDuration(0);
+      recordingTimerRef.current = window.setInterval(() => {
+        setRecordingDuration((prev) => prev + 1);
+      }, 1000);
       toast.success('Listening - speak clearly!');
     } catch (error) {
       console.error('Error starting speech recognition:', error);

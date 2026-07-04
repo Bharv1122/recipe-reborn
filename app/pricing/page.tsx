@@ -44,7 +44,7 @@ const pricingTiers: PricingTier[] = [
     priceId: process.env.NEXT_PUBLIC_STRIPE_PREMIUM_PRICE_ID || '',
     description: 'For home cooks who love healthy recipes',
     features: [
-      'Unlimited recipe generations',
+      '100 recipe generations per month',
       'All dietary customizations',
       'Unlimited recipe storage',
       'Recipe folders & organization',
@@ -65,7 +65,7 @@ const pricingTiers: PricingTier[] = [
     description: 'Everything in Premium — pay once, save all year',
     features: [
       'Everything in Premium',
-      'Unlimited recipe generations',
+      '100 recipe generations per month',
       'All dietary customizations',
       'Unlimited recipe storage',
       'Wine pairing suggestions',

@@ -26,7 +26,7 @@ export const PRICING_PLANS = {
     priceId: process.env.STRIPE_PREMIUM_PRICE_ID, // To be set in .env
     price: 9.99,
     features: [
-      'Unlimited recipe generation',
+      'Generate up to 100 recipes per month',
       'Unlimited recipe storage',
       'Advanced customization options',
       'Wine pairing suggestions',
