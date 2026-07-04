@@ -54,7 +54,7 @@ prisma/schema.prisma  # 12 models; binaryTargets includes rhel-openssl-3.0.x for
 - `prisma migrate dev` hanging = pooled URL being used; migrations need `DIRECT_URL`
 - Windows: close dev server before `prisma generate` (EPERM on client DLL)
 - Stripe SDK pins `apiVersion: '2026-02-25.clover'` — update both `lib/stripe.ts` and `app/api/webhooks/stripe/route.ts` together if bumping the SDK
-- `app/api/transcribe-audio` is a 501 stub pending Phase 3a (Gemini audio / browser SpeechRecognition)
+- `app/api/transcribe-audio` now transcribes via Gemini (`input_audio` on the OpenAI-compatible endpoint) as the fallback for browsers without SpeechRecognition — Phase 3a shipped (cooking mode, TTS, voice commands, recipe chat)
 - Supabase RLS: `postgres` role (Prisma) has `bypassrls` — enabling RLS on tables does not affect the app
 
 ## 🎯 Roadmap
