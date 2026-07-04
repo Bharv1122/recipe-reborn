@@ -5,10 +5,13 @@ import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { StarRating } from '@/components/ui/star-rating';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { X, Clock, Users, Save, Wine, Info, Loader2, Share2, Facebook, Twitter } from 'lucide-react';
+import { X, Clock, Users, Save, Wine, Info, Loader2, Share2, Facebook, Twitter, PiggyBank, ChefHat, MessageCircle } from 'lucide-react';
 import { useEffect, useState } from 'react';
+import Link from 'next/link';
 import toast from 'react-hot-toast';
 import { InteractiveIngredient } from '@/app/generator/_components/interactive-ingredient';
+import { VoiceReader } from '@/components/voice-reader';
+import { RecipeChat } from '@/components/recipe-chat';
 
 interface Recipe {
   id: string;
@@ -23,6 +26,8 @@ interface Recipe {
   rating?: number;
   notes?: string;
   winePairing?: string | null;
+  estimatedCostPerServing?: number | null;
+  storeBoughtCost?: number | null;
   createdAt: string;
 }
 
@@ -281,7 +286,7 @@ export function RecipeDetailModal({ recipe, onClose, onUpdate }: RecipeDetailMod
           </CardHeader>
           <CardContent className="pt-6">
             <Tabs defaultValue="recipe" className="w-full">
-              <TabsList className="grid w-full grid-cols-3">
+              <TabsList className="grid w-full grid-cols-4">
                 <TabsTrigger value="recipe">Recipe</TabsTrigger>
                 <TabsTrigger value="wine">
                   <Wine className="h-4 w-4 mr-2" />
@@ -290,6 +295,10 @@ export function RecipeDetailModal({ recipe, onClose, onUpdate }: RecipeDetailMod
                 <TabsTrigger value="ingredients">
                   <Info className="h-4 w-4 mr-2" />
                   Ingredient Info
+                </TabsTrigger>
+                <TabsTrigger value="chat">
+                  <MessageCircle className="h-4 w-4 mr-2" />
+                  Ask AI
                 </TabsTrigger>
               </TabsList>
 
@@ -316,6 +325,53 @@ export function RecipeDetailModal({ recipe, onClose, onUpdate }: RecipeDetailMod
                 </div>
               )}
             </div>
+
+            {/* Cooking Mode + Read Aloud */}
+            <div className="flex flex-wrap items-center gap-2">
+              <Link href={`/cooking-mode/${recipe?.id}`}>
+                <Button
+                  size="sm"
+                  className="bg-emerald-600 hover:bg-emerald-700 text-white"
+                >
+                  <ChefHat className="h-4 w-4 mr-2" />
+                  Start Cooking Mode
+                </Button>
+              </Link>
+              <VoiceReader
+                label="Listen to Recipe"
+                getText={() =>
+                  [
+                    recipe?.title,
+                    'Ingredients:',
+                    ...freshIngredients,
+                    'Instructions:',
+                    ...instructions.map(
+                      (step: string, index: number) => `Step ${index + 1}. ${step}`
+                    ),
+                  ]
+                    .filter(Boolean)
+                    .join('. ')
+                }
+              />
+            </div>
+
+            {/* Cost Savings Banner */}
+            {typeof recipe?.estimatedCostPerServing === 'number' &&
+              typeof recipe?.storeBoughtCost === 'number' &&
+              recipe.storeBoughtCost > recipe.estimatedCostPerServing && (
+                <div className="flex items-center gap-3 p-4 bg-gradient-to-r from-emerald-50 to-orange-50 border border-emerald-200 rounded-lg">
+                  <PiggyBank className="h-8 w-8 text-emerald-600 flex-shrink-0" />
+                  <div>
+                    <p className="font-semibold text-emerald-700">
+                      You saved ~${(recipe.storeBoughtCost - recipe.estimatedCostPerServing).toFixed(2)} per serving!
+                    </p>
+                    <p className="text-sm text-gray-600">
+                      Homemade ~${recipe.estimatedCostPerServing.toFixed(2)}/serving vs. store-bought ~$
+                      {recipe.storeBoughtCost.toFixed(2)}/serving
+                    </p>
+                  </div>
+                </div>
+              )}
 
             {/* Dietary Tags */}
             {recipe?.dietaryTags?.length > 0 && (
@@ -687,6 +743,21 @@ export function RecipeDetailModal({ recipe, onClose, onUpdate }: RecipeDetailMod
                     </div>
                   )}
                 </div>
+              </TabsContent>
+
+              {/* Ask AI Tab */}
+              <TabsContent value="chat" className="max-h-[60vh] overflow-y-auto mt-6">
+                <RecipeChat
+                  recipe={{
+                    title: recipe?.title ?? '',
+                    ingredients: freshIngredients,
+                    instructions,
+                    prepTime: recipe?.prepTime,
+                    cookTime: recipe?.cookTime,
+                    servings: recipe?.servings,
+                    dietaryTags: recipe?.dietaryTags,
+                  }}
+                />
               </TabsContent>
             </Tabs>
 
