@@ -3,6 +3,7 @@ import { getServerSession } from 'next-auth/next';
 import { authOptions } from '@/lib/auth-options';
 import { AI_CHAT_URL, AI_API_KEY, MODEL_SMART } from '@/lib/ai';
 import { rateLimit } from '@/lib/rate-limit';
+import { extractJsonPayload } from '@/lib/ai-json';
 
 export async function POST(req: Request) {
   try {
@@ -103,7 +104,9 @@ IMPORTANT RULES:
             ]
           }
         ],
-        max_tokens: 2000,
+        // Long ingredient labels + gemini-2.5-flash thinking tokens both count
+        // against this budget — 2000 truncated real labels mid-JSON in prod
+        max_tokens: 8000,
         temperature: 0.3,
       }),
     });
@@ -140,12 +143,14 @@ IMPORTANT RULES:
       );
     }
 
+    if (data.choices?.[0]?.finish_reason === 'length') {
+      console.error('Photo extraction truncated at max_tokens; content length:', content.length);
+    }
+
     // Parse the JSON response
     let recipeData;
     try {
-      // Remove markdown code blocks if present
-      const cleanedContent = content.replace(/```json\n?|```\n?/g, '').trim();
-      recipeData = JSON.parse(cleanedContent);
+      recipeData = JSON.parse(extractJsonPayload(content));
     } catch (parseError) {
       console.error('Failed to parse AI response:', content);
       return NextResponse.json(

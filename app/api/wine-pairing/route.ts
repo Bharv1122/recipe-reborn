@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth-options';
 import { AI_CHAT_URL, AI_API_KEY, MODEL_FAST } from '@/lib/ai';
+import { extractJsonPayload } from '@/lib/ai-json';
 
 export const dynamic = 'force-dynamic';
 
@@ -76,7 +77,8 @@ Keep descriptions concise (2-3 sentences).`;
           }
         ],
         temperature: 0.7,
-        max_tokens: 1000,
+        // gemini-2.5-flash thinking tokens count against this budget
+        max_tokens: 4000,
       }),
     });
 
@@ -94,10 +96,7 @@ Keep descriptions concise (2-3 sentences).`;
     // Try to parse JSON from the response
     let winePairing;
     try {
-      // Extract JSON from markdown code blocks if present
-      const jsonMatch = content.match(/```(?:json)?\s*([\s\S]*?)```/);
-      const jsonStr = jsonMatch ? jsonMatch[1].trim() : content.trim();
-      winePairing = JSON.parse(jsonStr);
+      winePairing = JSON.parse(extractJsonPayload(content));
     } catch (parseError) {
       console.error('Failed to parse wine pairing JSON:', parseError);
       // Return a default response if parsing fails

@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { Input } from '@/components/ui/input';
@@ -63,6 +63,14 @@ export function RecipeGenerator() {
   const [substitutionInfo, setSubstitutionInfo] = useState<{original: string; substitute: string} | null>(null);
   const [showSavePrompt, setShowSavePrompt] = useState(false);
   const [customCustomization, setCustomCustomization] = useState('');
+  const resultRef = useRef<HTMLDivElement>(null);
+
+  // Bring the finished recipe into view — on phones it renders below the fold
+  useEffect(() => {
+    if (recipe) {
+      resultRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+  }, [recipe]);
 
   const generateRecipe = async (dietaryRestriction?: string) => {
     if (!ingredients?.trim() && !dietaryRestriction) {
@@ -217,8 +225,48 @@ export function RecipeGenerator() {
     }
   };
 
-  const handleImageSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+  // Downscale big phone photos client-side: Vercel rejects request bodies
+  // over ~4.5MB, and a 1600px JPEG is plenty for label OCR
+  const compressImage = (file: File): Promise<File> =>
+    new Promise((resolve) => {
+      const img = new Image();
+      const url = URL.createObjectURL(file);
+      img.onload = () => {
+        URL.revokeObjectURL(url);
+        const maxDim = 1600;
+        let { width, height } = img;
+        if (Math.max(width, height) > maxDim) {
+          const scale = maxDim / Math.max(width, height);
+          width = Math.round(width * scale);
+          height = Math.round(height * scale);
+        }
+        const canvas = document.createElement('canvas');
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext('2d');
+        if (!ctx) return resolve(file);
+        ctx.drawImage(img, 0, 0, width, height);
+        canvas.toBlob(
+          (blob) =>
+            resolve(
+              blob && blob.size < file.size
+                ? new File([blob], 'label.jpg', { type: 'image/jpeg' })
+                : file
+            ),
+          'image/jpeg',
+          0.85
+        );
+      };
+      img.onerror = () => {
+        URL.revokeObjectURL(url);
+        resolve(file); // browser can't decode it (e.g., HEIC in Chrome) — send as-is
+      };
+      img.src = url;
+    });
+
+  const handleImageSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
+    e.target.value = ''; // allow re-selecting the same file
     if (!file) return;
 
     // Validate file type
@@ -227,20 +275,21 @@ export function RecipeGenerator() {
       return;
     }
 
-    // Validate file size (max 10MB)
-    if (file.size > 10 * 1024 * 1024) {
-      toast.error('Image size must be less than 10MB');
+    // Validate file size (max 20MB pre-compression)
+    if (file.size > 20 * 1024 * 1024) {
+      toast.error('Image size must be less than 20MB');
       return;
     }
 
-    setSelectedImage(file);
+    const upload = file.size > 1.5 * 1024 * 1024 ? await compressImage(file) : file;
+    setSelectedImage(upload);
 
     // Create preview
     const reader = new FileReader();
     reader.onloadend = () => {
       setImagePreview(reader.result as string);
     };
-    reader.readAsDataURL(file);
+    reader.readAsDataURL(upload);
   };
 
   const clearImage = () => {
@@ -764,7 +813,7 @@ export function RecipeGenerator() {
 
       {/* Recipe Display */}
       {recipe && (
-        <Card className="shadow-lg border-0 bg-white">
+        <Card ref={resultRef} className="shadow-lg border-0 bg-white scroll-mt-4">
           <CardHeader className="bg-gradient-to-r from-emerald-50 to-orange-50">
             <div className="flex items-center justify-between">
               <CardTitle className="text-2xl text-gray-900">{recipe?.title}</CardTitle>
