@@ -95,7 +95,13 @@ export function RecipeGenerator() {
       });
 
       if (!response?.ok) {
-        throw new Error('Failed to generate recipe');
+        // Surface the real reason — especially the free-tier limit message
+        const data = await response.json().catch(() => null);
+        if (response.status === 403 && data?.message) {
+          toast.error(data.message, { duration: 8000 });
+          return;
+        }
+        throw new Error(data?.error ?? 'Failed to generate recipe');
       }
 
       const reader = response?.body?.getReader();
@@ -135,9 +141,9 @@ export function RecipeGenerator() {
           }
         }
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error('Generate recipe error:', error);
-      toast.error('Failed to generate recipe');
+      toast.error(error?.message || 'Failed to generate recipe');
     } finally {
       setIsGenerating(false);
     }
@@ -347,7 +353,12 @@ export function RecipeGenerator() {
           });
 
           if (!generateResponse?.ok) {
-            throw new Error('Failed to generate recipe');
+            const errData = await generateResponse.json().catch(() => null);
+            if (generateResponse.status === 403 && errData?.message) {
+              toast.error(errData.message, { duration: 8000 });
+              return;
+            }
+            throw new Error(errData?.error ?? 'Failed to generate recipe');
           }
 
           const reader = generateResponse?.body?.getReader();

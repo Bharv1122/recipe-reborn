@@ -15,7 +15,10 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json();
-    const { email, password, confirmPassword } = body;
+    const { email: rawEmail, password, confirmPassword } = body;
+    // Case-insensitive matching: mixed-case signups created duplicate/unfindable
+    // accounts in the old app — always store lowercase
+    const email = typeof rawEmail === 'string' ? rawEmail.trim().toLowerCase() : rawEmail;
 
     if (!email || !password || !confirmPassword) {
       return NextResponse.json(

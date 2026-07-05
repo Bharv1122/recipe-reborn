@@ -23,7 +23,7 @@ export function Header() {
               width={200}
               height={47}
               priority
-              className="h-10 w-auto drop-shadow-sm"
+              className="h-10 w-auto drop-shadow-sm hidden max-lg:block xl:block"
             />
           </Link>
 

@@ -20,7 +20,8 @@ export const authOptions: NextAuthOptions = {
 
         const user = await prisma.user.findUnique({
           where: {
-            email: credentials.email,
+            // Emails are stored lowercase — normalize the login input to match
+            email: credentials.email.trim().toLowerCase(),
           },
         });
 

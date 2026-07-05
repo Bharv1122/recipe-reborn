@@ -149,7 +149,7 @@ export function InteractiveIngredient({
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          name: ingredient,
+          ingredient,
           quantity: '1',
           category: 'Other',
         }),
