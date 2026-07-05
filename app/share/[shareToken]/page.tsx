@@ -95,8 +95,22 @@ export default function SharedRecipePage() {
     );
   }
 
-  const freshIngredients = JSON.parse(recipe.freshIngredients || '[]');
-  const instructions = JSON.parse(recipe.instructions || '[]');
+  // Recipes are stored as newline-joined strings (older rows may be JSON arrays)
+  const toList = (value: string): string[] => {
+    if (!value) return [];
+    const s = value.trim();
+    if (s.startsWith('[')) {
+      try {
+        const arr = JSON.parse(s);
+        if (Array.isArray(arr)) return arr;
+      } catch {
+        // fall through to newline splitting
+      }
+    }
+    return s.split('\n').map((line) => line.trim()).filter(Boolean);
+  };
+  const freshIngredients = toList(recipe.freshIngredients);
+  const instructions = toList(recipe.instructions);
 
   return (
     <div className="min-h-screen py-12 px-4">

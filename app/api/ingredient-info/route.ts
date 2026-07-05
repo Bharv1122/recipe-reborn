@@ -71,8 +71,8 @@ Return the information in this exact JSON format:
 
 Provide accurate, concise information. Return ONLY valid JSON.`;
 
-    const response = await fetch(AI_CHAT_URL, {
-      method: 'POST',
+    const llmRequest = {
+      method: 'POST' as const,
       headers: {
         'Content-Type': 'application/json',
         'Authorization': `Bearer ${apiKey}`,
@@ -93,10 +93,19 @@ Provide accurate, concise information. Return ONLY valid JSON.`;
         // gemini-2.5-flash thinking tokens count against this budget
         max_tokens: 4000,
       }),
-    });
+    };
+
+    let response = await fetch(AI_CHAT_URL, llmRequest);
 
     if (!response.ok) {
-      throw new Error('Failed to get ingredient information');
+      const errText = await response.text().catch(() => '');
+      console.error('Ingredient-info LLM non-OK:', response.status, errText.slice(0, 300));
+      // Transient 429/5xx from the LLM API — one retry recovers most of them
+      response = await fetch(AI_CHAT_URL, llmRequest);
+    }
+
+    if (!response.ok) {
+      throw new Error(`Failed to get ingredient information (${response.status})`);
     }
 
     const data = await response.json();
