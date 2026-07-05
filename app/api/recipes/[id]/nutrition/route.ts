@@ -3,6 +3,7 @@ import { NextResponse } from 'next/server';
 import { authOptions } from '@/lib/auth-options';
 import { prisma } from '@/lib/db';
 import { AI_CHAT_URL, AI_API_KEY, MODEL_FAST } from '@/lib/ai';
+import { extractJsonPayload } from '@/lib/ai-json';
 import { lookupNutrients } from '@/lib/usda';
 
 interface NutritionValues {
@@ -37,7 +38,8 @@ async function callGemini(system: string, user: string): Promise<string> {
         { role: 'user', content: user },
       ],
       temperature: 0.2,
-      max_tokens: 2000,
+      // gemini-2.5-flash thinking tokens count against this budget
+      max_tokens: 6000,
     }),
   });
 
@@ -50,10 +52,7 @@ async function callGemini(system: string, user: string): Promise<string> {
 }
 
 function parseJsonReply(content: string): any {
-  // Remove markdown code blocks if present
-  const jsonMatch = content.match(/```(?:json)?\s*([\s\S]*?)```/);
-  const jsonStr = jsonMatch ? jsonMatch[1] : content;
-  return JSON.parse(jsonStr.trim());
+  return JSON.parse(extractJsonPayload(content));
 }
 
 // Step 1 of the hybrid path: Gemini turns free-form ingredient lines into

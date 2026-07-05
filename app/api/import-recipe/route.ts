@@ -3,6 +3,7 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth-options';
 import { prisma } from '@/lib/db';
 import { AI_CHAT_URL, AI_API_KEY, MODEL_SMART } from '@/lib/ai';
+import { extractJsonPayload } from '@/lib/ai-json';
 
 export const dynamic = 'force-dynamic';
 
@@ -175,7 +176,8 @@ If you cannot find specific information, use reasonable defaults. Return ONLY va
           }
         ],
         temperature: 0.3,
-        max_tokens: 2000,
+        // gemini-2.5-flash thinking tokens count against this budget
+        max_tokens: 8000,
       }),
     });
 
@@ -193,10 +195,7 @@ If you cannot find specific information, use reasonable defaults. Return ONLY va
     // Parse the JSON response
     let recipeData;
     try {
-      // Extract JSON from markdown code blocks if present
-      const jsonMatch = content.match(/```(?:json)?\s*([\s\S]*?)```/);
-      const jsonStr = jsonMatch ? jsonMatch[1].trim() : content.trim();
-      recipeData = JSON.parse(jsonStr);
+      recipeData = JSON.parse(extractJsonPayload(content));
     } catch (parseError) {
       console.error('Failed to parse recipe JSON:', parseError);
       return NextResponse.json(

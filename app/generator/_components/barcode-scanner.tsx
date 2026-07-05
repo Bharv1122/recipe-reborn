@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Loader2, ScanBarcode, Camera, StopCircle, Search } from 'lucide-react';
+import { Loader2, ScanBarcode, Camera, StopCircle, Search, Upload } from 'lucide-react';
 import toast from 'react-hot-toast';
 import type { Html5Qrcode } from 'html5-qrcode';
 
@@ -13,11 +13,14 @@ interface BarcodeScannerProps {
 
 // html5-qrcode renders its camera feed into this element
 const SCANNER_REGION_ID = 'barcode-scanner-region';
+// Separate always-mounted element for decoding uploaded barcode photos
+const FILE_SCAN_REGION_ID = 'barcode-file-scan-region';
 
 export function BarcodeScanner({ onIngredientsExtracted }: BarcodeScannerProps) {
   const [isScanning, setIsScanning] = useState(false);
   const [isStartingCamera, setIsStartingCamera] = useState(false);
   const [isLookingUp, setIsLookingUp] = useState(false);
+  const [isDecodingImage, setIsDecodingImage] = useState(false);
   const [manualCode, setManualCode] = useState('');
 
   const scannerRef = useRef<Html5Qrcode | null>(null);
@@ -145,6 +148,42 @@ export function BarcodeScanner({ onIngredientsExtracted }: BarcodeScannerProps) 
     }
   };
 
+  const handleBarcodeImage = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = ''; // allow re-selecting the same file
+    if (!file) return;
+
+    setIsDecodingImage(true);
+    try {
+      const { Html5Qrcode, Html5QrcodeSupportedFormats } = await import('html5-qrcode');
+      const scanner = new Html5Qrcode(FILE_SCAN_REGION_ID, {
+        formatsToSupport: [
+          Html5QrcodeSupportedFormats.EAN_13,
+          Html5QrcodeSupportedFormats.EAN_8,
+          Html5QrcodeSupportedFormats.UPC_A,
+          Html5QrcodeSupportedFormats.UPC_E,
+          Html5QrcodeSupportedFormats.CODE_128,
+        ],
+        verbose: false,
+      });
+      try {
+        const decoded = await scanner.scanFile(file, /* showImage */ false);
+        toast.success(`Barcode found: ${decoded}`);
+        await lookupBarcode(decoded);
+      } finally {
+        scanner.clear();
+      }
+    } catch (error) {
+      console.error('Barcode image decode error:', error);
+      toast.error(
+        "Couldn't read a barcode in that photo. Try a straight-on, well-lit shot of just the barcode — or type the number below.",
+        { duration: 6000 }
+      );
+    } finally {
+      setIsDecodingImage(false);
+    }
+  };
+
   const handleManualLookup = () => {
     const code = manualCode.trim();
     if (!/^\d{6,14}$/.test(code)) {
@@ -167,30 +206,57 @@ export function BarcodeScanner({ onIngredientsExtracted }: BarcodeScannerProps) 
             Point your camera at the barcode on any packaged food and we&apos;ll
             look up its ingredients for a fresh homemade version!
           </p>
-          <Button
-            type="button"
-            variant="outline"
-            className="border-emerald-600 text-emerald-600 hover:bg-emerald-50"
-            onClick={startScanner}
-            disabled={isStartingCamera || isLookingUp}
-          >
-            {isStartingCamera ? (
-              <>
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                Starting Camera...
-              </>
-            ) : isLookingUp ? (
-              <>
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                Looking Up Product...
-              </>
-            ) : (
-              <>
-                <Camera className="mr-2 h-4 w-4" />
-                Start Scanning
-              </>
-            )}
-          </Button>
+          <div className="flex flex-col sm:flex-row gap-2 justify-center">
+            <Button
+              type="button"
+              className="bg-emerald-600 hover:bg-emerald-700 text-white"
+              onClick={startScanner}
+              disabled={isStartingCamera || isLookingUp || isDecodingImage}
+            >
+              {isStartingCamera ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Starting Camera...
+                </>
+              ) : isLookingUp ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Looking Up Product...
+                </>
+              ) : (
+                <>
+                  <Camera className="mr-2 h-4 w-4" />
+                  Scan with Camera
+                </>
+              )}
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              className="border-emerald-600 text-emerald-600 hover:bg-emerald-50"
+              onClick={() => document.getElementById('barcode-photo-upload')?.click()}
+              disabled={isStartingCamera || isLookingUp || isDecodingImage}
+            >
+              {isDecodingImage ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Reading Barcode...
+                </>
+              ) : (
+                <>
+                  <Upload className="mr-2 h-4 w-4" />
+                  Upload Barcode Photo
+                </>
+              )}
+            </Button>
+          </div>
+          <input
+            id="barcode-photo-upload"
+            type="file"
+            accept="image/*"
+            onChange={handleBarcodeImage}
+            className="hidden"
+          />
           <p className="text-xs text-gray-400 mt-4">
             Works with EAN and UPC barcodes — powered by OpenFoodFacts
           </p>
@@ -202,6 +268,8 @@ export function BarcodeScanner({ onIngredientsExtracted }: BarcodeScannerProps) 
         id={SCANNER_REGION_ID}
         className={isScanning ? 'rounded-lg overflow-hidden border border-gray-200' : 'hidden'}
       />
+      {/* Off-screen decode target for uploaded barcode photos (must stay mounted) */}
+      <div id={FILE_SCAN_REGION_ID} className="h-0 overflow-hidden" />
 
       {isScanning && (
         <Button

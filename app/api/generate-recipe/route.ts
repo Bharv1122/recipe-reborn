@@ -234,8 +234,8 @@ Respond with raw JSON only. Do not include code blocks, markdown, or any other f
       },
     ];
 
-    const response = await fetch(AI_CHAT_URL, {
-      method: 'POST',
+    const llmRequest = {
+      method: 'POST' as const,
       headers: {
         'Content-Type': 'application/json',
         Authorization: `Bearer ${AI_API_KEY}`,
@@ -249,10 +249,21 @@ Respond with raw JSON only. Do not include code blocks, markdown, or any other f
         max_tokens: 6000,
         response_format: { type: 'json_object' },
       }),
-    });
+    };
+
+    let response = await fetch(AI_CHAT_URL, llmRequest);
 
     if (!response?.ok) {
-      throw new Error('LLM API request failed');
+      const errText = await response.text().catch(() => '');
+      console.error('LLM API non-OK response:', response.status, errText.slice(0, 500));
+      // Gemini occasionally returns transient 429/5xx — one retry recovers most of them
+      response = await fetch(AI_CHAT_URL, llmRequest);
+    }
+
+    if (!response?.ok) {
+      const errText = await response.text().catch(() => '');
+      console.error('LLM API retry also failed:', response.status, errText.slice(0, 500));
+      throw new Error(`LLM API request failed (${response.status})`);
     }
 
     const stream = new ReadableStream({
