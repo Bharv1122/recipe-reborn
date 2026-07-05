@@ -839,7 +839,7 @@ export function RecipeGenerator() {
 
             {/* Ingredients */}
             <div>
-              <div className="flex items-center gap-3 mb-3">
+              <div className="flex items-center gap-3 mb-1">
                 <h3 className="text-lg font-semibold text-gray-900">Fresh Ingredients</h3>
                 {isRegeneratingWithSubstitute && (
                   <div className="flex items-center gap-2 text-sm text-emerald-600 animate-pulse">
@@ -848,6 +848,9 @@ export function RecipeGenerator() {
                   </div>
                 )}
               </div>
+              <p className="text-xs text-gray-500 mb-3">
+                Tap any ingredient for info, substitutes, shopping list, or to remove it
+              </p>
               <ul className="space-y-1">
                 {recipe?.freshIngredients?.map?.((ingredient, index) => (
                   <li key={index}>

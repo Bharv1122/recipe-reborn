@@ -191,7 +191,7 @@ export function InteractiveIngredient({
             <span className="text-emerald-600 mt-1 flex-shrink-0">•</span>
             <span className="text-gray-700 group-hover:text-gray-900 flex-1">{ingredient}</span>
             {!isRegenerating && (
-              <span className="text-gray-400 group-hover:text-gray-600 text-xs mt-1 opacity-0 group-hover:opacity-100 transition-opacity">
+              <span className="text-gray-400 group-hover:text-emerald-600 mt-0.5 transition-colors">
                 ⋮
               </span>
             )}
