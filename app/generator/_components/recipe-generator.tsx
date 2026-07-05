@@ -58,6 +58,7 @@ export function RecipeGenerator() {
   const [imagePreview, setImagePreview] = useState<string | null>(null);
   const [isExtracting, setIsExtracting] = useState(false);
   const [activeTab, setActiveTab] = useState('generate');
+  const [inputMode, setInputMode] = useState<'label' | 'pantry'>('label');
   const [isRegeneratingWithSubstitute, setIsRegeneratingWithSubstitute] = useState(false);
   const [substitutionInfo, setSubstitutionInfo] = useState<{original: string; substitute: string} | null>(null);
   const [showSavePrompt, setShowSavePrompt] = useState(false);
@@ -81,6 +82,7 @@ export function RecipeGenerator() {
         body: JSON.stringify({
           ingredients: ingredients || recipe?.title,
           dietaryRestriction,
+          source: inputMode,
         }),
       });
 
@@ -507,10 +509,41 @@ export function RecipeGenerator() {
 
             {/* Generate Tab */}
             <TabsContent value="generate" className="space-y-4">
+              {/* Input mode: food label vs pantry */}
+              <div className="grid grid-cols-2 gap-2 p-1 bg-gray-100 rounded-lg">
+                <button
+                  type="button"
+                  onClick={() => setInputMode('label')}
+                  disabled={isGenerating}
+                  className={`px-3 py-2 rounded-md text-sm font-medium transition-colors ${
+                    inputMode === 'label'
+                      ? 'bg-white text-emerald-700 shadow-sm'
+                      : 'text-gray-600 hover:text-gray-900'
+                  }`}
+                >
+                  From a Food Label
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setInputMode('pantry')}
+                  disabled={isGenerating}
+                  className={`px-3 py-2 rounded-md text-sm font-medium transition-colors ${
+                    inputMode === 'pantry'
+                      ? 'bg-white text-emerald-700 shadow-sm'
+                      : 'text-gray-600 hover:text-gray-900'
+                  }`}
+                >
+                  From My Pantry
+                </button>
+              </div>
               <Textarea
-            placeholder="Enter ingredients from your processed food package...&#10;Example: enriched flour, sugar, palm oil, artificial flavoring, etc."
-            value={ingredients}
-            onChange={(e) => setIngredients(e?.target?.value ?? '')}
+                placeholder={
+                  inputMode === 'pantry'
+                    ? "What's in your fridge or pantry?\nExample: chicken thighs, spinach, rice, eggs, cheddar cheese, garlic..."
+                    : 'Enter ingredients from your processed food package...\nExample: enriched flour, sugar, palm oil, artificial flavoring, etc.'
+                }
+                value={ingredients}
+                onChange={(e) => setIngredients(e?.target?.value ?? '')}
                 rows={6}
                 className="resize-none"
                 disabled={isGenerating}
@@ -528,7 +561,7 @@ export function RecipeGenerator() {
                 ) : (
                   <>
                     <Sparkles className="mr-2 h-4 w-4" />
-                    Generate Fresh Recipe
+                    {inputMode === 'pantry' ? 'Cook From What I Have' : 'Generate Fresh Recipe'}
                   </>
                 )}
               </Button>
@@ -603,7 +636,16 @@ export function RecipeGenerator() {
                     <p className="text-sm text-gray-500 mb-4">
                       Take a photo of any ingredient label or product packaging, and we&apos;ll create a fresh recipe for you!
                     </p>
-                    <label htmlFor="photo-upload">
+                    <div className="flex flex-col sm:flex-row gap-2 justify-center">
+                      <Button
+                        type="button"
+                        className="bg-emerald-600 hover:bg-emerald-700 text-white"
+                        onClick={() => document.getElementById('photo-camera')?.click()}
+                        disabled={isExtracting || isGenerating}
+                      >
+                        <Camera className="mr-2 h-4 w-4" />
+                        Take Photo
+                      </Button>
                       <Button
                         type="button"
                         variant="outline"
@@ -612,14 +654,22 @@ export function RecipeGenerator() {
                         disabled={isExtracting || isGenerating}
                       >
                         <Upload className="mr-2 h-4 w-4" />
-                        Choose Photo
+                        Upload Photo
                       </Button>
-                    </label>
+                    </div>
+                    {/* capture forces the camera on phones; the plain input allows gallery/files */}
+                    <input
+                      id="photo-camera"
+                      type="file"
+                      accept="image/*"
+                      capture="environment"
+                      onChange={handleImageSelect}
+                      className="hidden"
+                    />
                     <input
                       id="photo-upload"
                       type="file"
                       accept="image/*"
-                      capture="environment"
                       onChange={handleImageSelect}
                       className="hidden"
                     />
@@ -645,24 +695,39 @@ export function RecipeGenerator() {
                         <X className="h-4 w-4" />
                       </Button>
                     </div>
-                    <div className="flex gap-2">
-                      <label htmlFor="photo-reupload" className="flex-1">
-                        <Button
-                          type="button"
-                          variant="outline"
-                          className="w-full"
-                          onClick={() => document.getElementById('photo-reupload')?.click()}
-                          disabled={isExtracting || isGenerating}
-                        >
-                          <Upload className="mr-2 h-4 w-4" />
-                          Choose Different Photo
-                        </Button>
-                      </label>
+                    <div className="flex flex-col sm:flex-row gap-2">
+                      <Button
+                        type="button"
+                        variant="outline"
+                        className="flex-1"
+                        onClick={() => document.getElementById('photo-recamera')?.click()}
+                        disabled={isExtracting || isGenerating}
+                      >
+                        <Camera className="mr-2 h-4 w-4" />
+                        Retake Photo
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        className="flex-1"
+                        onClick={() => document.getElementById('photo-reupload')?.click()}
+                        disabled={isExtracting || isGenerating}
+                      >
+                        <Upload className="mr-2 h-4 w-4" />
+                        Different Photo
+                      </Button>
+                      <input
+                        id="photo-recamera"
+                        type="file"
+                        accept="image/*"
+                        capture="environment"
+                        onChange={handleImageSelect}
+                        className="hidden"
+                      />
                       <input
                         id="photo-reupload"
                         type="file"
                         accept="image/*"
-                        capture="environment"
                         onChange={handleImageSelect}
                         className="hidden"
                       />

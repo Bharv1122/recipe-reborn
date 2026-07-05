@@ -31,7 +31,7 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json();
-    const { ingredients, dietaryRestriction, isSubstitutionRegeneration, originalRecipe, substitution } = body;
+    const { ingredients, dietaryRestriction, isSubstitutionRegeneration, originalRecipe, substitution, source } = body;
 
     if (!ingredients) {
       return NextResponse.json(
@@ -163,6 +163,28 @@ Provide a JSON response with this exact structure:
 }
 
 For the cost fields, estimate using average US grocery prices: "estimatedCostPerServing" is the cost in USD to make one serving of this recipe from the fresh ingredients, and "storeBoughtCost" is the cost in USD of one serving of the equivalent store-bought/packaged product. Both must be plain numbers (not strings), rounded to 2 decimal places.
+
+Respond with raw JSON only. Do not include code blocks, markdown, or any other formatting.`;
+    } else if (source === 'pantry') {
+      prompt = `You are a professional chef helping users cook with what they already have at home.
+
+The user has these ingredients on hand in their pantry/fridge: ${ingredients}
+
+Create a delicious, healthy recipe that primarily uses these on-hand ingredients. You may assume basic staples (salt, pepper, cooking oil, water). Minimize ingredients they would need to buy — if something extra is truly needed, keep it to one or two common items and mark each as "(optional)" or "(if you have it)" in the ingredient line. Provide clear, step-by-step instructions.
+
+Provide a JSON response with this exact structure:
+{
+  "title": "Recipe name",
+  "freshIngredients": ["ingredient 1 with quantity", "ingredient 2 with quantity"],
+  "instructions": ["Step 1 description", "Step 2 description"],
+  "prepTime": "15 minutes",
+  "cookTime": "30 minutes",
+  "servings": "4",
+  "estimatedCostPerServing": 2.50,
+  "storeBoughtCost": 6.75
+}
+
+For the cost fields, estimate using average US grocery prices: "estimatedCostPerServing" is the cost in USD of one serving of this recipe, and "storeBoughtCost" is the cost in USD of one serving of the closest equivalent store-bought, takeout, or packaged version of this dish. Both must be plain numbers (not strings), rounded to 2 decimal places.
 
 Respond with raw JSON only. Do not include code blocks, markdown, or any other formatting.`;
     } else {
