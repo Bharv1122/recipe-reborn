@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -36,6 +36,27 @@ export function GenerateMealPlanDialog({ open, onOpenChange, onPlanGenerated }: 
   const [calorieTarget, setCalorieTarget] = useState('');
   const [mealsPerDay, setMealsPerDay] = useState('3');
   const [servings, setServings] = useState('2');
+  const [allergies, setAllergies] = useState('');
+  const [dislikes, setDislikes] = useState('');
+  const [prefsLoaded, setPrefsLoaded] = useState(false);
+
+  // Pre-fill from the profile's saved food preferences (editable per plan)
+  useEffect(() => {
+    if (!open || prefsLoaded) return;
+    fetch('/api/user/preferences')
+      .then((res) => (res.ok ? res.json() : null))
+      .then((prefs) => {
+        if (prefs) {
+          setAllergies((prefs.allergies || []).join(', '));
+          setDislikes((prefs.dislikedIngredients || []).join(', '));
+        }
+        setPrefsLoaded(true);
+      })
+      .catch(() => setPrefsLoaded(true));
+  }, [open, prefsLoaded]);
+
+  const splitList = (value: string) =>
+    value.split(',').map((item) => item.trim()).filter(Boolean);
 
   const toggleDietary = (id: string) => {
     setSelectedDietary(prev =>
@@ -55,6 +76,8 @@ export function GenerateMealPlanDialog({ open, onOpenChange, onPlanGenerated }: 
           calorieTarget: calorieTarget ? parseInt(calorieTarget) : undefined,
           mealsPerDay: parseInt(mealsPerDay),
           servings: parseInt(servings),
+          allergies: splitList(allergies),
+          dislikedIngredients: splitList(dislikes),
         }),
       });
 
@@ -135,6 +158,30 @@ export function GenerateMealPlanDialog({ open, onOpenChange, onPlanGenerated }: 
               value={calorieTarget}
               onChange={(e) => setCalorieTarget(e.target.value)}
             />
+          </div>
+
+          {/* Allergies & Dislikes (pre-filled from Account settings) */}
+          <div className="space-y-2">
+            <Label htmlFor="allergies">Allergies (never included)</Label>
+            <Input
+              id="allergies"
+              placeholder="e.g., shellfish, peanuts"
+              value={allergies}
+              onChange={(e) => setAllergies(e.target.value)}
+            />
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="dislikes">Disliked Ingredients (avoided)</Label>
+            <Input
+              id="dislikes"
+              placeholder="e.g., cilantro, olives"
+              value={dislikes}
+              onChange={(e) => setDislikes(e.target.value)}
+            />
+            <p className="text-xs text-muted-foreground">
+              Pre-filled from your Account settings — edits here apply to this plan only.
+            </p>
           </div>
 
           {/* Dietary Preferences */}

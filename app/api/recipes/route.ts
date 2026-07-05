@@ -52,6 +52,8 @@ export async function POST(request: NextRequest) {
       prepTime,
       cookTime,
       servings,
+      estimatedCostPerServing,
+      storeBoughtCost,
     } = body;
 
     if (!title || !originalIngredients || !freshIngredients || !instructions) {
@@ -72,6 +74,14 @@ export async function POST(request: NextRequest) {
         prepTime,
         cookTime,
         servings,
+        estimatedCostPerServing:
+          typeof estimatedCostPerServing === 'number' && isFinite(estimatedCostPerServing)
+            ? estimatedCostPerServing
+            : null,
+        storeBoughtCost:
+          typeof storeBoughtCost === 'number' && isFinite(storeBoughtCost)
+            ? storeBoughtCost
+            : null,
       },
     });
 
