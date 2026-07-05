@@ -56,7 +56,11 @@ model User {
   currentPeriodEnd   DateTime?
   generationCount    Int      @default(0)
   lastGenerationReset DateTime @default(now())
-  
+
+  // Food preferences — applied to all AI generation (recipes + meal plans)
+  allergies           String[] @default([])
+  dislikedIngredients String[] @default([])
+
   accounts      Account[]
   sessions      Session[]
   recipes       Recipe[]
@@ -120,6 +124,10 @@ model Recipe {
   fat                 Float?   // grams
   fiber               Float?   // grams
   sodium              Int?     // mg
+
+  // Cost savings (per serving, USD)
+  estimatedCostPerServing Float? // homemade cost
+  storeBoughtCost         Float? // store-bought equivalent cost
   
   createdAt           DateTime @default(now())
   updatedAt           DateTime @updatedAt

@@ -6,6 +6,8 @@ import { useEffect, useState } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 import { Progress } from '@/components/ui/progress';
 import {
   CreditCard,
@@ -15,6 +17,8 @@ import {
   AlertCircle,
   ExternalLink,
   Loader2,
+  PiggyBank,
+  UtensilsCrossed,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import Link from 'next/link';
@@ -26,6 +30,7 @@ interface UserData {
   lastGenerationReset: string;
   currentPeriodEnd: string | null;
   stripeCustomerId: string | null;
+  lifetimeSavings?: number;
 }
 
 const TIER_LIMITS: Record<string, number> = {
@@ -58,14 +63,60 @@ export default function AccountPage() {
   const [userData, setUserData] = useState<UserData | null>(null);
   const [loading, setLoading] = useState(true);
   const [managingSubscription, setManagingSubscription] = useState(false);
+  const [allergies, setAllergies] = useState('');
+  const [dislikes, setDislikes] = useState('');
+  const [savingPrefs, setSavingPrefs] = useState(false);
 
   useEffect(() => {
     if (status === 'unauthenticated') {
       router.push('/login');
     } else if (status === 'authenticated') {
       fetchUserData();
+      fetchPreferences();
     }
   }, [status, router]);
+
+  const fetchPreferences = async () => {
+    try {
+      const response = await fetch('/api/user/preferences');
+      if (response.ok) {
+        const prefs = await response.json();
+        setAllergies((prefs.allergies || []).join(', '));
+        setDislikes((prefs.dislikedIngredients || []).join(', '));
+      }
+    } catch (error) {
+      console.error('Error fetching preferences:', error);
+    }
+  };
+
+  const handleSavePreferences = async () => {
+    setSavingPrefs(true);
+    try {
+      const splitList = (value: string) =>
+        value.split(',').map((item) => item.trim()).filter(Boolean);
+      const response = await fetch('/api/user/preferences', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          allergies: splitList(allergies),
+          dislikedIngredients: splitList(dislikes),
+        }),
+      });
+      if (response.ok) {
+        const prefs = await response.json();
+        setAllergies((prefs.allergies || []).join(', '));
+        setDislikes((prefs.dislikedIngredients || []).join(', '));
+        toast.success('Food preferences saved — all new recipes will respect them');
+      } else {
+        toast.error('Failed to save preferences');
+      }
+    } catch (error) {
+      console.error('Error saving preferences:', error);
+      toast.error('Failed to save preferences');
+    } finally {
+      setSavingPrefs(false);
+    }
+  };
 
   const fetchUserData = async () => {
     try {
@@ -248,6 +299,73 @@ export default function AccountPage() {
                 </Link>
               )}
             </div>
+          </CardContent>
+        </Card>
+
+        {/* Lifetime Cost Savings */}
+        <Card className="border-2 border-emerald-500/30 bg-gradient-to-r from-emerald-50 to-orange-50">
+          <CardHeader>
+            <div className="flex items-center gap-3">
+              <PiggyBank className="h-10 w-10 text-emerald-600" />
+              <div>
+                <CardTitle className="text-2xl text-emerald-700">
+                  ~${(userData.lifetimeSavings ?? 0).toFixed(2)} saved
+                </CardTitle>
+                <CardDescription className="text-gray-600">
+                  {(userData.lifetimeSavings ?? 0) > 0
+                    ? 'Estimated lifetime savings from cooking your saved recipes instead of buying store-bought'
+                    : 'Save recipes with cost estimates to start tracking how much you save vs. store-bought'}
+                </CardDescription>
+              </div>
+            </div>
+          </CardHeader>
+        </Card>
+
+        {/* Food Preferences */}
+        <Card className="border-2">
+          <CardHeader>
+            <div className="flex items-center gap-3">
+              <UtensilsCrossed className="h-8 w-8 text-emerald-600" />
+              <div>
+                <CardTitle>Food Preferences</CardTitle>
+                <CardDescription>
+                  Applied automatically to every recipe and meal plan we generate for you
+                </CardDescription>
+              </div>
+            </div>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="account-allergies">Allergies — never included, no exceptions</Label>
+              <Input
+                id="account-allergies"
+                placeholder="e.g., shellfish, peanuts, eggs"
+                value={allergies}
+                onChange={(e) => setAllergies(e.target.value)}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="account-dislikes">Disliked ingredients — avoided when possible</Label>
+              <Input
+                id="account-dislikes"
+                placeholder="e.g., cilantro, olives, mushrooms"
+                value={dislikes}
+                onChange={(e) => setDislikes(e.target.value)}
+              />
+              <p className="text-xs text-muted-foreground">
+                Separate items with commas. You can still tweak these per meal plan.
+              </p>
+            </div>
+            <Button onClick={handleSavePreferences} disabled={savingPrefs}>
+              {savingPrefs ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Saving...
+                </>
+              ) : (
+                'Save Preferences'
+              )}
+            </Button>
           </CardContent>
         </Card>
 

@@ -6,10 +6,11 @@ import { Textarea } from '@/components/ui/textarea';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Loader2, ChefHat, Sparkles, Save, Clock, Users, Link as LinkIcon, Camera, Upload, X, Mic } from 'lucide-react';
+import { Loader2, ChefHat, Sparkles, Save, Clock, Users, Link as LinkIcon, Camera, Upload, X, Mic, PiggyBank, ScanBarcode } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { InteractiveIngredient } from './interactive-ingredient';
 import { VoiceChat } from './voice-chat';
+import { BarcodeScanner } from './barcode-scanner';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -28,6 +29,8 @@ interface Recipe {
   prepTime: string;
   cookTime: string;
   servings: string;
+  estimatedCostPerServing?: number;
+  storeBoughtCost?: number;
 }
 
 interface DietaryButton {
@@ -151,6 +154,8 @@ export function RecipeGenerator() {
           prepTime: recipe?.prepTime,
           cookTime: recipe?.cookTime,
           servings: recipe?.servings,
+          estimatedCostPerServing: recipe?.estimatedCostPerServing,
+          storeBoughtCost: recipe?.storeBoughtCost,
         }),
       });
 
@@ -477,7 +482,7 @@ export function RecipeGenerator() {
         </CardHeader>
         <CardContent>
           <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-            <TabsList className="grid w-full grid-cols-4 mb-4">
+            <TabsList className="grid w-full h-auto grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 mb-4">
               <TabsTrigger value="generate">
                 <Sparkles className="h-4 w-4 mr-2" />
                 Generate from Ingredients
@@ -493,6 +498,10 @@ export function RecipeGenerator() {
               <TabsTrigger value="photo">
                 <Camera className="h-4 w-4 mr-2" />
                 Photo Upload
+              </TabsTrigger>
+              <TabsTrigger value="barcode">
+                <ScanBarcode className="h-4 w-4 mr-2" />
+                Scan Barcode
               </TabsTrigger>
             </TabsList>
 
@@ -529,6 +538,16 @@ export function RecipeGenerator() {
             <TabsContent value="voice" className="space-y-4">
               <VoiceChat
                 onIngredientExtracted={(extractedIngredients) => {
+                  setIngredients(extractedIngredients);
+                  setActiveTab('generate');
+                }}
+              />
+            </TabsContent>
+
+            {/* Barcode Scanner Tab */}
+            <TabsContent value="barcode" className="space-y-4">
+              <BarcodeScanner
+                onIngredientsExtracted={(extractedIngredients) => {
                   setIngredients(extractedIngredients);
                   setActiveTab('generate');
                 }}
@@ -705,6 +724,24 @@ export function RecipeGenerator() {
             </div>
           </CardHeader>
           <CardContent className="pt-6 space-y-6">
+            {/* Cost Savings Banner */}
+            {typeof recipe?.estimatedCostPerServing === 'number' &&
+              typeof recipe?.storeBoughtCost === 'number' &&
+              recipe.storeBoughtCost > recipe.estimatedCostPerServing && (
+                <div className="flex items-center gap-3 p-4 bg-gradient-to-r from-emerald-50 to-orange-50 border border-emerald-200 rounded-lg">
+                  <PiggyBank className="h-8 w-8 text-emerald-600 flex-shrink-0" />
+                  <div>
+                    <p className="font-semibold text-emerald-700">
+                      You saved ~${(recipe.storeBoughtCost - recipe.estimatedCostPerServing).toFixed(2)} per serving!
+                    </p>
+                    <p className="text-sm text-gray-600">
+                      Homemade ~${recipe.estimatedCostPerServing.toFixed(2)}/serving vs. store-bought ~$
+                      {recipe.storeBoughtCost.toFixed(2)}/serving
+                    </p>
+                  </div>
+                </div>
+              )}
+
             {/* Recipe Meta Info */}
             <div className="flex items-center gap-6 text-sm text-gray-600">
               <div className="flex items-center gap-2">

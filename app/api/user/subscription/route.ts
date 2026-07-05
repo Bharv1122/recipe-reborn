@@ -29,7 +29,28 @@ export async function GET() {
       return NextResponse.json({ error: 'User not found' }, { status: 404 });
     }
 
-    return NextResponse.json(user);
+    // Lifetime cost savings across saved recipes: per-serving savings x servings per recipe
+    const recipesWithCosts = await prisma.recipe.findMany({
+      where: {
+        userId: session.user.id,
+        estimatedCostPerServing: { not: null },
+        storeBoughtCost: { not: null },
+      },
+      select: {
+        estimatedCostPerServing: true,
+        storeBoughtCost: true,
+        servings: true,
+      },
+    });
+
+    const lifetimeSavings = recipesWithCosts.reduce((total, recipe) => {
+      const perServing = (recipe.storeBoughtCost ?? 0) - (recipe.estimatedCostPerServing ?? 0);
+      if (perServing <= 0) return total;
+      const servings = parseInt(recipe.servings ?? '', 10);
+      return total + perServing * (Number.isFinite(servings) && servings > 0 ? servings : 1);
+    }, 0);
+
+    return NextResponse.json({ ...user, lifetimeSavings });
   } catch (error) {
     console.error('Error fetching user subscription:', error);
     return NextResponse.json(

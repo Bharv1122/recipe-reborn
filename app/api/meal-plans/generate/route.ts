@@ -18,6 +18,8 @@ export async function POST(req: Request) {
       calorieTarget,
       mealsPerDay = 3,
       servings = 2,
+      allergies: allergiesOverride,
+      dislikedIngredients: dislikesOverride,
     } = await req.json();
 
     if (!weekStartDate) {
@@ -26,6 +28,18 @@ export async function POST(req: Request) {
         { status: 400 }
       );
     }
+
+    // Per-plan override wins; otherwise fall back to the profile's saved preferences
+    const profile = await prisma.user.findUnique({
+      where: { id: session.user.id },
+      select: { allergies: true, dislikedIngredients: true },
+    });
+    const allergies: string[] = Array.isArray(allergiesOverride)
+      ? allergiesOverride.filter((a: unknown) => typeof a === 'string' && a.trim())
+      : profile?.allergies ?? [];
+    const dislikedIngredients: string[] = Array.isArray(dislikesOverride)
+      ? dislikesOverride.filter((d: unknown) => typeof d === 'string' && d.trim())
+      : profile?.dislikedIngredients ?? [];
 
     // Build AI prompt for meal plan generation
     const dietaryInfo = dietaryPreferences.length > 0
@@ -36,13 +50,20 @@ export async function POST(req: Request) {
       ? `Target daily calories: ${calorieTarget}`
       : 'No specific calorie target';
 
+    const allergyInfo = allergies.length > 0
+      ? `CRITICAL — FOOD ALLERGIES: allergic to ${allergies.join(', ')}. NEVER include these ingredients or anything derived from them, in any form, in any meal.`
+      : '';
+    const dislikeInfo = dislikedIngredients.length > 0
+      ? `DISLIKED INGREDIENTS: dislikes ${dislikedIngredients.join(', ')}. Avoid them unless truly essential; prefer substitutes.`
+      : '';
+
     const prompt = `You are a professional meal planning nutritionist. Create a balanced weekly meal plan with the following requirements:
 
 - Week starting: ${new Date(weekStartDate).toLocaleDateString()}
 - ${dietaryInfo}
 - ${calorieInfo}
 - ${mealsPerDay} meals per day (breakfast, lunch, dinner${mealsPerDay > 3 ? ', and snacks' : ''})
-- ${servings} servings per recipe
+- ${servings} servings per recipe${allergyInfo ? `\n- ${allergyInfo}` : ''}${dislikeInfo ? `\n- ${dislikeInfo}` : ''}
 
 For each day (Monday through Sunday), suggest ${mealsPerDay} recipes that:
 1. Are balanced and nutritious
@@ -92,7 +113,9 @@ Ensure the JSON is valid and properly formatted.`;
           },
         ],
         temperature: 0.7,
-        max_tokens: 8000,
+        // 21 full recipes ≈ 8-10k output tokens, and gemini-2.5-flash thinking
+        // tokens also count against this budget — 8000 truncated mid-JSON.
+        max_tokens: 24000,
       }),
     });
 
@@ -102,13 +125,24 @@ Ensure the JSON is valid and properly formatted.`;
 
     const data = await response.json();
     const content = data.choices[0]?.message?.content || '';
+    if (data.choices[0]?.finish_reason === 'length') {
+      console.error('Meal plan response truncated at max_tokens; content length:', content.length);
+    }
 
     // Parse the AI response
     let weekPlan;
     try {
-      // Remove markdown code blocks if present
-      const jsonMatch = content.match(/```(?:json)?\s*([\s\S]*?)```/);
-      const jsonStr = jsonMatch ? jsonMatch[1] : content;
+      // Strip markdown code fences — including an unterminated opening fence
+      // (a truncated response never closes it, which broke the old regex)
+      let jsonStr = content.trim();
+      const fenceMatch = jsonStr.match(/```(?:json)?\s*([\s\S]*?)```/);
+      jsonStr = fenceMatch ? fenceMatch[1] : jsonStr.replace(/^```(?:json)?\s*/, '');
+      // Extract the JSON array to guard against surrounding prose
+      const start = jsonStr.indexOf('[');
+      const end = jsonStr.lastIndexOf(']');
+      if (start !== -1 && end > start) {
+        jsonStr = jsonStr.slice(start, end + 1);
+      }
       weekPlan = JSON.parse(jsonStr.trim());
     } catch (parseError) {
       console.error('Failed to parse AI response:', content);

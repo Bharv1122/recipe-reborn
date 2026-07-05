@@ -49,6 +49,8 @@ export async function POST(request: NextRequest) {
         subscriptionStatus: true,
         generationCount: true,
         lastGenerationReset: true,
+        allergies: true,
+        dislikedIngredients: true,
       },
     });
 
@@ -135,8 +137,12 @@ Provide a JSON response with this exact structure:
   "instructions": ["Step 1 description", "Step 2 description"],
   "prepTime": "15 minutes",
   "cookTime": "30 minutes",
-  "servings": "4"
+  "servings": "4",
+  "estimatedCostPerServing": 2.50,
+  "storeBoughtCost": 6.75
 }
+
+For the cost fields, estimate using average US grocery prices: "estimatedCostPerServing" is the cost in USD to make one serving of this recipe from the fresh ingredients, and "storeBoughtCost" is the cost in USD of one serving of the equivalent store-bought/packaged product. Both must be plain numbers (not strings), rounded to 2 decimal places.
 
 Respond with raw JSON only. Do not include code blocks, markdown, or any other formatting.`;
     } else if (dietaryRestriction) {
@@ -151,8 +157,12 @@ Provide a JSON response with this exact structure:
   "instructions": ["Step 1 description", "Step 2 description"],
   "prepTime": "15 minutes",
   "cookTime": "30 minutes",
-  "servings": "4"
+  "servings": "4",
+  "estimatedCostPerServing": 2.50,
+  "storeBoughtCost": 6.75
 }
+
+For the cost fields, estimate using average US grocery prices: "estimatedCostPerServing" is the cost in USD to make one serving of this recipe from the fresh ingredients, and "storeBoughtCost" is the cost in USD of one serving of the equivalent store-bought/packaged product. Both must be plain numbers (not strings), rounded to 2 decimal places.
 
 Respond with raw JSON only. Do not include code blocks, markdown, or any other formatting.`;
     } else {
@@ -169,10 +179,30 @@ Provide a JSON response with this exact structure:
   "instructions": ["Step 1 description", "Step 2 description"],
   "prepTime": "15 minutes",
   "cookTime": "30 minutes",
-  "servings": "4"
+  "servings": "4",
+  "estimatedCostPerServing": 2.50,
+  "storeBoughtCost": 6.75
 }
 
+For the cost fields, estimate using average US grocery prices: "estimatedCostPerServing" is the cost in USD to make one serving of this recipe from the fresh ingredients, and "storeBoughtCost" is the cost in USD of one serving of the equivalent store-bought/packaged product. Both must be plain numbers (not strings), rounded to 2 decimal places.
+
 Respond with raw JSON only. Do not include code blocks, markdown, or any other formatting.`;
+    }
+
+    // Apply the user's saved food preferences to every generation variant
+    const prefLines: string[] = [];
+    if (user.allergies.length > 0) {
+      prefLines.push(
+        `CRITICAL — FOOD ALLERGIES: The user is allergic to: ${user.allergies.join(', ')}. NEVER include these ingredients or anything derived from them, in any form. If an allergen is essential to the dish, use a safe substitute and note it.`
+      );
+    }
+    if (user.dislikedIngredients.length > 0) {
+      prefLines.push(
+        `DISLIKED INGREDIENTS: The user dislikes: ${user.dislikedIngredients.join(', ')}. Avoid them unless truly essential to the dish concept; prefer substitutes.`
+      );
+    }
+    if (prefLines.length > 0) {
+      prompt += `\n\nUSER FOOD PREFERENCES (must be respected):\n${prefLines.join('\n')}`;
     }
 
     const messages = [
@@ -192,7 +222,9 @@ Respond with raw JSON only. Do not include code blocks, markdown, or any other f
         model: MODEL_SMART,
         messages: messages,
         stream: true,
-        max_tokens: 2000,
+        // Gemini 2.5 thinking tokens count against this budget; cost estimation
+        // added in Phase 3e needs the extra headroom or the JSON gets truncated
+        max_tokens: 6000,
         response_format: { type: 'json_object' },
       }),
     });
