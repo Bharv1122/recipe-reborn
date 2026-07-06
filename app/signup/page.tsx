@@ -1,8 +1,15 @@
 import { SignupForm } from './_components/signup-form';
 import Link from 'next/link';
 import Image from 'next/image';
+import { Sparkles } from 'lucide-react';
 
-export default function SignupPage() {
+export default function SignupPage({
+  searchParams,
+}: {
+  searchParams?: { unlock?: string };
+}) {
+  const fromUnlock = Boolean(searchParams?.unlock);
+
   return (
     <div className="min-h-screen flex items-center justify-center py-12 px-4 sm:px-6 lg:px-8">
       <div className="max-w-md w-full space-y-8">
@@ -12,12 +19,24 @@ export default function SignupPage() {
             <Image src="/logo-text-hero.png" alt="Recipe Reborn" width={220} height={52} className="h-12 w-auto" />
           </Link>
           <h2 className="mt-6 text-3xl font-extrabold text-white">
-            Create your account
+            {fromUnlock ? 'Unlock your fresh recipe' : 'Create your account'}
           </h2>
           <p className="mt-2 text-sm text-emerald-50/90">
-            Start transforming processed foods into fresh recipes
+            {fromUnlock
+              ? 'Your recipe is waiting on the other side.'
+              : 'Save your fresh recipes, track your savings, cook real food.'}
           </p>
         </div>
+
+        {fromUnlock && (
+          <div className="rounded-xl border border-emerald-300/60 bg-white/10 backdrop-blur px-4 py-3 text-center">
+            <p className="inline-flex items-center gap-2 text-sm font-medium text-white">
+              <Sparkles className="h-4 w-4 text-orange-300" />
+              You&apos;re one step from the full ingredient list, instructions &amp; your savings
+            </p>
+          </div>
+        )}
+
         <SignupForm />
         <div className="text-center text-sm">
           <span className="text-emerald-50/90">Already have an account? </span>
@@ -28,6 +47,9 @@ export default function SignupPage() {
             Sign in
           </Link>
         </div>
+        <p className="text-center text-xs text-emerald-50/70">
+          Free to start · 3 recipes a month · no card required
+        </p>
       </div>
     </div>
   );

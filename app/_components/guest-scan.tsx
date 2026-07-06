@@ -60,6 +60,16 @@ export function GuestScan() {
     }
   };
 
+  // Carry the visitor's typed ingredients across signup so the generator can
+  // hand them the recipe they were promised instead of a blank form. (conversion)
+  const stashIngredientsForSignup = () => {
+    try {
+      sessionStorage.setItem('rr_guest_ingredients', ingredients);
+    } catch {
+      // sessionStorage unavailable (private mode) — signup still works
+    }
+  };
+
   const savings =
     recipe &&
     typeof recipe.estimatedCostPerServing === 'number' &&
@@ -118,7 +128,7 @@ export function GuestScan() {
           {wallMessage && (
             <div className="mt-4 rounded-lg border border-emerald-200 bg-emerald-50 p-4 text-center space-y-3">
               <p className="text-sm text-emerald-800">{wallMessage}</p>
-              <Link href="/signup">
+              <Link href="/signup?unlock=1" onClick={stashIngredientsForSignup}>
                 <Button className="bg-emerald-600 hover:bg-emerald-700 text-white">
                   Sign Up Free
                 </Button>
@@ -217,7 +227,7 @@ export function GuestScan() {
               Get the complete ingredient list, step-by-step instructions, and save it to your
               collection — 3 free recipes a month, no card required.
             </p>
-            <Link href="/signup">
+            <Link href="/signup?unlock=1" onClick={stashIngredientsForSignup}>
               <Button size="lg" className="bg-emerald-600 hover:bg-emerald-700 text-white">
                 <Sparkles className="mr-2 h-5 w-5" />
                 Sign Up Free to See It

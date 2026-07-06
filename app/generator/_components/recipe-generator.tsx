@@ -104,6 +104,26 @@ export function RecipeGenerator() {
     }
   }, [recipe]);
 
+  // Guest → signup handoff: a visitor who transformed a label on the landing
+  // page and then signed up lands here with their ingredients already loaded —
+  // instead of a blank form that makes them retype the thing they were just
+  // promised. Prefill only (they hit Transform themselves). (conversion)
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    try {
+      const stashed = window.sessionStorage.getItem('rr_guest_ingredients');
+      if (stashed && stashed.trim()) {
+        window.sessionStorage.removeItem('rr_guest_ingredients');
+        setIngredients(stashed);
+        setInputMode('label');
+        setActiveTab('generate');
+        toast.success('Your ingredients are ready — hit Transform to see your recipe.');
+      }
+    } catch {
+      // sessionStorage unavailable (private mode) — nothing to carry over
+    }
+  }, []);
+
   const generateRecipe = async (dietaryRestriction?: string) => {
     if (!ingredients?.trim() && !dietaryRestriction) {
       toast.error('Please enter some ingredients');
