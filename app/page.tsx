@@ -4,6 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Sparkles, Heart, Leaf } from 'lucide-react';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth-options';
+import { GuestScan } from './_components/guest-scan';
 
 export default async function HomePage() {
   const session = await getServerSession(authOptions);
@@ -63,6 +64,13 @@ export default async function HomePage() {
               </>
             )}
           </div>
+
+          {/* Guest funnel — let anyone try the transformation before signing up */}
+          {!session && (
+            <div className="pt-6">
+              <GuestScan />
+            </div>
+          )}
         </div>
       </section>
 
