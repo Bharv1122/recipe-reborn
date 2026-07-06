@@ -78,6 +78,16 @@ model VerificationToken {
   @@unique([identifier, token])
 }
 
+// Per-IP usage for the anonymous "try it free" guest scan. IPs are hashed
+// (sha256) so we never store raw addresses. Rate limit fails closed.
+model GuestUsage {
+  id        String   @id @default(cuid())
+  ipHash    String   @unique
+  count     Int      @default(0)
+  windowEnd DateTime
+  updatedAt DateTime @updatedAt
+}
+
 model Folder {
   id        String   @id @default(cuid())
   userId    String
