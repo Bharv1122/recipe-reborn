@@ -86,14 +86,15 @@ export function GuestScan() {
             className="resize-none text-gray-900"
             disabled={loading}
           />
-          <div className="flex items-center justify-between mt-2 mb-4">
+          <div className="flex justify-center mt-2 mb-4">
             <button
               type="button"
               onClick={() => setIngredients(EXAMPLE)}
-              className="text-xs text-emerald-600 hover:underline"
+              className="inline-flex items-center gap-1.5 rounded-full border border-emerald-200 bg-emerald-50 px-4 py-2 text-sm font-medium text-emerald-700 transition-colors hover:bg-emerald-100 disabled:opacity-50"
               disabled={loading}
             >
-              Try an example
+              <Sparkles className="h-4 w-4" />
+              No label handy? Try an example
             </button>
           </div>
           <Button
