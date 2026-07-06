@@ -5,6 +5,7 @@ import { Sparkles, Heart, Leaf } from 'lucide-react';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth-options';
 import { GuestScan } from './_components/guest-scan';
+import { LandingDemo } from './_components/landing-demo';
 
 export default async function HomePage() {
   const session = await getServerSession(authOptions);
@@ -39,7 +40,8 @@ export default async function HomePage() {
             className="mx-auto -mt-6 w-full max-w-sm sm:max-w-md h-auto drop-shadow-md"
           />
           <p className="text-2xl text-white max-w-3xl mx-auto drop-shadow-sm">
-            Transform processed food ingredients into fresh, healthy recipes with the power of AI.
+            Snap a photo of any ingredient label — or scan the barcode — and watch AI turn
+            that processed product into a fresh, homemade recipe in seconds.
           </p>
           <div className="flex items-center justify-center gap-4 pt-6">
             {session ? (
@@ -74,6 +76,9 @@ export default async function HomePage() {
         </div>
       </section>
 
+      {/* See It in Action — animated demo + every input method */}
+      <LandingDemo />
+
       {/* Features Section */}
       <section className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-20">
         <h2 className="text-3xl font-bold text-center text-white mb-12 drop-shadow-sm">
@@ -84,9 +89,9 @@ export default async function HomePage() {
             <div className="w-12 h-12 bg-emerald-100 rounded-full flex items-center justify-center mb-4">
               <Sparkles className="h-6 w-6 text-emerald-600" />
             </div>
-            <h3 className="text-xl font-semibold text-gray-900 mb-3">AI-Powered Generation</h3>
+            <h3 className="text-xl font-semibold text-gray-900 mb-3">Point. Scan. Cook.</h3>
             <p className="text-gray-600">
-              Our advanced AI analyzes processed ingredients and creates fresh, wholesome alternatives tailored to your needs.
+              Photograph any ingredient label or scan the barcode — AI reads it, flags the additives, and builds the fresh homemade version.
             </p>
           </div>
           <div className="bg-white p-8 rounded-lg shadow-lg hover:shadow-xl transition-shadow">
@@ -139,9 +144,9 @@ export default async function HomePage() {
             <div className="w-16 h-16 bg-emerald-600 text-white rounded-full flex items-center justify-center mx-auto mb-4 text-2xl font-bold">
               1
             </div>
-            <h3 className="text-lg font-semibold text-gray-900 mb-2">Input Ingredients</h3>
+            <h3 className="text-lg font-semibold text-gray-900 mb-2">Snap, Scan, or Say It</h3>
             <p className="text-gray-600">
-              Copy the ingredient list from any processed food package
+              Photograph the label, scan the barcode, chat by voice, or just type — whatever&apos;s easiest
             </p>
           </div>
           <div className="text-center">
