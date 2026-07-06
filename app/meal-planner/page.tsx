@@ -3,9 +3,10 @@
 import { useEffect, useState } from 'react';
 import { useSession } from 'next-auth/react';
 import { useRouter } from 'next/navigation';
+import Link from 'next/link';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Loader2, Plus, Calendar as CalendarIcon } from 'lucide-react';
+import { Loader2, Plus, Calendar as CalendarIcon, Crown } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { MealPlanCard } from './_components/meal-plan-card';
 import { GenerateMealPlanDialog } from './_components/generate-meal-plan-dialog';
@@ -27,12 +28,19 @@ export default function MealPlannerPage() {
   const [loading, setLoading] = useState(true);
   const [generateDialogOpen, setGenerateDialogOpen] = useState(false);
   const [selectedPlan, setSelectedPlan] = useState<MealPlan | null>(null);
+  const [isPremium, setIsPremium] = useState<boolean | null>(null);
 
   useEffect(() => {
     if (status === 'unauthenticated') {
       router.push('/login');
     } else if (status === 'authenticated') {
       fetchMealPlans();
+      fetch('/api/user/subscription')
+        .then((res) => (res.ok ? res.json() : null))
+        .then((sub) => {
+          if (sub) setIsPremium(sub.subscriptionTier === 'premium' || sub.subscriptionTier === 'pro');
+        })
+        .catch(() => {});
     }
   }, [status, router]);
 
@@ -113,6 +121,29 @@ export default function MealPlannerPage() {
             Generate Meal Plan
           </Button>
         </div>
+
+        {/* Premium upsell for free users — the API also enforces this server-side */}
+        {isPremium === false && (
+          <Card className="border-2 border-orange-300 bg-gradient-to-r from-orange-50 to-emerald-50">
+            <CardContent className="pt-6 flex flex-col sm:flex-row items-center gap-4 justify-between">
+              <div className="flex items-center gap-3">
+                <Crown className="h-8 w-8 text-orange-500 flex-shrink-0" />
+                <div>
+                  <p className="font-semibold text-gray-900">AI weekly meal plans are a Premium feature</p>
+                  <p className="text-sm text-gray-600">
+                    21 personalized meals a week, tuned to your allergies and preferences — $9.99/mo, first month free with code 1STMONTHOFF
+                  </p>
+                </div>
+              </div>
+              <Link href="/pricing">
+                <Button className="bg-orange-500 hover:bg-orange-600 text-white whitespace-nowrap">
+                  <Crown className="mr-2 h-4 w-4" />
+                  Upgrade to Premium
+                </Button>
+              </Link>
+            </CardContent>
+          </Card>
+        )}
 
         {mealPlans.length === 0 ? (
           <Card>

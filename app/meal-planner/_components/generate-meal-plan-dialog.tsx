@@ -86,7 +86,10 @@ export function GenerateMealPlanDialog({ open, onOpenChange, onPlanGenerated }: 
         onPlanGenerated(plan);
       } else {
         const error = await response.json();
-        toast.error(error.error || 'Failed to generate meal plan');
+        // 403 carries the Premium upsell message — show it, not a generic failure
+        toast.error(error.message || error.error || 'Failed to generate meal plan', {
+          duration: error.message ? 8000 : 4000,
+        });
       }
     } catch (error) {
       console.error('Error generating meal plan:', error);

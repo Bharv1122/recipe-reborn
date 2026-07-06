@@ -32,8 +32,21 @@ export async function POST(req: Request) {
     // Per-plan override wins; otherwise fall back to the profile's saved preferences
     const profile = await prisma.user.findUnique({
       where: { id: session.user.id },
-      select: { allergies: true, dislikedIngredients: true },
+      select: { allergies: true, dislikedIngredients: true, subscriptionTier: true },
     });
+
+    // Meal planning is a Premium feature ('pro' = grandfathered legacy tier)
+    const tier = profile?.subscriptionTier ?? 'free';
+    if (tier !== 'premium' && tier !== 'pro') {
+      return NextResponse.json(
+        {
+          error: 'Premium feature',
+          message:
+            'AI weekly meal plans are a Premium feature. Upgrade for $9.99/mo — or try your first month free with code 1STMONTHOFF.',
+        },
+        { status: 403 }
+      );
+    }
     const allergies: string[] = Array.isArray(allergiesOverride)
       ? allergiesOverride.filter((a: unknown) => typeof a === 'string' && a.trim())
       : profile?.allergies ?? [];
