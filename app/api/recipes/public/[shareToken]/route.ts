@@ -28,17 +28,28 @@ export async function GET(
       );
     }
 
-    // Find the recipe by share token
+    // Find the recipe by share token. Explicit allowlist — a public link must
+    // expose ONLY display fields, never the owner's private notes, userId,
+    // folderId, or internal cost data.
     const recipe = await prisma.recipe.findFirst({
       where: {
         shareToken,
         isPublic: true,
       },
-      include: {
+      select: {
+        id: true,
+        title: true,
+        originalIngredients: true,
+        freshIngredients: true,
+        instructions: true,
+        dietaryTags: true,
+        prepTime: true,
+        cookTime: true,
+        servings: true,
+        viewCount: true,
         user: {
           select: {
             name: true,
-            email: false,
           },
         },
       },
