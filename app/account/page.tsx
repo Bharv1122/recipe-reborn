@@ -217,8 +217,14 @@ export default function AccountPage() {
                   </CardTitle>
                   <div className="flex items-center gap-2 mt-1">
                     <span className="text-sm text-muted-foreground">Status:</span>
-                    <Badge variant={userData.subscriptionStatus === 'active' ? 'default' : 'destructive'}>
-                      {userData.subscriptionStatus}
+                    <Badge
+                      variant={
+                        userData.subscriptionStatus === 'active' || userData.subscriptionStatus === 'trialing'
+                          ? 'default'
+                          : 'destructive'
+                      }
+                    >
+                      {userData.subscriptionStatus === 'trialing' ? 'free trial' : userData.subscriptionStatus}
                     </Badge>
                   </div>
                 </div>

@@ -44,6 +44,7 @@ const pricingTiers: PricingTier[] = [
     priceId: process.env.NEXT_PUBLIC_STRIPE_PREMIUM_PRICE_ID || '',
     description: 'For home cooks who love healthy recipes',
     features: [
+      '7-day free trial',
       '100 recipe generations per month',
       'All dietary customizations',
       'Unlimited recipe storage',
@@ -55,7 +56,7 @@ const pricingTiers: PricingTier[] = [
     ],
     icon: <Crown className="h-6 w-6" />,
     popular: true,
-    buttonText: 'Start Premium',
+    buttonText: 'Start 7-Day Free Trial',
   },
   {
     name: 'Premium Yearly',
@@ -64,6 +65,7 @@ const pricingTiers: PricingTier[] = [
     priceId: process.env.NEXT_PUBLIC_STRIPE_YEARLY_PRICE_ID || '',
     description: 'Everything in Premium — pay once, save all year',
     features: [
+      '7-day free trial',
       'Everything in Premium',
       '100 recipe generations per month',
       'All dietary customizations',

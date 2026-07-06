@@ -77,8 +77,14 @@ export async function POST(request: NextRequest) {
       user.generationCount = 0;
     }
 
-    // Check subscription limits
-    const limit = TIER_LIMITS[user.subscriptionTier as keyof typeof TIER_LIMITS] || TIER_LIMITS.free;
+    // Check subscription limits — trial users get a reduced cap until their
+    // first real payment (prevents stockpiling recipes on a free trial)
+    const TRIAL_LIMIT = 15;
+    const isTrialing =
+      user.subscriptionTier !== 'free' && user.subscriptionStatus === 'trialing';
+    const limit = isTrialing
+      ? TRIAL_LIMIT
+      : TIER_LIMITS[user.subscriptionTier as keyof typeof TIER_LIMITS] || TIER_LIMITS.free;
 
     if (user.generationCount >= limit) {
       return NextResponse.json(
@@ -87,8 +93,9 @@ export async function POST(request: NextRequest) {
           limit,
           current: user.generationCount,
           tier: user.subscriptionTier,
-          message:
-            user.subscriptionTier === 'free'
+          message: isTrialing
+            ? `Your free trial includes ${TRIAL_LIMIT} recipes. Your full 100 per month unlocks when your trial converts to Premium.`
+            : user.subscriptionTier === 'free'
               ? 'You have reached your free tier limit of 3 recipes per month. Upgrade to Premium for 100 recipes per month.'
               : `You have reached your ${user.subscriptionTier} tier limit of ${limit} recipes this month.`,
         },
