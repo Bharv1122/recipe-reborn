@@ -131,7 +131,7 @@ export default function MealPlannerPage() {
                 <div>
                   <p className="font-semibold text-gray-900">AI weekly meal plans are a Premium feature</p>
                   <p className="text-sm text-gray-600">
-                    21 personalized meals a week, tuned to your allergies and preferences — $9.99/mo, first month free with code 1STMONTHOFF
+                    21 personalized meals a week, tuned to your allergies and preferences — $9.99/mo with a free 7-day trial
                   </p>
                 </div>
               </div>

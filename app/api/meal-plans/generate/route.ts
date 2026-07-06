@@ -32,7 +32,12 @@ export async function POST(req: Request) {
     // Per-plan override wins; otherwise fall back to the profile's saved preferences
     const profile = await prisma.user.findUnique({
       where: { id: session.user.id },
-      select: { allergies: true, dislikedIngredients: true, subscriptionTier: true },
+      select: {
+        allergies: true,
+        dislikedIngredients: true,
+        subscriptionTier: true,
+        subscriptionStatus: true,
+      },
     });
 
     // Meal planning is a Premium feature ('pro' = grandfathered legacy tier)
@@ -42,10 +47,27 @@ export async function POST(req: Request) {
         {
           error: 'Premium feature',
           message:
-            'AI weekly meal plans are a Premium feature. Upgrade for $9.99/mo — or try your first month free with code 1STMONTHOFF.',
+            'AI weekly meal plans are a Premium feature. Upgrade for $9.99/mo — your first 7 days are free.',
         },
         { status: 403 }
       );
+    }
+
+    // Trial cap: each plan is 21 recipes, so limit trials to 2 plans
+    const TRIAL_MEAL_PLAN_LIMIT = 2;
+    if (profile?.subscriptionStatus === 'trialing') {
+      const planCount = await prisma.mealPlan.count({
+        where: { userId: session.user.id },
+      });
+      if (planCount >= TRIAL_MEAL_PLAN_LIMIT) {
+        return NextResponse.json(
+          {
+            error: 'Trial limit reached',
+            message: `Your free trial includes ${TRIAL_MEAL_PLAN_LIMIT} meal plans. Unlimited plans unlock when your trial converts to Premium.`,
+          },
+          { status: 403 }
+        );
+      }
     }
     const allergies: string[] = Array.isArray(allergiesOverride)
       ? allergiesOverride.filter((a: unknown) => typeof a === 'string' && a.trim())

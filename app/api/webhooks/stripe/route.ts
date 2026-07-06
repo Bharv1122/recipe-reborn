@@ -95,16 +95,25 @@ async function handleSubscriptionChange(subscription: Stripe.Subscription) {
     tier = 'pro'; // legacy — no longer sold, kept for grandfathered subscribers
   }
 
+  // Keep 'trialing' distinct — trial users get Premium features but reduced
+  // caps until their first real payment converts them to 'active'
   const status =
-    subscription.status === 'active' || subscription.status === 'trialing'
+    subscription.status === 'active'
       ? 'active'
+      : subscription.status === 'trialing'
+      ? 'trialing'
       : subscription.status === 'past_due'
       ? 'past_due'
       : 'canceled';
 
-  const currentPeriodEnd = (subscription as any).current_period_end 
-    ? new Date((subscription as any).current_period_end * 1000)
-    : new Date();
+  // On API version 2026-02-25 current_period_end lives on the subscription
+  // items, not the subscription — check both
+  const periodEndSeconds =
+    (subscription as any).current_period_end ??
+    (subscription as any).items?.data?.[0]?.current_period_end;
+  const currentPeriodEnd = periodEndSeconds
+    ? new Date(periodEndSeconds * 1000)
+    : null;
 
   // Update user in database
   await prisma.user.update({
@@ -140,6 +149,13 @@ async function handleSubscriptionCanceled(subscription: Stripe.Subscription) {
 
 async function handlePaymentSuccess(invoice: Stripe.Invoice) {
   const customerId = invoice.customer as string;
+
+  // $0 invoices (trial start, 100%-off coupons) also fire this event —
+  // don't flip a trialing user to 'active' until real money moves
+  if ((invoice.amount_paid ?? 0) <= 0) {
+    console.log(`Zero-amount invoice for customer ${customerId} — status unchanged`);
+    return;
+  }
 
   // Reset generation count on successful payment (monthly billing)
   await prisma.user.update({
