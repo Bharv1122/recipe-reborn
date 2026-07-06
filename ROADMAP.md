@@ -40,4 +40,16 @@ Protocol: worker agents EDIT ONLY (no git commands, no .env changes, no killing 
 4. Production smoke test: signup→login; 3 recipes then 4th blocked (message says 3); photo extract; checkout w/ 1STMONTHOFF real card → premium → cancel → reverts; webhook 200s; share link logged out; sitemap/robots/headers; meal planner + shopping CRUD; mobile nav at 375px.
 
 ## Phase 3 backlog (post-launch, spawn-task chips created)
-3a voice done right (Gemini audio transcription + TTS + cooking mode) · 3c barcode scan via OpenFoodFacts · 3d USDA FoodData Central real nutrition · 3e "you saved $X" cost compare · 3f Instacart handoff (post-approval) · i18n restore (lowest priority). Specs in the approved plan: `C:\Users\bethh\.claude\plans\ok-so-i-would-zesty-dewdrop.md` + docs in `OneDrive\Desktop\RR PICS\`.
+3a voice done right (Gemini audio transcription + TTS + cooking mode) · ✅ 3c barcode scan via OpenFoodFacts (shipped PR #4) · 3d USDA FoodData Central real nutrition · ✅ 3e "you saved $X" cost compare (shipped PR #4) · 3f Instacart handoff (HARD-BLOCKED: Instacart not accepting dev applications as of 2026-07-05) · i18n restore (lowest priority). Specs in the approved plan: `C:\Users\bethh\.claude\plans\ok-so-i-would-zesty-dewdrop.md` + docs in `OneDrive\Desktop\RR PICS\`.
+
+## Shipped 2026-07-05 (PR #4)
+Meal-plan truncation fix (max_tokens 24000 + fence-tolerant parse) · Phase 3c barcode · Phase 3e cost savings · Food preferences (profile-level allergies hard-block + dislikes soft-avoid, applied to all generation; /account editor; meal-plan dialog pre-fill w/ per-plan override). Two additive migrations applied to prod.
+
+## Phase 4 — approved direction (Beth, 2026-07-05 brainstorm)
+**North star: "the transformation app" — photo of processed label → fresh recipe is THE product; everything else supports it.**
+- **4a Photo-hero UX:** unified Scan flow (barcode-first, photo fallback) as default tab + landing CTA; progressive loading steps ("Reading label… found N additives…"); before/after results screen (additive count red→green pills, store vs homemade cost); photo-fail recovery tips; lighter surfaces on content pages (green = accent, script font = logo only); empty states with scan CTAs
+- **4b Monetization nudges (small, ride along with 4a):** block-moment upsell using user's own lifetimeSavings; surface the 7-day free trial at block + pricing; visible "X of 3 free left" counter. (1STMONTHOFF coupon deleted 2026-07-05 — trial replaced it.)
+- **4c Guest scan funnel:** one anonymous scan → recipe teaser (title + savings) → signup wall to reveal. Highest-leverage conversion change.
+- **4d SEO transformation gallery (later, big):** public "healthy homemade version of X" pages from barcode DB + generated recipes
+- **4e Mobile & app stores (phased):** A) PWA polish (manifest/icons/install prompt — days) → B) Google Play via TWA/PWABuilder ($25 one-time — days) → C) iOS native via Expo reusing existing API (weeks + $99/yr — only after revenue justifies). Subscriptions stay on web Stripe checkout via link-out (US anti-steering rulings allow; avoids 15-30% store cut). Mobile-web responsiveness already shipped (WP3 nav, 375px generator tabs).
+- Restore lost old-app gems: single-meal refresh, PDF export (meal plans + collection cookbooks), wine pairing (old app had all three — see RR PICS/COMPLETE_PROJECT_SUMMARY.md)
