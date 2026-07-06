@@ -58,7 +58,7 @@ export function RecipeGenerator() {
   const [selectedImage, setSelectedImage] = useState<File | null>(null);
   const [imagePreview, setImagePreview] = useState<string | null>(null);
   const [isExtracting, setIsExtracting] = useState(false);
-  const [activeTab, setActiveTab] = useState('generate');
+  const [activeTab, setActiveTab] = useState('photo');
   const [inputMode, setInputMode] = useState<'label' | 'pantry'>('label');
   const [isRegeneratingWithSubstitute, setIsRegeneratingWithSubstitute] = useState(false);
   const [substitutionInfo, setSubstitutionInfo] = useState<{original: string; substitute: string} | null>(null);
@@ -68,6 +68,7 @@ export function RecipeGenerator() {
   // before/after transformation reveal. Empty for pantry / fresh input.
   const [detectedAdditives, setDetectedAdditives] = useState<DetectedAdditive[]>([]);
   const [loadingStep, setLoadingStep] = useState(0);
+  const [photoError, setPhotoError] = useState<string | null>(null);
   const resultRef = useRef<HTMLDivElement>(null);
 
   const isBusy = isGenerating || isExtracting;
@@ -348,6 +349,7 @@ export function RecipeGenerator() {
 
     setIsExtracting(true);
     setRecipe(null);
+    setPhotoError(null);
 
     try {
       const formData = new FormData();
@@ -466,7 +468,10 @@ export function RecipeGenerator() {
       }
     } catch (error: any) {
       console.error('Extract recipe error:', error);
-      toast.error(error?.message || 'Failed to extract recipe from photo');
+      // Keep the photo on screen and show inline recovery instead of a dead toast
+      setPhotoError(
+        error?.message || "We couldn't read that label. Try the tips below."
+      );
     } finally {
       setIsExtracting(false);
     }
@@ -583,26 +588,27 @@ export function RecipeGenerator() {
         </CardHeader>
         <CardContent>
           <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
+            {/* Scanning leads — it's the core "processed → fresh" experience */}
             <TabsList className="grid w-full h-auto grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 mb-4">
+              <TabsTrigger value="photo">
+                <Camera className="h-4 w-4 mr-2" />
+                Scan a Label
+              </TabsTrigger>
+              <TabsTrigger value="barcode">
+                <ScanBarcode className="h-4 w-4 mr-2" />
+                Scan Barcode
+              </TabsTrigger>
               <TabsTrigger value="generate">
                 <Sparkles className="h-4 w-4 mr-2" />
-                Generate from Ingredients
-              </TabsTrigger>
-              <TabsTrigger value="voice">
-                <Mic className="h-4 w-4 mr-2" />
-                Voice Chat
+                Type Ingredients
               </TabsTrigger>
               <TabsTrigger value="import">
                 <LinkIcon className="h-4 w-4 mr-2" />
                 Import from URL
               </TabsTrigger>
-              <TabsTrigger value="photo">
-                <Camera className="h-4 w-4 mr-2" />
-                Photo Upload
-              </TabsTrigger>
-              <TabsTrigger value="barcode">
-                <ScanBarcode className="h-4 w-4 mr-2" />
-                Scan Barcode
+              <TabsTrigger value="voice">
+                <Mic className="h-4 w-4 mr-2" />
+                Voice Chat
               </TabsTrigger>
             </TabsList>
 
@@ -853,6 +859,47 @@ export function RecipeGenerator() {
                         )}
                       </Button>
                     </div>
+
+                    {/* Photo-fail recovery — never dead-end a scan */}
+                    {photoError && (
+                      <div className="rounded-lg border border-amber-200 bg-amber-50 p-4 space-y-3">
+                        <div className="flex items-start gap-2">
+                          <AlertTriangle className="h-5 w-5 text-amber-500 flex-shrink-0 mt-0.5" />
+                          <div>
+                            <p className="font-medium text-amber-800">{photoError}</p>
+                            <ul className="mt-2 text-sm text-amber-700 space-y-1 list-disc list-inside">
+                              <li>Get close so the ingredient list fills the frame</li>
+                              <li>Flatten the label and avoid glare or shadows</li>
+                              <li>Make sure the small print is in focus</li>
+                            </ul>
+                          </div>
+                        </div>
+                        <div className="flex flex-col sm:flex-row gap-2">
+                          <Button
+                            type="button"
+                            onClick={extractRecipeFromPhoto}
+                            disabled={isExtracting || isGenerating}
+                            className="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white"
+                          >
+                            <Sparkles className="mr-2 h-4 w-4" />
+                            Try This Photo Again
+                          </Button>
+                          <Button
+                            type="button"
+                            variant="outline"
+                            onClick={() => {
+                              setPhotoError(null);
+                              clearImage();
+                              setActiveTab('barcode');
+                            }}
+                            className="flex-1 border-emerald-600 text-emerald-600 hover:bg-emerald-50"
+                          >
+                            <ScanBarcode className="mr-2 h-4 w-4" />
+                            Try Barcode Instead
+                          </Button>
+                        </div>
+                      </div>
+                    )}
                   </div>
                 )}
               </div>

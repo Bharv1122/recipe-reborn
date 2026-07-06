@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/button';
 import { SearchInput } from '@/components/ui/search-input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { StarRating } from '@/components/ui/star-rating';
-import { Loader2, Trash2, Clock, Users, ChefHat, Filter, Share2, FolderInput } from 'lucide-react';
+import { Loader2, Trash2, Clock, Users, ChefHat, Filter, Share2, FolderInput, Camera } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { RecipeDetailModal } from './recipe-detail-modal';
 import { FolderSidebar } from './folder-sidebar';
@@ -248,14 +248,19 @@ export function RecipesList() {
     return (
       <Card className="shadow-lg border-0 bg-white">
         <CardContent className="py-12 text-center">
-          <ChefHat className="h-16 w-16 text-gray-300 mx-auto mb-4" />
+          <div className="mx-auto mb-4 h-16 w-16 rounded-full bg-emerald-100 flex items-center justify-center">
+            <Camera className="h-8 w-8 text-emerald-600" />
+          </div>
           <h3 className="text-xl font-semibold text-gray-900 mb-2">No recipes yet</h3>
-          <p className="text-gray-600 mb-6">Start generating fresh recipes to build your collection!</p>
+          <p className="text-gray-600 mb-6">
+            📸 Grab any box from your pantry and scan the label — we&apos;ll turn it into a fresh homemade version.
+          </p>
           <Button
             onClick={() => (window.location.href = '/generator')}
             className="bg-emerald-600 hover:bg-emerald-700 text-white"
           >
-            Generate Your First Recipe
+            <Camera className="mr-2 h-4 w-4" />
+            Scan Your First Label
           </Button>
         </CardContent>
       </Card>
