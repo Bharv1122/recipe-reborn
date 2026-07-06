@@ -269,9 +269,9 @@ export function RecipesList() {
 
   return (
     <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
-      <div className="flex gap-6">
-        {/* Folder Sidebar */}
-        <div className="w-64 flex-shrink-0">
+      <div className="flex flex-col lg:flex-row gap-6">
+        {/* Folder Sidebar — stacks on top on mobile, sidebar on lg+ */}
+        <div className="w-full lg:w-64 lg:flex-shrink-0">
           <Card className="shadow-lg border-0 bg-white h-full">
             <FolderSidebar
               folders={folders}
