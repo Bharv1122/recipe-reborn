@@ -47,11 +47,9 @@ export function GuestScan() {
       });
       const data = await res.json();
       if (!res.ok) {
-        if (res.status === 429 && data?.message) {
-          setWallMessage(data.message);
-        } else {
-          setWallMessage(data?.error || 'Something went wrong — please try again.');
-        }
+        // 429 (out of previews) and 503 (Gemini busy) both carry a friendly,
+        // signup-pointing message
+        setWallMessage(data?.message || data?.error || 'Something went wrong — please try again.');
         return;
       }
       setRecipe(data.recipe);

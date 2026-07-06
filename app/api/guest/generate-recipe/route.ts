@@ -13,14 +13,11 @@ export async function POST(request: NextRequest) {
     const ip = getClientIp(request);
     const limit = await checkGuestLimit(ip);
     if (!limit.allowed) {
-      return NextResponse.json(
-        {
-          error: 'Guest limit reached',
-          message:
-            "You've used your free previews for today. Sign up free to keep transforming — 3 recipes a month, no card needed.",
-        },
-        { status: 429 }
-      );
+      const message =
+        limit.reason === 'global'
+          ? "We've hit today's free-preview limit. Sign up free to keep transforming — no card needed."
+          : "You've used your free previews for today. Sign up free to keep transforming — 3 recipes a month, no card needed.";
+      return NextResponse.json({ error: 'Guest limit reached', message }, { status: 429 });
     }
 
     const body = await request.json().catch(() => ({}));
@@ -69,12 +66,25 @@ Respond with raw JSON only. Do not include code blocks, markdown, or any other f
     };
 
     let response = await fetch(AI_CHAT_URL, llmRequest);
-    if (!response.ok) {
-      response = await fetch(AI_CHAT_URL, llmRequest); // one retry on transient failure
+    // Retry only transient 5xx/network errors — NOT 429 (retrying into a
+    // quota wall just burns more of the shared Gemini budget)
+    if (!response.ok && response.status !== 429) {
+      response = await fetch(AI_CHAT_URL, llmRequest);
     }
     if (!response.ok) {
       const errText = await response.text().catch(() => '');
       console.error('Guest generation LLM failed:', response.status, errText.slice(0, 300));
+      if (response.status === 429) {
+        // Gemini quota is exhausted — degrade gracefully, push to signup
+        return NextResponse.json(
+          {
+            error: 'Busy',
+            message:
+              "Recipe Reborn is really popular right now — try again in a minute, or sign up free to skip the wait.",
+          },
+          { status: 503 }
+        );
+      }
       throw new Error('AI request failed');
     }
 
