@@ -6,11 +6,12 @@ import { Textarea } from '@/components/ui/textarea';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Loader2, ChefHat, Sparkles, Save, Clock, Users, Link as LinkIcon, Camera, Upload, X, Mic, PiggyBank, ScanBarcode } from 'lucide-react';
+import { Loader2, ChefHat, Sparkles, Save, Clock, Users, Link as LinkIcon, Camera, Upload, X, Mic, PiggyBank, ScanBarcode, AlertTriangle, Leaf, ArrowRight } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { InteractiveIngredient } from './interactive-ingredient';
 import { VoiceChat } from './voice-chat';
 import { BarcodeScanner } from './barcode-scanner';
+import { detectAdditives, type DetectedAdditive } from '@/lib/additives';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -63,7 +64,37 @@ export function RecipeGenerator() {
   const [substitutionInfo, setSubstitutionInfo] = useState<{original: string; substitute: string} | null>(null);
   const [showSavePrompt, setShowSavePrompt] = useState(false);
   const [customCustomization, setCustomCustomization] = useState('');
+  // Additives found in the ORIGINAL processed ingredients — powers the
+  // before/after transformation reveal. Empty for pantry / fresh input.
+  const [detectedAdditives, setDetectedAdditives] = useState<DetectedAdditive[]>([]);
+  const [loadingStep, setLoadingStep] = useState(0);
   const resultRef = useRef<HTMLDivElement>(null);
+
+  const isBusy = isGenerating || isExtracting;
+
+  // Progressive loading theater — cycle status messages so the 15-30s wait
+  // feels alive instead of a frozen spinner
+  const loadingMessages = [
+    isExtracting ? 'Reading the label…' : 'Reading the ingredients…',
+    detectedAdditives.length > 0
+      ? `Found ${detectedAdditives.length} additive${detectedAdditives.length === 1 ? '' : 's'} to leave behind…`
+      : 'Choosing whole-food ingredients…',
+    'Designing your fresh version…',
+    'Calculating your savings…',
+    'Plating it up…',
+  ];
+
+  useEffect(() => {
+    if (!isBusy) {
+      setLoadingStep(0);
+      return;
+    }
+    const timer = setInterval(() => {
+      setLoadingStep((s) => Math.min(s + 1, loadingMessages.length - 1));
+    }, 3500);
+    return () => clearInterval(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isBusy]);
 
   // Bring the finished recipe into view — on phones it renders below the fold
   useEffect(() => {
@@ -76,6 +107,12 @@ export function RecipeGenerator() {
     if (!ingredients?.trim() && !dietaryRestriction) {
       toast.error('Please enter some ingredients');
       return;
+    }
+
+    // Snapshot the additives in the original product before we transform it —
+    // skip for pantry mode (nothing to "leave behind" from fresh ingredients)
+    if (!dietaryRestriction) {
+      setDetectedAdditives(inputMode === 'pantry' ? [] : detectAdditives(ingredients));
     }
 
     setIsGenerating(true);
@@ -333,8 +370,10 @@ export function RecipeGenerator() {
         // For product labels, extract ingredients and immediately generate a recipe
         const extractedIngredients = data.ingredients.join(', ');
         setIngredients(extractedIngredients);
+        // Snapshot the additives on this label for the transformation reveal
+        setDetectedAdditives(detectAdditives(extractedIngredients));
         clearImage(); // Clear the photo preview
-        
+
         toast.success('Ingredients detected! Generating your fresh recipe...', { duration: 3000 });
         
         // Automatically generate a recipe with the extracted ingredients
@@ -822,6 +861,34 @@ export function RecipeGenerator() {
         </CardContent>
       </Card>
 
+      {/* Progressive loading theater — keeps the wait alive */}
+      {isBusy && !recipe && (
+        <Card className="shadow-lg border-0 bg-white">
+          <CardContent className="py-10">
+            <div className="flex flex-col items-center text-center gap-4">
+              <div className="relative">
+                <div className="h-14 w-14 rounded-full border-4 border-emerald-100" />
+                <Loader2 className="h-14 w-14 text-emerald-600 animate-spin absolute inset-0" />
+                <Sparkles className="h-6 w-6 text-orange-500 absolute inset-0 m-auto" />
+              </div>
+              <p className="text-lg font-medium text-gray-900 transition-all">
+                {loadingMessages[loadingStep]}
+              </p>
+              <div className="flex gap-1.5">
+                {loadingMessages.map((_, i) => (
+                  <span
+                    key={i}
+                    className={`h-1.5 w-1.5 rounded-full transition-colors ${
+                      i <= loadingStep ? 'bg-emerald-500' : 'bg-gray-200'
+                    }`}
+                  />
+                ))}
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
       {/* Recipe Display */}
       {recipe && (
         <Card ref={resultRef} className="shadow-lg border-0 bg-white scroll-mt-4">
@@ -849,6 +916,68 @@ export function RecipeGenerator() {
             </div>
           </CardHeader>
           <CardContent className="pt-6 space-y-6">
+            {/* Transformation Reveal — the before/after that IS the brand */}
+            {detectedAdditives.length > 0 && (
+              <div className="rounded-xl border border-emerald-200 overflow-hidden">
+                <div className="bg-gradient-to-r from-amber-50 via-white to-emerald-50 px-4 py-3 border-b border-emerald-100">
+                  <p className="text-center text-sm font-semibold text-gray-700">
+                    ✨ You just transformed a processed product into real food
+                  </p>
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-[1fr_auto_1fr] items-stretch">
+                  {/* BEFORE */}
+                  <div className="p-4 bg-red-50/60">
+                    <div className="flex items-center gap-2 mb-2">
+                      <AlertTriangle className="h-4 w-4 text-red-500 flex-shrink-0" />
+                      <span className="text-xs font-semibold text-red-600 uppercase tracking-wide">
+                        The packaged version
+                      </span>
+                    </div>
+                    <p className="text-2xl font-bold text-red-600 mb-2">
+                      {detectedAdditives.length} additive{detectedAdditives.length === 1 ? '' : 's'}
+                    </p>
+                    <div className="flex flex-wrap gap-1.5">
+                      {detectedAdditives.slice(0, 6).map((a) => (
+                        <span
+                          key={a.name}
+                          title={a.concern}
+                          className="px-2 py-0.5 bg-red-100 text-red-700 rounded-full text-xs font-medium"
+                        >
+                          {a.name}
+                        </span>
+                      ))}
+                      {detectedAdditives.length > 6 && (
+                        <span className="px-2 py-0.5 bg-red-100 text-red-700 rounded-full text-xs font-medium">
+                          +{detectedAdditives.length - 6} more
+                        </span>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Arrow */}
+                  <div className="flex items-center justify-center py-2 sm:px-2 bg-white">
+                    <div className="bg-emerald-100 rounded-full p-2">
+                      <ArrowRight className="h-5 w-5 text-emerald-600 rotate-90 sm:rotate-0" />
+                    </div>
+                  </div>
+
+                  {/* AFTER */}
+                  <div className="p-4 bg-emerald-50/60">
+                    <div className="flex items-center gap-2 mb-2">
+                      <Leaf className="h-4 w-4 text-emerald-600 flex-shrink-0" />
+                      <span className="text-xs font-semibold text-emerald-700 uppercase tracking-wide">
+                        Your fresh version
+                      </span>
+                    </div>
+                    <p className="text-2xl font-bold text-emerald-600 mb-2">0 additives</p>
+                    <p className="text-sm text-gray-600">
+                      Just whole-food ingredients you can pronounce.
+                    </p>
+                  </div>
+                </div>
+              </div>
+            )}
+
             {/* Cost Savings Banner */}
             {typeof recipe?.estimatedCostPerServing === 'number' &&
               typeof recipe?.storeBoughtCost === 'number' &&
