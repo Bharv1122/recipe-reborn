@@ -39,9 +39,25 @@ export async function PATCH(
     if (category !== undefined) updateData.category = category;
     if (notes !== undefined) updateData.notes = notes;
 
-    const item = await prisma.shoppingListItem.update({
-      where: { id: params.itemId },
+    // Scope the update to THIS list so a valid owner can't edit another
+    // user's ShoppingListItem by passing its (global) id
+    const { count } = await prisma.shoppingListItem.updateMany({
+      where: {
+        id: params.itemId,
+        shoppingListId: params.id,
+      },
       data: updateData,
+    });
+
+    if (count === 0) {
+      return NextResponse.json(
+        { error: 'Item not found' },
+        { status: 404 }
+      );
+    }
+
+    const item = await prisma.shoppingListItem.findUnique({
+      where: { id: params.itemId },
     });
 
     return NextResponse.json(item);
@@ -80,9 +96,21 @@ export async function DELETE(
       );
     }
 
-    await prisma.shoppingListItem.delete({
-      where: { id: params.itemId },
+    // Scope the delete to THIS list so a valid owner can't delete another
+    // user's ShoppingListItem by passing its (global) id
+    const { count } = await prisma.shoppingListItem.deleteMany({
+      where: {
+        id: params.itemId,
+        shoppingListId: params.id,
+      },
     });
+
+    if (count === 0) {
+      return NextResponse.json(
+        { error: 'Item not found' },
+        { status: 404 }
+      );
+    }
 
     return NextResponse.json({ success: true });
   } catch (error) {

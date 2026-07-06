@@ -26,12 +26,21 @@ export async function DELETE(
       return NextResponse.json({ error: 'Meal plan not found' }, { status: 404 });
     }
 
-    // Delete the meal plan recipe entry
-    await prisma.mealPlanRecipe.delete({
+    // Delete the entry — scoped to THIS meal plan so a valid owner can't
+    // target another user's MealPlanRecipe by passing its (global) id
+    const { count } = await prisma.mealPlanRecipe.deleteMany({
       where: {
         id: params.recipeId,
+        mealPlanId: params.id,
       },
     });
+
+    if (count === 0) {
+      return NextResponse.json(
+        { error: 'Meal plan recipe not found' },
+        { status: 404 }
+      );
+    }
 
     return NextResponse.json({ success: true });
   } catch (error) {
@@ -74,9 +83,25 @@ export async function PATCH(
     if (servings !== undefined) updateData.servings = servings;
     if (notes !== undefined) updateData.notes = notes;
 
-    const mealPlanRecipe = await prisma.mealPlanRecipe.update({
-      where: { id: params.recipeId },
+    // Scope the update to THIS meal plan so a valid owner can't edit another
+    // user's MealPlanRecipe by passing its (global) id
+    const { count } = await prisma.mealPlanRecipe.updateMany({
+      where: {
+        id: params.recipeId,
+        mealPlanId: params.id,
+      },
       data: updateData,
+    });
+
+    if (count === 0) {
+      return NextResponse.json(
+        { error: 'Meal plan recipe not found' },
+        { status: 404 }
+      );
+    }
+
+    const mealPlanRecipe = await prisma.mealPlanRecipe.findUnique({
+      where: { id: params.recipeId },
       include: {
         recipe: true,
       },
