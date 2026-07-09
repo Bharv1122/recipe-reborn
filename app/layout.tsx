@@ -1,6 +1,7 @@
 import type { Metadata } from 'next';
 import { Inter } from 'next/font/google';
 import Script from 'next/script';
+import { Analytics } from '@vercel/analytics/next';
 import './globals.css';
 import { Providers } from './providers';
 import { Header } from '@/components/header';
@@ -121,6 +122,7 @@ export default function RootLayout({
           <main>{children}</main>
           <Toaster position="top-center" />
         </Providers>
+        <Analytics />
 
         {/* Google Analytics - only loads if GA_ID is set */}
         {GA_ID && (
