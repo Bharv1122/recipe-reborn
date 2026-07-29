@@ -15,7 +15,7 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json();
-    const { email: rawEmail, password, confirmPassword } = body;
+    const { email: rawEmail, password, confirmPassword, src } = body;
     // Case-insensitive matching: mixed-case signups created duplicate/unfindable
     // accounts in the old app — always store lowercase
     const email = typeof rawEmail === 'string' ? rawEmail.trim().toLowerCase() : rawEmail;
@@ -56,10 +56,15 @@ export async function POST(request: NextRequest) {
 
     const hashedPassword = await bcrypt.hash(password, 12);
 
+    // Optional first-touch attribution from ?src= links (cards, socials)
+    const signupSource =
+      typeof src === 'string' && src.trim() ? src.trim().slice(0, 40) : null;
+
     const user = await prisma.user.create({
       data: {
         email,
         password: hashedPassword,
+        ...(signupSource ? { signupSource } : {}),
       },
     });
 

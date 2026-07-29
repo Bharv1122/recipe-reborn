@@ -57,6 +57,10 @@ model User {
   generationCount    Int      @default(0)
   lastGenerationReset DateTime @default(now())
 
+  // First-touch acquisition channel from ?src= links (e.g. "card", "fb");
+  // null = organic/unknown
+  signupSource String?
+
   // Food preferences — applied to all AI generation (recipes + meal plans)
   allergies           String[] @default([])
   dislikedIngredients String[] @default([])

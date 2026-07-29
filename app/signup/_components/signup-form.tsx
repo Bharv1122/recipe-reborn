@@ -27,6 +27,14 @@ export function SignupForm() {
 
     setIsLoading(true);
 
+    // First-touch attribution captured by SrcCapture (?src= on any landing URL)
+    let src: string | null = null;
+    try {
+      src = localStorage.getItem('rr_src');
+    } catch {
+      // localStorage unavailable — attribution is best-effort
+    }
+
     try {
       const response = await fetch('/api/signup', {
         method: 'POST',
@@ -39,6 +47,7 @@ export function SignupForm() {
           // The confirm-password field was removed from the form (it depresses
           // signup conversion); the API still validates it, so mirror password.
           confirmPassword: password,
+          ...(src ? { src } : {}),
         }),
       });
 

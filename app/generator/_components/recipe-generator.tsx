@@ -12,6 +12,7 @@ import { InteractiveIngredient } from './interactive-ingredient';
 import { VoiceChat } from './voice-chat';
 import { BarcodeScanner } from './barcode-scanner';
 import { detectAdditives, type DetectedAdditive } from '@/lib/additives';
+import { EXAMPLE_LABEL } from '@/lib/example-label';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -105,9 +106,10 @@ export function RecipeGenerator() {
   }, [recipe]);
 
   // Guest → signup handoff: a visitor who transformed a label on the landing
-  // page and then signed up lands here with their ingredients already loaded —
-  // instead of a blank form that makes them retype the thing they were just
-  // promised. Prefill only (they hit Transform themselves). (conversion)
+  // page and then signed up lands here with their ingredients already loaded
+  // AND the generation already running — they typed the label and clicked
+  // "unlock" on the landing page; a third click here is where we were losing
+  // them. removeItem before firing means this runs at most once. (conversion)
   useEffect(() => {
     if (typeof window === 'undefined') return;
     try {
@@ -117,15 +119,29 @@ export function RecipeGenerator() {
         setIngredients(stashed);
         setInputMode('label');
         setActiveTab('generate');
-        toast.success('Your ingredients are ready — hit Transform to see your recipe.');
+        toast.success('Welcome! Your fresh recipe is being made right now…');
+        generateRecipe(undefined, stashed);
       }
     } catch {
       // sessionStorage unavailable (private mode) — nothing to carry over
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const generateRecipe = async (dietaryRestriction?: string) => {
-    if (!ingredients?.trim() && !dietaryRestriction) {
+  // Sets up and fires the example transformation — the fastest possible route
+  // to the additives-reveal aha for someone with no label in hand.
+  const tryExample = () => {
+    setIngredients(EXAMPLE_LABEL);
+    setInputMode('label');
+    setActiveTab('generate');
+    generateRecipe(undefined, EXAMPLE_LABEL);
+  };
+
+  const generateRecipe = async (dietaryRestriction?: string, ingredientsOverride?: string) => {
+    // State set in the same tick (stash handoff, example) hasn't rendered yet —
+    // the override carries the value the closure can't see.
+    const inputText = ingredientsOverride ?? ingredients;
+    if (!inputText?.trim() && !dietaryRestriction) {
       toast.error('Please enter some ingredients');
       return;
     }
@@ -133,7 +149,7 @@ export function RecipeGenerator() {
     // Snapshot the additives in the original product before we transform it —
     // skip for pantry mode (nothing to "leave behind" from fresh ingredients)
     if (!dietaryRestriction) {
-      setDetectedAdditives(inputMode === 'pantry' ? [] : detectAdditives(ingredients));
+      setDetectedAdditives(inputMode === 'pantry' && !ingredientsOverride ? [] : detectAdditives(inputText));
     }
 
     setIsGenerating(true);
@@ -146,9 +162,11 @@ export function RecipeGenerator() {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          ingredients: ingredients || recipe?.title,
+          ingredients: inputText || recipe?.title,
           dietaryRestriction,
-          source: inputMode,
+          // Auto-fired runs (guest handoff, example) are always label mode —
+          // the closure may still hold a stale inputMode from before the fire
+          source: ingredientsOverride ? 'label' : inputMode,
         }),
       });
 
@@ -673,6 +691,19 @@ export function RecipeGenerator() {
                 className="resize-none"
                 disabled={isGenerating}
               />
+              {!ingredients?.trim() && inputMode === 'label' && (
+                <div className="flex justify-center">
+                  <button
+                    type="button"
+                    onClick={tryExample}
+                    disabled={isBusy}
+                    className="inline-flex items-center gap-1.5 rounded-full border border-emerald-200 bg-emerald-50 px-4 py-2 text-sm font-medium text-emerald-700 transition-colors hover:bg-emerald-100 disabled:opacity-50"
+                  >
+                    <Sparkles className="h-4 w-4" />
+                    No label handy? See an example transformation
+                  </button>
+                </div>
+              )}
               <Button
                 onClick={() => generateRecipe()}
                 className="w-full bg-emerald-600 hover:bg-emerald-700 text-white"
@@ -801,6 +832,17 @@ export function RecipeGenerator() {
                     <p className="text-xs text-gray-400 mt-4">
                       Supports JPG, PNG, HEIC. Max size 10MB
                     </p>
+                    {/* Nothing to scan right now? Don't dead-end the first visit —
+                        one click shows the full additives-reveal on a demo label */}
+                    <button
+                      type="button"
+                      onClick={tryExample}
+                      disabled={isBusy}
+                      className="mt-4 inline-flex items-center gap-1.5 rounded-full border border-emerald-200 bg-emerald-50 px-4 py-2 text-sm font-medium text-emerald-700 transition-colors hover:bg-emerald-100 disabled:opacity-50"
+                    >
+                      <Sparkles className="h-4 w-4" />
+                      No label handy? See an example transformation
+                    </button>
                   </div>
                 ) : (
                   <div className="space-y-4">
