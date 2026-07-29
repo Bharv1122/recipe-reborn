@@ -77,7 +77,7 @@ export function GuestScan() {
       : null;
 
   return (
-    <div className="mx-auto w-full max-w-2xl bg-white rounded-2xl shadow-2xl p-6 sm:p-8 text-left">
+    <div className="mx-auto w-full max-w-2xl bg-white rounded-2xl shadow-2xl p-5 sm:p-8 text-left">
       {!recipe ? (
         <>
           <h2 className="text-xl font-bold text-gray-900 text-center mb-1">

@@ -13,13 +13,15 @@ export default async function HomePage() {
   return (
     <div className="min-h-screen">
       {/* Hero Section */}
-      <section className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
-        <div className="text-center space-y-8">
+      <section className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-12">
+        <div className="text-center space-y-4 sm:space-y-8">
           <h1 className="sr-only">Recipe Reborn</h1>
           {/* Emblem: cropped to the artwork and edge-faded so it melts into the
-              matching page green; the wordmark below is a transparent PNG. */}
+              matching page green; the wordmark below is a transparent PNG.
+              Deliberately small on phones — the guest-scan box below is the real
+              hero and has to clear the fold on a 375×812 screen. */}
           <div
-            className="mx-auto w-full max-w-md sm:max-w-lg aspect-[4/3] overflow-hidden [mask-image:radial-gradient(ellipse_68%_75%_at_50%_50%,black_52%,transparent_78%)]"
+            className="mx-auto w-full max-w-[13rem] sm:max-w-lg aspect-[4/3] overflow-hidden [mask-image:radial-gradient(ellipse_68%_75%_at_50%_50%,black_52%,transparent_78%)]"
           >
             <Image
               src="/logo.png"
@@ -37,13 +39,24 @@ export default async function HomePage() {
             width={440}
             height={104}
             priority
-            className="mx-auto -mt-6 w-full max-w-sm sm:max-w-md h-auto drop-shadow-md"
+            className="mx-auto -mt-4 sm:-mt-6 w-full max-w-[14rem] sm:max-w-md h-auto drop-shadow-md"
           />
-          <p className="text-2xl text-white max-w-3xl mx-auto drop-shadow-sm">
+          <p className="text-base sm:text-2xl text-white max-w-3xl mx-auto drop-shadow-sm">
             Snap a photo of any ingredient label — or scan the barcode — and watch AI turn
             that processed product into a fresh, homemade recipe in seconds.
           </p>
-          <div className="flex items-center justify-center gap-4 pt-6">
+
+          {/* Guest funnel — let anyone try the transformation before signing up.
+              Sits ABOVE the auth buttons on purpose: for a cold visitor the free
+              demo is the call to action, and Sign In is for people who already
+              converted (it's also in the header). */}
+          {!session && (
+            <div className="pt-1 sm:pt-2">
+              <GuestScan />
+            </div>
+          )}
+
+          <div className="flex items-center justify-center gap-4 pt-2 sm:pt-6">
             {session ? (
               <Link href="/generator">
                 <Button size="lg" className="bg-emerald-600 hover:bg-emerald-700 text-white text-lg px-8">
@@ -66,13 +79,6 @@ export default async function HomePage() {
               </>
             )}
           </div>
-
-          {/* Guest funnel — let anyone try the transformation before signing up */}
-          {!session && (
-            <div className="pt-6">
-              <GuestScan />
-            </div>
-          )}
         </div>
       </section>
 
@@ -122,7 +128,8 @@ export default async function HomePage() {
             Ready to Transform Your Cooking?
           </h2>
           <p className="text-xl text-white/90 mb-8 max-w-2xl mx-auto">
-            Join thousands of home cooks who are creating healthier meals with RecipeReborn.
+            Every packaged product in your kitchen has a fresher version. Find out what
+            yours looks like — 3 free recipes a month, no card required.
           </p>
           {!session && (
             <Link href="/signup">
