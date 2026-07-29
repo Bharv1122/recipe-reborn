@@ -15,9 +15,32 @@ export function LandingDemo() {
       <h2 className="text-3xl font-bold text-center text-white mb-4 drop-shadow-sm">
         See It in Action
       </h2>
-      <p className="text-center text-emerald-50/90 mb-12 max-w-2xl mx-auto">
+      <p className="text-center text-emerald-50/90 mb-8 max-w-2xl mx-auto">
         From freezer aisle to fresh dinner in three steps.
       </p>
+
+      {/* Narrated walkthrough of the real app. Not autoplayed — it has a
+          voiceover, and a page that starts talking at you is a page you close.
+          preload="metadata" keeps the 6.8MB off the initial load; only the
+          poster frame ships until someone presses play. */}
+      <div className="mx-auto mb-14 w-full max-w-3xl">
+        <div className="overflow-hidden rounded-2xl border border-white/20 shadow-2xl bg-black">
+          <video
+            controls
+            preload="metadata"
+            playsInline
+            poster="/recipe-reborn-demo-poster.jpg"
+            className="w-full h-auto block"
+          >
+            <source src="/recipe-reborn-demo.mp4" type="video/mp4" />
+            Your browser doesn&apos;t support video. Recipe Reborn turns any processed
+            ingredient label into a fresh homemade recipe — try it free above.
+          </video>
+        </div>
+        <p className="mt-3 text-center text-sm text-emerald-50/80">
+          Watch the 2-minute walkthrough — a real label transformed, start to finish.
+        </p>
+      </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 items-center">
         {/* Animated phone demo */}
