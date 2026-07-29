@@ -281,7 +281,7 @@ export default function PricingPage() {
             Start Creating Healthy Recipes Today
           </h2>
           <p className="text-xl mb-8 opacity-90">
-            Join thousands of home cooks transforming processed foods into fresh, nutritious meals
+            Turn the processed food already in your kitchen into fresh meals worth cooking
           </p>
           <Button
             onClick={() => router.push('/signup')}
