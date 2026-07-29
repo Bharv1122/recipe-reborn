@@ -14,6 +14,7 @@ import {
   PiggyBank,
 } from 'lucide-react';
 import { detectAdditives, type DetectedAdditive } from '@/lib/additives';
+import { EXAMPLE_LABEL as EXAMPLE } from '@/lib/example-label';
 
 interface GuestRecipe {
   title: string;
@@ -22,9 +23,6 @@ interface GuestRecipe {
   estimatedCostPerServing?: number;
   storeBoughtCost?: number;
 }
-
-const EXAMPLE =
-  'enriched flour, high fructose corn syrup, palm oil, sodium nitrite, artificial flavor, Red 40, BHT, monosodium glutamate';
 
 export function GuestScan() {
   const [ingredients, setIngredients] = useState('');
