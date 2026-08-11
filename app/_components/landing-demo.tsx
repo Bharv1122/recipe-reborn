@@ -89,8 +89,8 @@ export function LandingDemo() {
                 <Leaf className="h-3.5 w-3.5 text-emerald-600" />
                 <p className="text-xs font-semibold text-emerald-700">Your fresh version:</p>
               </div>
-              <p className="text-3xl font-extrabold text-emerald-600">0 additives</p>
-              <p className="text-[11px] text-gray-500 mt-2">Building your homemade recipe…</p>
+              <p className="text-xl font-extrabold text-emerald-700">Fresh ingredient list</p>
+              <p className="text-[11px] text-gray-500 mt-2">Building the generated recipe preview…</p>
             </div>
 
             {/* Scene 3: the fresh recipe */}
@@ -101,7 +101,7 @@ export function LandingDemo() {
               <div className="rounded-lg bg-gradient-to-r from-emerald-50 to-orange-50 border border-emerald-200 p-2.5 mb-3 flex items-center gap-2">
                 <PiggyBank className="h-4 w-4 text-emerald-600 flex-shrink-0" />
                 <p className="text-[10px] font-semibold text-emerald-700">
-                  You save ~$3.40 per serving
+                  Illustrative AI estimate: ~$3.40 cost difference
                 </p>
               </div>
               <ul className="space-y-1.5">
@@ -113,7 +113,7 @@ export function LandingDemo() {
                 ))}
               </ul>
               <div className="mt-4 rounded-lg bg-emerald-600 py-2 text-center text-[11px] font-semibold text-white">
-                Real food. Same comfort. ✨
+                Fresh recipe preview ✨
               </div>
             </div>
           </div>
@@ -125,7 +125,7 @@ export function LandingDemo() {
             Start however you like
           </h3>
           <p className="text-emerald-50/90 mb-6">
-            Five ways in — every one ends with a fresh, additive-free recipe.
+            Five ways in — every one can produce a generated fresh recipe.
           </p>
           <div className="space-y-3">
             <div className="flex items-center gap-4 bg-white rounded-xl p-4 shadow-lg">

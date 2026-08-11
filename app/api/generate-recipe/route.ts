@@ -5,6 +5,8 @@ import { prisma } from '@/lib/db';
 import { AI_CHAT_URL, AI_API_KEY, MODEL_SMART } from '@/lib/ai';
 import { rateLimit } from '@/lib/rate-limit';
 import { z } from 'zod';
+import { logServerError } from '@/lib/server-error-log';
+import { clearGenerationCancellation, wasGenerationCanceled } from '@/lib/generation-cancellation';
 
 export const dynamic = 'force-dynamic';
 export const maxDuration = 60;
@@ -56,12 +58,17 @@ export async function POST(request: NextRequest) {
 
     const body = await request.json();
     const { ingredients, dietaryRestriction, isSubstitutionRegeneration, originalRecipe, substitution, source } = body;
+    const generationId = z.string().uuid().safeParse(body.generationId);
 
     if (!ingredients) {
       return NextResponse.json(
         { error: 'Ingredients are required' },
         { status: 400 }
       );
+    }
+
+    if (!generationId.success) {
+      return NextResponse.json({ error: 'A valid generation ID is required' }, { status: 400 });
     }
 
     // Get user with subscription info
@@ -127,27 +134,40 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Increment generation count
-    await prisma.user.update({
-      where: { id: user.id },
-      data: {
-        generationCount: { increment: 1 },
-      },
-    });
+    // Charge quota only after a validated recipe is ready. The conditional
+    // update keeps concurrent successful requests within the finite tier cap,
+    // while canceled or failed requests never need a delayed refund.
+    let generationChargeState: 'unpaid' | 'charged' | 'completed' = 'unpaid';
+    const chargeGenerationSlot = async () => {
+      if (generationChargeState !== 'unpaid') return true;
 
-    // Reserve the quota slot up front to keep concurrent requests within the
-    // tier limit, but give it back if the model or stream fails.
-    let generationSlotSettled = false;
-    const releaseGenerationSlot = async () => {
-      if (generationSlotSettled) return;
-      generationSlotSettled = true;
+      if (Number.isFinite(limit)) {
+        const update = await prisma.user.updateMany({
+          where: { id: user.id, generationCount: { lt: limit } },
+          data: { generationCount: { increment: 1 } },
+        });
+        if (update.count !== 1) return false;
+      } else {
+        await prisma.user.update({
+          where: { id: user.id },
+          data: { generationCount: { increment: 1 } },
+        });
+      }
+
+      generationChargeState = 'charged';
+      return true;
+    };
+
+    const rollbackGenerationCharge = async () => {
+      if (generationChargeState !== 'charged') return;
+      generationChargeState = 'unpaid';
       try {
         await prisma.user.update({
           where: { id: user.id },
           data: { generationCount: { decrement: 1 } },
         });
       } catch (releaseError) {
-        console.error('Failed to release recipe generation quota:', releaseError);
+        logServerError('generation_quota_release_failed', releaseError);
       }
     };
 
@@ -299,42 +319,59 @@ Respond with raw JSON only. Do not include code blocks, markdown, or any other f
       }),
     };
 
-    const fetchModelResponse = async () => {
+    const openModelStream = async () => {
       const controller = new AbortController();
       const timeout = setTimeout(() => controller.abort(), 52_000);
-      try {
-        return await fetch(AI_CHAT_URL, { ...llmRequest, signal: controller.signal });
-      } finally {
+      const abortForClient = () => controller.abort();
+      request.signal.addEventListener('abort', abortForClient, { once: true });
+
+      const cleanup = () => {
         clearTimeout(timeout);
+        request.signal.removeEventListener('abort', abortForClient);
+      };
+
+      try {
+        const modelResponse = await fetch(AI_CHAT_URL, {
+          ...llmRequest,
+          signal: controller.signal,
+        });
+        return {
+          response: modelResponse,
+          abort: () => controller.abort(),
+          cleanup,
+        };
+      } catch (error) {
+        cleanup();
+        throw error;
       }
     };
 
-    let response: Response;
+    let modelStream: Awaited<ReturnType<typeof openModelStream>>;
     try {
-      response = await fetchModelResponse();
+      modelStream = await openModelStream();
     } catch (modelError) {
-      await releaseGenerationSlot();
       throw modelError;
     }
 
+    let response = modelStream.response;
+
     if (!response?.ok) {
-      const errText = await response.text().catch(() => '');
-      console.error('LLM API non-OK response:', response.status, errText.slice(0, 500));
+      logServerError('generation_model_non_ok', undefined, { status: response.status });
+      modelStream.cleanup();
       // Gemini occasionally returns transient 429/5xx — one retry recovers most of them
       if (response.status === 429 || response.status >= 500) {
         try {
-          response = await fetchModelResponse();
+          modelStream = await openModelStream();
+          response = modelStream.response;
         } catch (modelError) {
-          await releaseGenerationSlot();
           throw modelError;
         }
       }
     }
 
     if (!response?.ok) {
-      const errText = await response.text().catch(() => '');
-      console.error('LLM API retry also failed:', response.status, errText.slice(0, 500));
-      await releaseGenerationSlot();
+      logServerError('generation_model_retry_failed', undefined, { status: response.status });
+      modelStream.cleanup();
       throw new Error(`LLM API request failed (${response.status})`);
     }
 
@@ -372,22 +409,39 @@ Respond with raw JSON only. Do not include code blocks, markdown, or any other f
                     if (includedAllergen) {
                       throw new Error('Recipe response included a saved allergen');
                     }
+                    if (await wasGenerationCanceled(user.id, generationId.data)) {
+                      throw new DOMException('Recipe generation canceled', 'AbortError');
+                    }
+                    const charged = await chargeGenerationSlot();
+                    if (!charged) {
+                      throw new Error('Recipe generation limit reached before completion');
+                    }
                     const finalData = JSON.stringify({
                       status: 'completed',
                       result: finalResult,
                     });
                     controller.enqueue(encoder.encode(`data: ${finalData}\n\n`));
-                    generationSlotSettled = true;
+                    generationChargeState = 'completed';
+                    await clearGenerationCancellation(user.id, generationId.data);
                   } catch (e) {
-                    console.error('Error parsing final JSON:', e);
-                    await releaseGenerationSlot();
+                    const wasCanceled = e instanceof DOMException && e.name === 'AbortError';
+                    if (!wasCanceled) {
+                      logServerError('generation_validation_failed', e);
+                    }
+                    await rollbackGenerationCharge();
                     controller.enqueue(
                       encoder.encode(
-                        `data: ${JSON.stringify({ status: 'error', message: 'Recipe failed validation. Please try again.' })}\n\n`
+                        `data: ${JSON.stringify({
+                          status: 'error',
+                          message: wasCanceled
+                            ? 'Recipe generation canceled.'
+                            : 'Recipe failed validation. Please try again.',
+                        })}\n\n`
                       )
                     );
                   }
                   controller.close();
+                  modelStream.cleanup();
                   return;
                 }
                 try {
@@ -405,8 +459,10 @@ Respond with raw JSON only. Do not include code blocks, markdown, or any other f
             }
           }
         } catch (error) {
-          console.error('Stream error:', error);
-          await releaseGenerationSlot();
+          logServerError('generation_stream_failed', error);
+          modelStream.abort();
+          modelStream.cleanup();
+          await rollbackGenerationCharge();
           controller.enqueue(
             encoder.encode(
               `data: ${JSON.stringify({ status: 'error', message: 'Stream failed' })}\n\n`
@@ -416,13 +472,19 @@ Respond with raw JSON only. Do not include code blocks, markdown, or any other f
           return;
         }
 
-        await releaseGenerationSlot();
+        modelStream.cleanup();
+        await rollbackGenerationCharge();
         controller.enqueue(
           encoder.encode(
             `data: ${JSON.stringify({ status: 'error', message: 'Recipe generation ended early. Please try again.' })}\n\n`
           )
         );
         controller.close();
+      },
+      async cancel() {
+        modelStream.abort();
+        modelStream.cleanup();
+        await rollbackGenerationCharge();
       },
     });
 
@@ -434,7 +496,7 @@ Respond with raw JSON only. Do not include code blocks, markdown, or any other f
       },
     });
   } catch (error) {
-    console.error('Generate recipe error:', error);
+    logServerError('generation_request_failed', error);
     return NextResponse.json(
       { error: 'Failed to generate recipe' },
       { status: 500 }

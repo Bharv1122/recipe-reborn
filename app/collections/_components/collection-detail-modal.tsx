@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import {
   Dialog,
   DialogContent,
+  DialogDescription,
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
@@ -95,7 +96,7 @@ export function CollectionDetailModal({
       const response = await fetch('/api/recipes');
       if (response.ok) {
         const data = await response.json();
-        setAvailableRecipes(data);
+        setAvailableRecipes(Array.isArray(data?.recipes) ? data.recipes : []);
       }
     } catch (error) {
       console.error('Error fetching recipes:', error);
@@ -187,8 +188,12 @@ export function CollectionDetailModal({
     return (
       <Dialog open onOpenChange={onClose}>
         <DialogContent className="max-w-4xl max-h-[80vh] overflow-y-auto">
+          <DialogHeader className="sr-only">
+            <DialogTitle>Loading collection</DialogTitle>
+            <DialogDescription>Loading collection recipes and available recipes.</DialogDescription>
+          </DialogHeader>
           <div className="flex items-center justify-center py-12">
-            <Loader2 className="h-8 w-8 animate-spin text-primary" />
+            <Loader2 className="h-8 w-8 animate-spin motion-reduce:animate-none text-primary" aria-hidden="true" />
           </div>
         </DialogContent>
       </Dialog>
@@ -212,18 +217,18 @@ export function CollectionDetailModal({
       <DialogContent className="max-w-4xl max-h-[80vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="text-2xl">{collection.name}</DialogTitle>
-          {collection.description && (
-            <p className="text-muted-foreground">{collection.description}</p>
-          )}
+          <DialogDescription>
+            {collection.description || 'Add recipes to this collection or export it as a cookbook.'}
+          </DialogDescription>
         </DialogHeader>
 
         <div className="space-y-6">
           {/* Add Recipe Section */}
           <div className="space-y-2">
-            <label className="text-sm font-medium">Add Recipe to Collection</label>
-            <div className="flex gap-2">
+            <label htmlFor="collection-recipe-select" className="text-sm font-medium">Add Recipe to Collection</label>
+            <div className="flex flex-col gap-2 sm:flex-row">
               <Select value={selectedRecipeId} onValueChange={setSelectedRecipeId}>
-                <SelectTrigger className="flex-1">
+                <SelectTrigger id="collection-recipe-select" className="min-h-11 flex-1">
                   <SelectValue placeholder="Select a recipe to add" />
                 </SelectTrigger>
                 <SelectContent>
@@ -240,7 +245,12 @@ export function CollectionDetailModal({
                   )}
                 </SelectContent>
               </Select>
-              <Button onClick={handleAddRecipe} disabled={adding || !selectedRecipeId}>
+              <Button
+                onClick={handleAddRecipe}
+                disabled={adding || !selectedRecipeId}
+                aria-label="Add selected recipe to collection"
+                className="min-h-11 min-w-11"
+              >
                 {adding ? (
                   <Loader2 className="h-4 w-4 animate-spin" />
                 ) : (
@@ -327,6 +337,7 @@ export function CollectionDetailModal({
                         size="sm"
                         onClick={() => handleRemoveRecipe(recipe.id)}
                         disabled={removingId === recipe.id}
+                        aria-label={`Remove ${recipe.title} from collection`}
                       >
                         {removingId === recipe.id ? (
                           <Loader2 className="h-4 w-4 animate-spin" />

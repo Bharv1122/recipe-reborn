@@ -1,12 +1,13 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
+import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Loader2, ChefHat, Sparkles, Save, Clock, Users, Link as LinkIcon, Camera, Upload, X, Mic, PiggyBank, ScanBarcode, AlertTriangle, Leaf, ArrowRight } from 'lucide-react';
+import { Loader2, ChefHat, Sparkles, Save, Clock, Users, Link as LinkIcon, Camera, Upload, X, Mic, PiggyBank, ScanBarcode, AlertTriangle, Leaf, ArrowRight, Ban, CheckCircle2, FolderPlus, CalendarDays, ListChecks } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { InteractiveIngredient } from './interactive-ingredient';
 import { VoiceChat } from './voice-chat';
@@ -70,12 +71,17 @@ export function RecipeGenerator() {
   const [detectedAdditives, setDetectedAdditives] = useState<DetectedAdditive[]>([]);
   const [loadingElapsed, setLoadingElapsed] = useState(0);
   const [photoError, setPhotoError] = useState<string | null>(null);
+  const [isDemoRun, setIsDemoRun] = useState(false);
+  const [isSaved, setIsSaved] = useState(false);
+  const [isCanceling, setIsCanceling] = useState(false);
   const resultRef = useRef<HTMLDivElement>(null);
+  const generationAbortRef = useRef<AbortController | null>(null);
+  const generationIdRef = useRef<string | null>(null);
 
   const isBusy = isGenerating || isExtracting;
 
-  // Progressive loading theater — cycle status messages so the 15-30s wait
-  // feels alive instead of a frozen spinner
+  // Time-based status copy is intentionally honest: it shows elapsed time and
+  // what the app is attempting, without promising a completion time.
   const loadingMessages = [
     isExtracting ? 'Reading the label…' : 'Reading the ingredients…',
     detectedAdditives.length > 0
@@ -98,10 +104,29 @@ export function RecipeGenerator() {
     return () => clearInterval(timer);
   }, [isBusy]);
 
+  useEffect(
+    () => () => {
+      const generationId = generationIdRef.current;
+      if (generationId && navigator.sendBeacon) {
+        navigator.sendBeacon(
+          '/api/generate-recipe/cancel',
+          new Blob([JSON.stringify({ generationId })], { type: 'application/json' })
+        );
+      }
+      generationAbortRef.current?.abort();
+    },
+    []
+  );
+
   // Bring the finished recipe into view — on phones it renders below the fold
   useEffect(() => {
     if (recipe) {
-      resultRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+      resultRef.current?.focus({ preventScroll: true });
+      resultRef.current?.scrollIntoView({
+        behavior: reduceMotion ? 'auto' : 'smooth',
+        block: 'start',
+      });
     }
   }, [recipe]);
 
@@ -134,7 +159,100 @@ export function RecipeGenerator() {
     setIngredients(EXAMPLE_LABEL);
     setInputMode('label');
     setActiveTab('generate');
+    setIsDemoRun(true);
     generateRecipe(undefined, EXAMPLE_LABEL);
+  };
+
+  const requestGeneratedRecipe = async (payload: Record<string, unknown>) => {
+    generationAbortRef.current?.abort();
+    const abortController = new AbortController();
+    const generationId = crypto.randomUUID();
+    generationAbortRef.current = abortController;
+    generationIdRef.current = generationId;
+
+    try {
+      const response = await fetch('/api/generate-recipe', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ...payload, generationId }),
+        signal: abortController.signal,
+      });
+
+      if (!response.ok) {
+        const data = await response.json().catch(() => null);
+        if (response.status === 403 && data?.message) {
+          throw new Error(data.message);
+        }
+        throw new Error(data?.error ?? 'Failed to generate recipe');
+      }
+
+      const reader = response.body?.getReader();
+      if (!reader) throw new Error('Recipe stream was unavailable');
+
+      const decoder = new TextDecoder();
+      let partialRead = '';
+
+      while (true) {
+        const result = await reader.read();
+        if (result.done) break;
+
+        partialRead += decoder.decode(result.value, { stream: true });
+        const lines = partialRead.split('\n');
+        partialRead = lines.pop() ?? '';
+
+        for (const line of lines) {
+          if (!line.startsWith('data: ')) continue;
+          const data = line.slice(6);
+          if (data === '[DONE]') continue;
+
+          let parsed: { status?: string; result?: Recipe; message?: string };
+          try {
+            parsed = JSON.parse(data);
+          } catch {
+            continue;
+          }
+
+          if (parsed.status === 'completed' && parsed.result) return parsed.result;
+          if (parsed.status === 'error') {
+            throw new Error(parsed.message ?? 'Generation failed');
+          }
+        }
+      }
+
+      throw new Error('Recipe generation ended before a recipe was ready');
+    } finally {
+      if (generationAbortRef.current === abortController) {
+        generationAbortRef.current = null;
+        generationIdRef.current = null;
+      }
+    }
+  };
+
+  const cancelGeneration = async () => {
+    const abortController = generationAbortRef.current;
+    const generationId = generationIdRef.current;
+    if (!abortController || !generationId || isCanceling) return;
+
+    setIsCanceling(true);
+    const markerController = new AbortController();
+    const markerTimeout = setTimeout(() => markerController.abort(), 3_000);
+    try {
+      const response = await fetch('/api/generate-recipe/cancel', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ generationId }),
+        keepalive: true,
+        signal: markerController.signal,
+      });
+      if (!response.ok) throw new Error('Cancellation marker failed');
+    } catch (error) {
+      console.error('Cancel generation error:', error);
+      toast.error('Generation stopped here, but the quota refund could not be confirmed.');
+    } finally {
+      clearTimeout(markerTimeout);
+      abortController.abort();
+      setIsCanceling(false);
+    }
   };
 
   const generateRecipe = async (dietaryRestriction?: string, ingredientsOverride?: string) => {
@@ -151,75 +269,37 @@ export function RecipeGenerator() {
     if (!dietaryRestriction) {
       setDetectedAdditives(inputMode === 'pantry' && !ingredientsOverride ? [] : detectAdditives(inputText));
     }
+    if (!ingredientsOverride && !dietaryRestriction) {
+      setIsDemoRun(false);
+    }
 
     setIsGenerating(true);
     setRecipe(null);
+    setIsSaved(false);
+    setShowSavePrompt(false);
 
     try {
-      const response = await fetch('/api/generate-recipe', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          ingredients: inputText || recipe?.title,
-          dietaryRestriction,
-          // Auto-fired runs (guest handoff, example) are always label mode —
-          // the closure may still hold a stale inputMode from before the fire
-          source: ingredientsOverride ? 'label' : inputMode,
-        }),
+      const generatedRecipe = await requestGeneratedRecipe({
+        ingredients: inputText || recipe?.title,
+        dietaryRestriction,
+        // Auto-fired runs (guest handoff, example) are always label mode —
+        // the closure may still hold a stale inputMode from before the fire
+        source: ingredientsOverride ? 'label' : inputMode,
       });
 
-      if (!response?.ok) {
-        // Surface the real reason — especially the free-tier limit message
-        const data = await response.json().catch(() => null);
-        if (response.status === 403 && data?.message) {
-          toast.error(data.message, { duration: 8000 });
-          return;
-        }
-        throw new Error(data?.error ?? 'Failed to generate recipe');
+      setRecipe(generatedRecipe);
+      if (dietaryRestriction) {
+        setAppliedDietaryTags((prev) => [...(prev ?? []), dietaryRestriction]);
       }
-
-      const reader = response?.body?.getReader();
-      const decoder = new TextDecoder();
-      let partialRead = '';
-
-      while (true) {
-        const result = await reader?.read();
-        if (result?.done) break;
-
-        partialRead += decoder.decode(result?.value, { stream: true });
-        let lines = partialRead?.split('\n') ?? [];
-        partialRead = lines?.pop() ?? '';
-
-        for (const line of lines) {
-          if (line?.startsWith('data: ')) {
-            const data = line?.slice(6);
-            if (data === '[DONE]') {
-              return;
-            }
-            try {
-              const parsed = JSON.parse(data);
-              if (parsed?.status === 'completed') {
-                setRecipe(parsed?.result);
-                if (dietaryRestriction) {
-                  setAppliedDietaryTags((prev) => [...(prev ?? []), dietaryRestriction]);
-                }
-                toast.success('Recipe generated successfully!');
-                setShowSavePrompt(true); // Show save prompt after generation
-                return;
-              } else if (parsed?.status === 'error') {
-                throw new Error(parsed?.message ?? 'Generation failed');
-              }
-            } catch (e) {
-              // Skip invalid JSON
-            }
-          }
-        }
-      }
+      toast.success('Recipe generated successfully!');
+      setShowSavePrompt(true);
     } catch (error: any) {
-      console.error('Generate recipe error:', error);
-      toast.error(error?.message || 'Failed to generate recipe');
+      if (error?.name === 'AbortError') {
+        toast('Generation canceled. Your ingredients are still here.', { icon: '↩' });
+      } else {
+        console.error('Generate recipe error:', error);
+        toast.error(error?.message || 'Failed to generate recipe');
+      }
     } finally {
       setIsGenerating(false);
     }
@@ -257,6 +337,7 @@ export function RecipeGenerator() {
       }
 
       toast.success('Recipe saved successfully!');
+      setIsSaved(true);
     } catch (error) {
       console.error('Save recipe error:', error);
       toast.error('Failed to save recipe');
@@ -412,6 +493,7 @@ export function RecipeGenerator() {
         setIngredients(extractedIngredients);
         // Snapshot the additives on this label for the transformation reveal
         setDetectedAdditives(detectAdditives(extractedIngredients));
+        setIsDemoRun(false);
         clearImage(); // Clear the photo preview
 
         toast.success('Ingredients detected! Generating your fresh recipe...', { duration: 3000 });
@@ -421,62 +503,21 @@ export function RecipeGenerator() {
         setIsGenerating(true); // Start generation loading
         
         try {
-          const generateResponse = await fetch('/api/generate-recipe', {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({
-              ingredients: extractedIngredients,
-            }),
+          const generatedRecipe = await requestGeneratedRecipe({
+            ingredients: extractedIngredients,
+            source: 'label',
           });
-
-          if (!generateResponse?.ok) {
-            const errData = await generateResponse.json().catch(() => null);
-            if (generateResponse.status === 403 && errData?.message) {
-              toast.error(errData.message, { duration: 8000 });
-              return;
-            }
-            throw new Error(errData?.error ?? 'Failed to generate recipe');
+          setRecipe(generatedRecipe);
+          setIsSaved(false);
+          toast.success('Fresh recipe created from your photo!');
+          setShowSavePrompt(true);
+        } catch (genError: any) {
+          if (genError?.name === 'AbortError') {
+            toast('Generation canceled. Your extracted ingredients are still here.', { icon: '↩' });
+          } else {
+            console.error('Generate recipe error:', genError);
+            toast.error(genError?.message || 'Failed to generate recipe from extracted ingredients');
           }
-
-          const reader = generateResponse?.body?.getReader();
-          const decoder = new TextDecoder();
-          let partialRead = '';
-
-          while (true) {
-            const result = await reader?.read();
-            if (result?.done) break;
-
-            partialRead += decoder.decode(result?.value, { stream: true });
-            let lines = partialRead?.split('\n') ?? [];
-            partialRead = lines?.pop() ?? '';
-
-            for (const line of lines) {
-              if (line?.startsWith('data: ')) {
-                const lineData = line?.slice(6);
-                if (lineData === '[DONE]') {
-                  return;
-                }
-                try {
-                  const parsed = JSON.parse(lineData);
-                  if (parsed?.status === 'completed') {
-                    setRecipe(parsed?.result);
-                    toast.success('Fresh recipe created from your photo!');
-                    setShowSavePrompt(true); // Show save prompt after photo-based generation
-                    return;
-                  } else if (parsed?.status === 'error') {
-                    throw new Error(parsed?.message ?? 'Generation failed');
-                  }
-                } catch (e) {
-                  // Skip invalid JSON
-                }
-              }
-            }
-          }
-        } catch (genError) {
-          console.error('Generate recipe error:', genError);
-          toast.error('Failed to generate recipe from extracted ingredients');
         } finally {
           setIsGenerating(false);
         }
@@ -492,6 +533,8 @@ export function RecipeGenerator() {
         };
 
         setRecipe(extractedRecipe);
+        setIsDemoRun(false);
+        setIsSaved(false);
         
         // Set ingredients for potential re-generation
         setIngredients(data.ingredients.join(', '));
@@ -615,7 +658,49 @@ export function RecipeGenerator() {
   };
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-8 overflow-x-hidden">
+      <section
+        aria-labelledby="guided-demo-title"
+        className="rounded-2xl border border-emerald-200 bg-gradient-to-br from-emerald-50 via-white to-orange-50 p-4 sm:p-6 shadow-sm"
+      >
+        <div className="flex flex-col gap-5 lg:flex-row lg:items-center lg:justify-between">
+          <div className="min-w-0">
+            <p className="text-xs font-semibold uppercase tracking-[0.18em] text-emerald-700">
+              60-second guided demo
+            </p>
+            <h2 id="guided-demo-title" className="mt-1 text-xl font-bold text-gray-900 sm:text-2xl">
+              See processed ingredients become a cookable fresh recipe
+            </h2>
+            <p className="mt-2 max-w-2xl text-sm leading-6 text-gray-600">
+              We’ll load a clearly labeled example, generate the recipe, show the detected-to-fresh
+              comparison, and let you decide whether to save it. Nothing is saved automatically.
+            </p>
+          </div>
+          <Button
+            type="button"
+            onClick={tryExample}
+            disabled={isBusy}
+            className="min-h-11 w-full shrink-0 bg-emerald-700 px-5 text-white hover:bg-emerald-800 focus-visible:ring-2 focus-visible:ring-emerald-700 focus-visible:ring-offset-2 lg:w-auto"
+          >
+            <Sparkles className="mr-2 h-4 w-4" aria-hidden="true" />
+            {isBusy && isDemoRun ? 'Demo is running…' : 'Try the guided demo'}
+          </Button>
+        </div>
+        <ol className="mt-5 grid grid-cols-2 gap-2 text-sm sm:grid-cols-4" aria-label="Demo steps">
+          {['Load example', 'Generate recipe', 'Compare changes', 'Save or plan next'].map((step, index) => (
+            <li
+              key={step}
+              className="flex min-h-11 items-center gap-2 rounded-lg border border-white bg-white/80 px-3 py-2 text-gray-700 shadow-sm"
+            >
+              <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-emerald-100 text-xs font-bold text-emerald-800">
+                {index + 1}
+              </span>
+              <span>{step}</span>
+            </li>
+          ))}
+        </ol>
+      </section>
+
       {/* Input Section */}
       <Card className="shadow-lg border-0">
         <CardHeader>
@@ -658,7 +743,8 @@ export function RecipeGenerator() {
                   type="button"
                   onClick={() => setInputMode('label')}
                   disabled={isGenerating}
-                  className={`px-3 py-2 rounded-md text-sm font-medium transition-colors ${
+                  aria-pressed={inputMode === 'label'}
+                  className={`min-h-11 px-3 py-2 rounded-md text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-700 focus-visible:ring-offset-2 ${
                     inputMode === 'label'
                       ? 'bg-white text-emerald-700 shadow-sm'
                       : 'text-gray-600 hover:text-gray-900'
@@ -670,7 +756,8 @@ export function RecipeGenerator() {
                   type="button"
                   onClick={() => setInputMode('pantry')}
                   disabled={isGenerating}
-                  className={`px-3 py-2 rounded-md text-sm font-medium transition-colors ${
+                  aria-pressed={inputMode === 'pantry'}
+                  className={`min-h-11 px-3 py-2 rounded-md text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-700 focus-visible:ring-offset-2 ${
                     inputMode === 'pantry'
                       ? 'bg-white text-emerald-700 shadow-sm'
                       : 'text-gray-600 hover:text-gray-900'
@@ -680,6 +767,7 @@ export function RecipeGenerator() {
                 </button>
               </div>
               <Textarea
+                aria-label={inputMode === 'pantry' ? 'Ingredients in your pantry or refrigerator' : 'Processed food ingredient list'}
                 placeholder={
                   inputMode === 'pantry'
                     ? "What's in your fridge or pantry?\nExample: chicken thighs, spinach, rice, eggs, cheddar cheese, garlic..."
@@ -697,16 +785,16 @@ export function RecipeGenerator() {
                     type="button"
                     onClick={tryExample}
                     disabled={isBusy}
-                    className="inline-flex items-center gap-1.5 rounded-full border border-emerald-200 bg-emerald-50 px-4 py-2 text-sm font-medium text-emerald-700 transition-colors hover:bg-emerald-100 disabled:opacity-50"
+                    className="inline-flex min-h-11 items-center gap-1.5 rounded-full border border-emerald-300 bg-emerald-50 px-4 py-2 text-sm font-medium text-emerald-800 transition-colors hover:bg-emerald-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-700 focus-visible:ring-offset-2 disabled:opacity-50"
                   >
                     <Sparkles className="h-4 w-4" />
-                    No label handy? See an example transformation
+                    No label handy? Try the guided demo
                   </button>
                 </div>
               )}
               <Button
                 onClick={() => generateRecipe()}
-                className="w-full bg-emerald-600 hover:bg-emerald-700 text-white"
+                className="min-h-11 w-full bg-emerald-700 hover:bg-emerald-800 text-white focus-visible:ring-2 focus-visible:ring-emerald-700 focus-visible:ring-offset-2"
                 disabled={isGenerating || !ingredients?.trim()}
               >
                 {isGenerating ? (
@@ -970,36 +1058,37 @@ export function RecipeGenerator() {
         </CardContent>
       </Card>
 
-      {/* Progressive loading theater — keeps the wait alive */}
+      {/* Honest elapsed feedback with a user-controlled cancel path. */}
       {isBusy && !recipe && (
-        <Card className="shadow-lg border-0 bg-white">
+        <Card className="shadow-lg border-0 bg-white" role="status" aria-live="polite">
           <CardContent className="py-10">
             <div className="flex flex-col items-center text-center gap-4">
               <div className="relative">
                 <div className="h-14 w-14 rounded-full border-4 border-emerald-100" />
-                <Loader2 className="h-14 w-14 text-emerald-600 animate-spin absolute inset-0" />
-                <Sparkles className="h-6 w-6 text-orange-500 absolute inset-0 m-auto" />
+                <Loader2 className="h-14 w-14 text-emerald-700 animate-spin motion-reduce:animate-none absolute inset-0" aria-hidden="true" />
+                <Sparkles className="h-6 w-6 text-orange-600 absolute inset-0 m-auto" aria-hidden="true" />
               </div>
-              <p className="text-lg font-medium text-gray-900 transition-all">
+              <p className="text-lg font-medium text-gray-900">
                 {loadingMessages[loadingStep]}
               </p>
-              <p className="text-sm text-gray-500" aria-live="polite">
-                {loadingElapsed < 15
-                  ? 'Building a complete recipe…'
-                  : loadingElapsed < 30
-                    ? `Still working carefully · ${loadingElapsed}s`
-                    : `This one is taking longer than usual · ${loadingElapsed}s. Keep this tab open.`}
+              <p className="text-sm font-medium text-gray-700">
+                Elapsed: {Math.floor(loadingElapsed / 60)}:{String(loadingElapsed % 60).padStart(2, '0')}
               </p>
-              <div className="flex gap-1.5">
-                {loadingMessages.map((_, i) => (
-                  <span
-                    key={i}
-                    className={`h-1.5 w-1.5 rounded-full transition-colors ${
-                      i <= loadingStep ? 'bg-emerald-500' : 'bg-gray-200'
-                    }`}
-                  />
-                ))}
-              </div>
+              <p className="max-w-md text-sm text-gray-600">
+                Generation time varies with recipe complexity. The elapsed clock is exact; no finish time is promised.
+              </p>
+              {isGenerating && (
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={cancelGeneration}
+                  disabled={isCanceling}
+                  className="min-h-11 border-gray-400 text-gray-800 hover:bg-gray-100 focus-visible:ring-2 focus-visible:ring-gray-800 focus-visible:ring-offset-2"
+                >
+                  <Ban className="mr-2 h-4 w-4" aria-hidden="true" />
+                  {isCanceling ? 'Canceling…' : 'Cancel generation'}
+                </Button>
+              )}
             </div>
           </CardContent>
         </Card>
@@ -1007,15 +1096,20 @@ export function RecipeGenerator() {
 
       {/* Recipe Display */}
       {recipe && (
-        <Card ref={resultRef} className="shadow-lg border-0 bg-white scroll-mt-4">
+        <Card
+          ref={resultRef}
+          tabIndex={-1}
+          aria-labelledby="generated-recipe-title"
+          className="shadow-lg border-0 bg-white scroll-mt-4 focus:outline-none"
+        >
           <CardHeader className="bg-gradient-to-r from-emerald-50 to-orange-50">
-            <div className="flex items-center justify-between">
-              <CardTitle className="text-2xl text-gray-900">{recipe?.title}</CardTitle>
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <CardTitle id="generated-recipe-title" className="min-w-0 break-words text-xl text-gray-900 sm:text-2xl">{recipe?.title}</CardTitle>
               <Button
                 onClick={saveRecipe}
                 variant="outline"
                 disabled={isSaving}
-                className="border-emerald-600 text-emerald-600 hover:bg-emerald-50"
+                className="min-h-11 w-full border-emerald-700 text-emerald-800 hover:bg-emerald-50 focus-visible:ring-2 focus-visible:ring-emerald-700 focus-visible:ring-offset-2 sm:w-auto"
               >
                 {isSaving ? (
                   <>
@@ -1032,12 +1126,24 @@ export function RecipeGenerator() {
             </div>
           </CardHeader>
           <CardContent className="pt-6 space-y-6">
-            {/* Transformation Reveal — the before/after that IS the brand */}
+            {isDemoRun && (
+              <div className="flex items-start gap-3 rounded-xl border border-blue-200 bg-blue-50 p-4 text-blue-950">
+                <CheckCircle2 className="mt-0.5 h-5 w-5 shrink-0 text-blue-700" aria-hidden="true" />
+                <div>
+                  <p className="font-semibold">Demo result ready</p>
+                  <p className="mt-1 text-sm leading-6">
+                    Compare the detected label items with the generated fresh ingredients below. Save only if you want this example in your account.
+                  </p>
+                </div>
+              </div>
+            )}
+
+            {/* Truthful transformation reveal: detected source items vs generated output. */}
             {detectedAdditives.length > 0 && (
               <div className="rounded-xl border border-emerald-200 overflow-hidden">
                 <div className="bg-gradient-to-r from-amber-50 via-white to-emerald-50 px-4 py-3 border-b border-emerald-100">
                   <p className="text-center text-sm font-semibold text-gray-700">
-                    ✨ You just transformed a processed product into real food
+                    Processed label → generated fresh recipe
                   </p>
                 </div>
                 <div className="grid grid-cols-1 sm:grid-cols-[1fr_auto_1fr] items-stretch">
@@ -1046,11 +1152,11 @@ export function RecipeGenerator() {
                     <div className="flex items-center gap-2 mb-2">
                       <AlertTriangle className="h-4 w-4 text-red-500 flex-shrink-0" />
                       <span className="text-xs font-semibold text-red-600 uppercase tracking-wide">
-                        The packaged version
+                        Detected on the label
                       </span>
                     </div>
                     <p className="text-2xl font-bold text-red-600 mb-2">
-                      {detectedAdditives.length} additive{detectedAdditives.length === 1 ? '' : 's'}
+                      {detectedAdditives.length} flagged item{detectedAdditives.length === 1 ? '' : 's'}
                     </p>
                     <div className="flex flex-wrap gap-1.5">
                       {detectedAdditives.slice(0, 6).map((a) => (
@@ -1073,7 +1179,7 @@ export function RecipeGenerator() {
                   {/* Arrow */}
                   <div className="flex items-center justify-center py-2 sm:px-2 bg-white">
                     <div className="bg-emerald-100 rounded-full p-2">
-                      <ArrowRight className="h-5 w-5 text-emerald-600 rotate-90 sm:rotate-0" />
+                      <ArrowRight className="h-5 w-5 text-emerald-700 rotate-90 sm:rotate-0" aria-hidden="true" />
                     </div>
                   </div>
 
@@ -1082,13 +1188,19 @@ export function RecipeGenerator() {
                     <div className="flex items-center gap-2 mb-2">
                       <Leaf className="h-4 w-4 text-emerald-600 flex-shrink-0" />
                       <span className="text-xs font-semibold text-emerald-700 uppercase tracking-wide">
-                        Your fresh version
+                        Generated fresh ingredients
                       </span>
                     </div>
-                    <p className="text-2xl font-bold text-emerald-600 mb-2">0 additives</p>
-                    <p className="text-sm text-gray-600">
-                      Just whole-food ingredients you can pronounce.
-                    </p>
+                    <ul className="space-y-1 text-sm text-gray-700">
+                      {recipe.freshIngredients.slice(0, 5).map((ingredient, index) => (
+                        <li key={`${ingredient}-${index}`} className="break-words">• {ingredient}</li>
+                      ))}
+                    </ul>
+                    {recipe.freshIngredients.length > 5 && (
+                      <p className="mt-2 text-xs font-medium text-emerald-800">
+                        +{recipe.freshIngredients.length - 5} more in the recipe
+                      </p>
+                    )}
                   </div>
                 </div>
               </div>
@@ -1102,11 +1214,11 @@ export function RecipeGenerator() {
                   <PiggyBank className="h-8 w-8 text-emerald-600 flex-shrink-0" />
                   <div>
                     <p className="font-semibold text-emerald-700">
-                      You saved ~${(recipe.storeBoughtCost - recipe.estimatedCostPerServing).toFixed(2)} per serving!
+                      Estimated cost difference: ~${(recipe.storeBoughtCost - recipe.estimatedCostPerServing).toFixed(2)} per serving
                     </p>
                     <p className="text-sm text-gray-600">
-                      Homemade ~${recipe.estimatedCostPerServing.toFixed(2)}/serving vs. store-bought ~$
-                      {recipe.storeBoughtCost.toFixed(2)}/serving
+                      AI estimate only: homemade ~${recipe.estimatedCostPerServing.toFixed(2)}/serving vs. store-bought ~$
+                      {recipe.storeBoughtCost.toFixed(2)}/serving. Actual prices vary.
                     </p>
                   </div>
                 </div>
@@ -1252,6 +1364,28 @@ export function RecipeGenerator() {
                 </p>
               </div>
             </div>
+
+            {isSaved && (
+              <section aria-labelledby="recipe-next-steps" className="rounded-xl border border-emerald-200 bg-emerald-50 p-4">
+                <h3 id="recipe-next-steps" className="text-lg font-semibold text-emerald-950">
+                  Recipe saved. Keep the plan moving.
+                </h3>
+                <p className="mt-1 text-sm text-emerald-900">
+                  Choose the next step—nothing else is created automatically.
+                </p>
+                <div className="mt-4 grid gap-2 sm:grid-cols-3">
+                  <Link href="/collections" className="flex min-h-11 items-center gap-2 rounded-lg border border-emerald-300 bg-white px-3 py-2 text-sm font-semibold text-emerald-900 hover:bg-emerald-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-700 focus-visible:ring-offset-2">
+                    <FolderPlus className="h-4 w-4 shrink-0" aria-hidden="true" /> Add to a collection
+                  </Link>
+                  <Link href="/meal-planner" className="flex min-h-11 items-center gap-2 rounded-lg border border-emerald-300 bg-white px-3 py-2 text-sm font-semibold text-emerald-900 hover:bg-emerald-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-700 focus-visible:ring-offset-2">
+                    <CalendarDays className="h-4 w-4 shrink-0" aria-hidden="true" /> Plan a meal
+                  </Link>
+                  <Link href="/shopping-lists" className="flex min-h-11 items-center gap-2 rounded-lg border border-emerald-300 bg-white px-3 py-2 text-sm font-semibold text-emerald-900 hover:bg-emerald-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-700 focus-visible:ring-offset-2">
+                    <ListChecks className="h-4 w-4 shrink-0" aria-hidden="true" /> Make a shopping list
+                  </Link>
+                </div>
+              </section>
+            )}
           </CardContent>
         </Card>
       )}

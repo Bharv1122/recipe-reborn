@@ -143,11 +143,11 @@ export function GuestScan() {
                 <div className="flex items-center gap-2 mb-1">
                   <AlertTriangle className="h-4 w-4 text-red-500" />
                   <span className="text-xs font-semibold text-red-600 uppercase tracking-wide">
-                    The packaged version
+                    Detected on the label
                   </span>
                 </div>
                 <p className="text-2xl font-bold text-red-600 mb-2">
-                  {additives.length} additive{additives.length === 1 ? '' : 's'}
+                  {additives.length} flagged item{additives.length === 1 ? '' : 's'}
                 </p>
                 <div className="flex flex-wrap gap-1.5">
                   {additives.slice(0, 5).map((a) => (
@@ -174,11 +174,14 @@ export function GuestScan() {
                 <div className="flex items-center gap-2 mb-1">
                   <Leaf className="h-4 w-4 text-emerald-600" />
                   <span className="text-xs font-semibold text-emerald-700 uppercase tracking-wide">
-                    Your fresh version
+                    Generated fresh ingredients
                   </span>
                 </div>
-                <p className="text-2xl font-bold text-emerald-600 mb-2">0 additives</p>
-                <p className="text-sm text-gray-600">Just whole-food ingredients.</p>
+                <ul className="space-y-1 text-sm text-gray-700">
+                  {recipe.freshIngredients.slice(0, 3).map((ingredient, index) => (
+                    <li key={`${ingredient}-${index}`}>• {ingredient}</li>
+                  ))}
+                </ul>
               </div>
             </div>
           )}
@@ -187,7 +190,7 @@ export function GuestScan() {
             <div className="flex items-center gap-3 p-3 bg-gradient-to-r from-emerald-50 to-orange-50 border border-emerald-200 rounded-lg">
               <PiggyBank className="h-6 w-6 text-emerald-600 flex-shrink-0" />
               <p className="text-sm font-semibold text-emerald-700">
-                You&apos;d save ~${savings.toFixed(2)} per serving vs. store-bought
+                AI-estimated cost difference: ~${savings.toFixed(2)} per serving. Actual prices vary.
               </p>
             </div>
           )}
