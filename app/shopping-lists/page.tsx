@@ -5,11 +5,12 @@ import { useSession } from 'next-auth/react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Loader2, Plus } from 'lucide-react';
+import { Plus } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { ShoppingListCard } from './_components/shopping-list-card';
 import { ShoppingListView } from './_components/shopping-list-view';
 import { CreateListDialog } from './_components/create-list-dialog';
+import { AuthenticatedPageLoading, SessionRequiredState } from '@/components/authenticated-page-state';
 
 interface ShoppingList {
   id: string;
@@ -20,7 +21,7 @@ interface ShoppingList {
 }
 
 export default function ShoppingListsPage() {
-  const { data: session, status } = useSession() || {};
+  const { status } = useSession();
   const router = useRouter();
   const searchParams = useSearchParams();
   const [lists, setLists] = useState<ShoppingList[]>([]);
@@ -29,12 +30,10 @@ export default function ShoppingListsPage() {
   const [selectedList, setSelectedList] = useState<ShoppingList | null>(null);
 
   useEffect(() => {
-    if (status === 'unauthenticated') {
-      router.push('/login');
-    } else if (status === 'authenticated') {
+    if (status === 'authenticated') {
       fetchLists();
     }
-  }, [status, router]);
+  }, [status]);
 
   useEffect(() => {
     // Select list from URL parameter if provided
@@ -104,12 +103,12 @@ export default function ShoppingListsPage() {
     fetchLists();
   };
 
-  if (status === 'loading' || loading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center">
-        <Loader2 className="h-8 w-8 animate-spin text-primary" />
-      </div>
-    );
+  if (status === 'loading' || (status === 'authenticated' && loading)) {
+    return <AuthenticatedPageLoading label="your shopping lists" />;
+  }
+
+  if (status === 'unauthenticated') {
+    return <SessionRequiredState />;
   }
 
   return (

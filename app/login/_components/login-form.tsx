@@ -10,11 +10,13 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Loader2, Mail, Lock } from 'lucide-react';
 import toast from 'react-hot-toast';
 
-export function LoginForm() {
+export function LoginForm({ callbackUrl = '/generator' }: { callbackUrl?: string }) {
   const router = useRouter();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const safeCallbackUrl =
+    callbackUrl.startsWith('/') && !callbackUrl.startsWith('//') ? callbackUrl : '/generator';
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -31,7 +33,8 @@ export function LoginForm() {
         toast.error('Invalid email or password');
       } else {
         toast.success('Logged in successfully!');
-        router.push('/generator');
+        router.replace(safeCallbackUrl);
+        router.refresh();
       }
     } catch (error) {
       console.error('Login error:', error);

@@ -2,15 +2,15 @@
 
 import { useEffect, useState } from 'react';
 import { useSession } from 'next-auth/react';
-import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Loader2, Plus, Calendar as CalendarIcon, Crown } from 'lucide-react';
+import { Plus, Calendar as CalendarIcon, Crown } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { MealPlanCard } from './_components/meal-plan-card';
 import { GenerateMealPlanDialog } from './_components/generate-meal-plan-dialog';
 import { MealPlanCalendar } from './_components/meal-plan-calendar';
+import { AuthenticatedPageLoading, SessionRequiredState } from '@/components/authenticated-page-state';
 
 interface MealPlan {
   id: string;
@@ -22,8 +22,7 @@ interface MealPlan {
 }
 
 export default function MealPlannerPage() {
-  const { data: session, status } = useSession() || {};
-  const router = useRouter();
+  const { status } = useSession();
   const [mealPlans, setMealPlans] = useState<MealPlan[]>([]);
   const [loading, setLoading] = useState(true);
   const [generateDialogOpen, setGenerateDialogOpen] = useState(false);
@@ -31,9 +30,7 @@ export default function MealPlannerPage() {
   const [isPremium, setIsPremium] = useState<boolean | null>(null);
 
   useEffect(() => {
-    if (status === 'unauthenticated') {
-      router.push('/login');
-    } else if (status === 'authenticated') {
+    if (status === 'authenticated') {
       fetchMealPlans();
       fetch('/api/user/subscription')
         .then((res) => (res.ok ? res.json() : null))
@@ -42,7 +39,7 @@ export default function MealPlannerPage() {
         })
         .catch(() => {});
     }
-  }, [status, router]);
+  }, [status]);
 
   const fetchMealPlans = async () => {
     try {
@@ -97,12 +94,12 @@ export default function MealPlannerPage() {
     }
   };
 
-  if (status === 'loading' || loading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center">
-        <Loader2 className="h-8 w-8 animate-spin text-primary" />
-      </div>
-    );
+  if (status === 'loading' || (status === 'authenticated' && loading)) {
+    return <AuthenticatedPageLoading label="your meal plans" />;
+  }
+
+  if (status === 'unauthenticated') {
+    return <SessionRequiredState />;
   }
 
   return (

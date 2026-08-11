@@ -8,7 +8,7 @@ import { LogOut, User, BookOpen, UserCircle, Calendar, ShoppingCart } from 'luci
 import { MobileNav } from '@/components/mobile-nav';
 
 export function Header() {
-  const { data: session, status } = useSession() || {};
+  const { status } = useSession();
 
   return (
     <header className="sticky top-0 z-50 w-full border-b border-white/20 bg-emerald-900/40 backdrop-blur-sm transition-all-smooth">
@@ -29,7 +29,11 @@ export function Header() {
 
           {/* Navigation (desktop) */}
           <nav className="hidden lg:flex items-center space-x-2">
-            {status === 'authenticated' ? (
+            {status === 'loading' ? (
+              <span className="px-3 text-sm text-emerald-50/80" role="status">
+                Checking account…
+              </span>
+            ) : status === 'authenticated' ? (
               <>
                 <Link href="/generator">
                   <Button variant="ghost" className="text-white hover:text-emerald-900 hover:bg-white/90">
@@ -98,7 +102,7 @@ export function Header() {
 
           {/* Navigation (mobile) */}
           <div className="lg:hidden">
-            <MobileNav isAuthenticated={status === 'authenticated'} />
+            <MobileNav authStatus={status} />
           </div>
         </div>
       </div>

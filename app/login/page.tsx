@@ -2,7 +2,11 @@ import { LoginForm } from './_components/login-form';
 import Link from 'next/link';
 import Image from 'next/image';
 
-export default function LoginPage() {
+export default function LoginPage({
+  searchParams,
+}: {
+  searchParams?: { callbackUrl?: string };
+}) {
   return (
     <div className="min-h-screen flex items-center justify-center py-12 px-4 sm:px-6 lg:px-8">
       <div className="max-w-md w-full space-y-8">
@@ -24,7 +28,7 @@ export default function LoginPage() {
             Sign in to your account to continue
           </p>
         </div>
-        <LoginForm />
+        <LoginForm callbackUrl={searchParams?.callbackUrl} />
         <div className="text-center text-sm">
           <span className="text-emerald-50/90">Don't have an account? </span>
           <Link

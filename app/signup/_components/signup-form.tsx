@@ -71,7 +71,8 @@ export function SignupForm() {
         toast.error('Please login with your credentials');
         router.push('/login');
       } else {
-        router.push('/generator');
+        router.replace('/generator');
+        router.refresh();
       }
     } catch (error) {
       console.error('Signup error:', error);

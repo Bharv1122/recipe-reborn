@@ -86,14 +86,18 @@ export default function PricingPage() {
   const [loadingTier, setLoadingTier] = useState<string | null>(null);
 
   const handleSubscribe = async (tier: PricingTier) => {
-    if (status === 'unauthenticated') {
-      router.push('/login');
+    if (tier.priceId === null) {
+      // Free is an account-creation path for new visitors, not a login gate.
+      router.push(session ? '/generator' : '/signup');
       return;
     }
 
-    if (tier.priceId === null) {
-      // Free tier - just redirect to signup or dashboard
-      router.push(session ? '/generator' : '/signup');
+    if (status === 'loading') {
+      return;
+    }
+
+    if (status === 'unauthenticated') {
+      router.push('/login?callbackUrl=/pricing');
       return;
     }
 
@@ -198,7 +202,7 @@ export default function PricingPage() {
                 
                 <Button
                   onClick={() => handleSubscribe(tier)}
-                  disabled={loadingTier === tier.name}
+                  disabled={loadingTier === tier.name || status === 'loading'}
                   className={`w-full text-white ${
                     tier.popular
                       ? 'bg-emerald-600 hover:bg-emerald-700'

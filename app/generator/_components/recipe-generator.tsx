@@ -68,7 +68,7 @@ export function RecipeGenerator() {
   // Additives found in the ORIGINAL processed ingredients — powers the
   // before/after transformation reveal. Empty for pantry / fresh input.
   const [detectedAdditives, setDetectedAdditives] = useState<DetectedAdditive[]>([]);
-  const [loadingStep, setLoadingStep] = useState(0);
+  const [loadingElapsed, setLoadingElapsed] = useState(0);
   const [photoError, setPhotoError] = useState<string | null>(null);
   const resultRef = useRef<HTMLDivElement>(null);
 
@@ -85,17 +85,17 @@ export function RecipeGenerator() {
     'Calculating your savings…',
     'Plating it up…',
   ];
+  const loadingStep = Math.min(Math.floor(loadingElapsed / 6), loadingMessages.length - 1);
 
   useEffect(() => {
     if (!isBusy) {
-      setLoadingStep(0);
+      setLoadingElapsed(0);
       return;
     }
     const timer = setInterval(() => {
-      setLoadingStep((s) => Math.min(s + 1, loadingMessages.length - 1));
-    }, 3500);
+      setLoadingElapsed((seconds) => seconds + 1);
+    }, 1000);
     return () => clearInterval(timer);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isBusy]);
 
   // Bring the finished recipe into view — on phones it renders below the fold
@@ -982,6 +982,13 @@ export function RecipeGenerator() {
               </div>
               <p className="text-lg font-medium text-gray-900 transition-all">
                 {loadingMessages[loadingStep]}
+              </p>
+              <p className="text-sm text-gray-500" aria-live="polite">
+                {loadingElapsed < 15
+                  ? 'Building a complete recipe…'
+                  : loadingElapsed < 30
+                    ? `Still working carefully · ${loadingElapsed}s`
+                    : `This one is taking longer than usual · ${loadingElapsed}s. Keep this tab open.`}
               </p>
               <div className="flex gap-1.5">
                 {loadingMessages.map((_, i) => (

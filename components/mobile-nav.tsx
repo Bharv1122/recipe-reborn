@@ -20,10 +20,10 @@ import {
 } from 'lucide-react';
 
 interface MobileNavProps {
-  isAuthenticated: boolean;
+  authStatus: 'loading' | 'authenticated' | 'unauthenticated';
 }
 
-export function MobileNav({ isAuthenticated }: MobileNavProps) {
+export function MobileNav({ authStatus }: MobileNavProps) {
   const [open, setOpen] = useState(false);
 
   const close = () => setOpen(false);
@@ -47,7 +47,11 @@ export function MobileNav({ isAuthenticated }: MobileNavProps) {
           Menu
         </SheetTitle>
 
-        {isAuthenticated ? (
+        {authStatus === 'loading' ? (
+          <p className="px-4 py-3 text-sm text-emerald-50/80" role="status">
+            Checking account…
+          </p>
+        ) : authStatus === 'authenticated' ? (
           <>
             <Link href="/generator" onClick={close}>
               <Button

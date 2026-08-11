@@ -1,7 +1,6 @@
 'use client';
 
 import { useSession } from 'next-auth/react';
-import { useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -38,6 +37,7 @@ import {
 import toast from 'react-hot-toast';
 import Link from 'next/link';
 import { CollectionDetailModal } from './_components/collection-detail-modal';
+import { AuthenticatedPageLoading, SessionRequiredState } from '@/components/authenticated-page-state';
 
 interface Collection {
   id: string;
@@ -53,8 +53,7 @@ interface Collection {
 }
 
 export default function CollectionsPage() {
-  const { data: session, status } = useSession() || {};
-  const router = useRouter();
+  const { status } = useSession();
   const [collections, setCollections] = useState<Collection[]>([]);
   const [loading, setLoading] = useState(true);
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
@@ -65,12 +64,10 @@ export default function CollectionsPage() {
   const [selectedCollection, setSelectedCollection] = useState<string | null>(null);
 
   useEffect(() => {
-    if (status === 'unauthenticated') {
-      router.push('/login');
-    } else if (status === 'authenticated') {
+    if (status === 'authenticated') {
       fetchCollections();
     }
-  }, [status, router]);
+  }, [status]);
 
   const fetchCollections = async () => {
     try {
@@ -174,12 +171,12 @@ export default function CollectionsPage() {
     }
   };
 
-  if (status === 'loading' || loading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center">
-        <Loader2 className="h-8 w-8 animate-spin text-primary" />
-      </div>
-    );
+  if (status === 'loading' || (status === 'authenticated' && loading)) {
+    return <AuthenticatedPageLoading label="your collections" />;
+  }
+
+  if (status === 'unauthenticated') {
+    return <SessionRequiredState />;
   }
 
   return (

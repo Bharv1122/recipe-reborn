@@ -4,8 +4,32 @@ import { authOptions } from '@/lib/auth-options';
 import { prisma } from '@/lib/db';
 import { AI_CHAT_URL, AI_API_KEY, MODEL_SMART } from '@/lib/ai';
 import { rateLimit } from '@/lib/rate-limit';
+import { z } from 'zod';
 
 export const dynamic = 'force-dynamic';
+export const maxDuration = 60;
+
+const recipeResultSchema = z.object({
+  title: z.string().trim().min(1),
+  freshIngredients: z.array(z.string().trim().min(1)).min(2),
+  instructions: z.array(z.string().trim().min(1)).min(2),
+  prepTime: z.string().trim().min(1),
+  cookTime: z.string().trim().min(1),
+  servings: z.string().trim().min(1),
+  estimatedCostPerServing: z.number().nonnegative().optional(),
+  storeBoughtCost: z.number().nonnegative().optional(),
+}).passthrough();
+
+function findIncludedAllergen(ingredients: string[], allergies: string[]) {
+  const ingredientText = ingredients.join(' ').toLowerCase();
+
+  return allergies.find((rawAllergen) => {
+    const allergen = rawAllergen.trim().toLowerCase();
+    if (allergen.length < 2) return false;
+    const escaped = allergen.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    return new RegExp(`(^|[^a-z])${escaped}([^a-z]|$)`, 'i').test(ingredientText);
+  });
+}
 
 // Tier limits
 const TIER_LIMITS = {
@@ -110,6 +134,22 @@ export async function POST(request: NextRequest) {
         generationCount: { increment: 1 },
       },
     });
+
+    // Reserve the quota slot up front to keep concurrent requests within the
+    // tier limit, but give it back if the model or stream fails.
+    let generationSlotSettled = false;
+    const releaseGenerationSlot = async () => {
+      if (generationSlotSettled) return;
+      generationSlotSettled = true;
+      try {
+        await prisma.user.update({
+          where: { id: user.id },
+          data: { generationCount: { decrement: 1 } },
+        });
+      } catch (releaseError) {
+        console.error('Failed to release recipe generation quota:', releaseError);
+      }
+    };
 
     // Construct the prompt based on the type of request
     let prompt = '';
@@ -254,22 +294,47 @@ Respond with raw JSON only. Do not include code blocks, markdown, or any other f
         // Gemini 2.5 thinking tokens count against this budget; cost estimation
         // added in Phase 3e needs the extra headroom or the JSON gets truncated
         max_tokens: 6000,
+        reasoning_effort: 'low',
         response_format: { type: 'json_object' },
       }),
     };
 
-    let response = await fetch(AI_CHAT_URL, llmRequest);
+    const fetchModelResponse = async () => {
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 52_000);
+      try {
+        return await fetch(AI_CHAT_URL, { ...llmRequest, signal: controller.signal });
+      } finally {
+        clearTimeout(timeout);
+      }
+    };
+
+    let response: Response;
+    try {
+      response = await fetchModelResponse();
+    } catch (modelError) {
+      await releaseGenerationSlot();
+      throw modelError;
+    }
 
     if (!response?.ok) {
       const errText = await response.text().catch(() => '');
       console.error('LLM API non-OK response:', response.status, errText.slice(0, 500));
       // Gemini occasionally returns transient 429/5xx — one retry recovers most of them
-      response = await fetch(AI_CHAT_URL, llmRequest);
+      if (response.status === 429 || response.status >= 500) {
+        try {
+          response = await fetchModelResponse();
+        } catch (modelError) {
+          await releaseGenerationSlot();
+          throw modelError;
+        }
+      }
     }
 
     if (!response?.ok) {
       const errText = await response.text().catch(() => '');
       console.error('LLM API retry also failed:', response.status, errText.slice(0, 500));
+      await releaseGenerationSlot();
       throw new Error(`LLM API request failed (${response.status})`);
     }
 
@@ -295,17 +360,30 @@ Respond with raw JSON only. Do not include code blocks, markdown, or any other f
                 const data = line?.slice(6);
                 if (data === '[DONE]') {
                   try {
-                    const finalResult = JSON.parse(buffer);
+                    const validation = recipeResultSchema.safeParse(JSON.parse(buffer));
+                    if (!validation.success) {
+                      throw new Error('Recipe response did not match the required structure');
+                    }
+                    const finalResult = validation.data;
+                    const includedAllergen = findIncludedAllergen(
+                      finalResult.freshIngredients,
+                      user.allergies
+                    );
+                    if (includedAllergen) {
+                      throw new Error('Recipe response included a saved allergen');
+                    }
                     const finalData = JSON.stringify({
                       status: 'completed',
                       result: finalResult,
                     });
                     controller.enqueue(encoder.encode(`data: ${finalData}\n\n`));
+                    generationSlotSettled = true;
                   } catch (e) {
                     console.error('Error parsing final JSON:', e);
+                    await releaseGenerationSlot();
                     controller.enqueue(
                       encoder.encode(
-                        `data: ${JSON.stringify({ status: 'error', message: 'Failed to parse recipe' })}\n\n`
+                        `data: ${JSON.stringify({ status: 'error', message: 'Recipe failed validation. Please try again.' })}\n\n`
                       )
                     );
                   }
@@ -328,13 +406,23 @@ Respond with raw JSON only. Do not include code blocks, markdown, or any other f
           }
         } catch (error) {
           console.error('Stream error:', error);
+          await releaseGenerationSlot();
           controller.enqueue(
             encoder.encode(
               `data: ${JSON.stringify({ status: 'error', message: 'Stream failed' })}\n\n`
             )
           );
           controller.close();
+          return;
         }
+
+        await releaseGenerationSlot();
+        controller.enqueue(
+          encoder.encode(
+            `data: ${JSON.stringify({ status: 'error', message: 'Recipe generation ended early. Please try again.' })}\n\n`
+          )
+        );
+        controller.close();
       },
     });
 

@@ -22,6 +22,7 @@ import {
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import Link from 'next/link';
+import { AuthenticatedPageLoading, SessionRequiredState } from '@/components/authenticated-page-state';
 
 interface UserData {
   subscriptionTier: string;
@@ -58,7 +59,7 @@ const TIER_INFO = {
 };
 
 export default function AccountPage() {
-  const { data: session, status } = useSession() || {};
+  const { status } = useSession();
   const router = useRouter();
   const [userData, setUserData] = useState<UserData | null>(null);
   const [loading, setLoading] = useState(true);
@@ -68,13 +69,11 @@ export default function AccountPage() {
   const [savingPrefs, setSavingPrefs] = useState(false);
 
   useEffect(() => {
-    if (status === 'unauthenticated') {
-      router.push('/login');
-    } else if (status === 'authenticated') {
+    if (status === 'authenticated') {
       fetchUserData();
       fetchPreferences();
     }
-  }, [status, router]);
+  }, [status]);
 
   const fetchPreferences = async () => {
     try {
@@ -156,12 +155,12 @@ export default function AccountPage() {
     }
   };
 
-  if (status === 'loading' || loading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center">
-        <Loader2 className="h-8 w-8 animate-spin text-primary" />
-      </div>
-    );
+  if (status === 'loading' || (status === 'authenticated' && loading)) {
+    return <AuthenticatedPageLoading label="your account" />;
+  }
+
+  if (status === 'unauthenticated') {
+    return <SessionRequiredState />;
   }
 
   if (!userData) {

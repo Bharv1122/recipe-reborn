@@ -7,6 +7,8 @@ import { Providers } from './providers';
 import { Header } from '@/components/header';
 import { Toaster } from 'react-hot-toast';
 import { SrcCapture } from './_components/src-capture';
+import { getServerSession } from 'next-auth';
+import { authOptions } from '@/lib/auth-options';
 
 const inter = Inter({ subsets: ['latin'] });
 
@@ -88,11 +90,13 @@ export const metadata: Metadata = {
   },
 };
 
-export default function RootLayout({
+export default async function RootLayout({
   children,
 }: Readonly<{
   children: React.ReactNode;
 }>) {
+  const session = await getServerSession(authOptions);
+
   return (
     <html lang="en" suppressHydrationWarning>
       <head>
@@ -118,7 +122,7 @@ export default function RootLayout({
         />
       </head>
       <body className={inter.className}>
-        <Providers>
+        <Providers session={session}>
           <SrcCapture />
           <Header />
           <main>{children}</main>
