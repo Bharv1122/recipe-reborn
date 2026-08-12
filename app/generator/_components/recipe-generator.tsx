@@ -7,11 +7,13 @@ import { Textarea } from '@/components/ui/textarea';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Loader2, ChefHat, Sparkles, Save, Clock, Users, Link as LinkIcon, Camera, Upload, X, Mic, PiggyBank, ScanBarcode, AlertTriangle, Leaf, ArrowRight, Ban, CheckCircle2, FolderPlus, CalendarDays, ListChecks } from 'lucide-react';
+import { Loader2, ChefHat, Sparkles, Save, Clock, Users, Link as LinkIcon, Camera, Upload, X, Mic, PiggyBank, ScanBarcode, AlertTriangle, Leaf, ArrowRight, Ban, CheckCircle2, FolderPlus, CalendarDays } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { InteractiveIngredient } from './interactive-ingredient';
 import { VoiceChat } from './voice-chat';
 import { BarcodeScanner } from './barcode-scanner';
+import { PantryCheckDialog } from './pantry-check-dialog';
+import { PantryIdeaCard } from './pantry-idea-card';
 import { detectAdditives, type DetectedAdditive } from '@/lib/additives';
 import { EXAMPLE_LABEL } from '@/lib/example-label';
 import {
@@ -73,6 +75,7 @@ export function RecipeGenerator() {
   const [photoError, setPhotoError] = useState<string | null>(null);
   const [isDemoRun, setIsDemoRun] = useState(false);
   const [isSaved, setIsSaved] = useState(false);
+  const [savedRecipeId, setSavedRecipeId] = useState<string | null>(null);
   const [isCanceling, setIsCanceling] = useState(false);
   const resultRef = useRef<HTMLDivElement>(null);
   const generationAbortRef = useRef<AbortController | null>(null);
@@ -255,7 +258,11 @@ export function RecipeGenerator() {
     }
   };
 
-  const generateRecipe = async (dietaryRestriction?: string, ingredientsOverride?: string) => {
+  const generateRecipe = async (
+    dietaryRestriction?: string,
+    ingredientsOverride?: string,
+    sourceOverride?: 'label' | 'pantry'
+  ) => {
     // State set in the same tick (stash handoff, example) hasn't rendered yet —
     // the override carries the value the closure can't see.
     const inputText = ingredientsOverride ?? ingredients;
@@ -266,8 +273,9 @@ export function RecipeGenerator() {
 
     // Snapshot the additives in the original product before we transform it —
     // skip for pantry mode (nothing to "leave behind" from fresh ingredients)
+    const effectiveSource = sourceOverride ?? (ingredientsOverride ? 'label' : inputMode);
     if (!dietaryRestriction) {
-      setDetectedAdditives(inputMode === 'pantry' && !ingredientsOverride ? [] : detectAdditives(inputText));
+      setDetectedAdditives(effectiveSource === 'pantry' ? [] : detectAdditives(inputText));
     }
     if (!ingredientsOverride && !dietaryRestriction) {
       setIsDemoRun(false);
@@ -276,15 +284,16 @@ export function RecipeGenerator() {
     setIsGenerating(true);
     setRecipe(null);
     setIsSaved(false);
+    setSavedRecipeId(null);
     setShowSavePrompt(false);
 
     try {
       const generatedRecipe = await requestGeneratedRecipe({
         ingredients: inputText || recipe?.title,
         dietaryRestriction,
-        // Auto-fired runs (guest handoff, example) are always label mode —
-        // the closure may still hold a stale inputMode from before the fire
-        source: ingredientsOverride ? 'label' : inputMode,
+        // Auto-fired guest/demo runs default to label mode; pantry suggestions
+        // explicitly override the source so the request keeps pantry semantics.
+        source: effectiveSource,
       });
 
       setRecipe(generatedRecipe);
@@ -303,6 +312,16 @@ export function RecipeGenerator() {
     } finally {
       setIsGenerating(false);
     }
+  };
+
+  const generatePantryIdea = (title: string, extraIngredient?: string) => {
+    const pantryRequest = [
+      ingredients,
+      extraIngredient ? `One ingredient to buy: ${extraIngredient}` : '',
+      `Please create this dish: ${title}`,
+    ].filter(Boolean).join('\n');
+
+    generateRecipe(undefined, pantryRequest, 'pantry');
   };
 
   const saveRecipe = async () => {
@@ -336,8 +355,13 @@ export function RecipeGenerator() {
         throw new Error(data?.error ?? 'Failed to save recipe');
       }
 
+      const data = await response.json();
+      const recipeId = data?.recipe?.id;
+      if (!recipeId) throw new Error('Saved recipe ID was missing');
+
       toast.success('Recipe saved successfully!');
       setIsSaved(true);
+      setSavedRecipeId(recipeId);
     } catch (error) {
       console.error('Save recipe error:', error);
       toast.error('Failed to save recipe');
@@ -354,6 +378,8 @@ export function RecipeGenerator() {
 
     setIsImporting(true);
     setRecipe(null);
+    setIsSaved(false);
+    setSavedRecipeId(null);
 
     try {
       const response = await fetch('/api/import-recipe', {
@@ -468,6 +494,8 @@ export function RecipeGenerator() {
 
     setIsExtracting(true);
     setRecipe(null);
+    setIsSaved(false);
+    setSavedRecipeId(null);
     setPhotoError(null);
 
     try {
@@ -509,6 +537,7 @@ export function RecipeGenerator() {
           });
           setRecipe(generatedRecipe);
           setIsSaved(false);
+          setSavedRecipeId(null);
           toast.success('Fresh recipe created from your photo!');
           setShowSavePrompt(true);
         } catch (genError: any) {
@@ -535,6 +564,7 @@ export function RecipeGenerator() {
         setRecipe(extractedRecipe);
         setIsDemoRun(false);
         setIsSaved(false);
+        setSavedRecipeId(null);
         
         // Set ingredients for potential re-generation
         setIngredients(data.ingredients.join(', '));
@@ -566,6 +596,8 @@ export function RecipeGenerator() {
       ...recipe,
       freshIngredients: updatedIngredients,
     });
+    setIsSaved(false);
+    setSavedRecipeId(null);
   };
 
   const handleSubstituteIngredient = async (index: number, originalIngredient: string, newIngredient: string) => {
@@ -637,6 +669,9 @@ export function RecipeGenerator() {
               const parsed = JSON.parse(data);
               if (parsed?.status === 'completed') {
                 setRecipe(parsed?.result);
+                setIsSaved(false);
+                setSavedRecipeId(null);
+                setShowSavePrompt(true);
                 toast.success(`Recipe regenerated with ${newIngredient}!`, { duration: 4000 });
                 return;
               } else if (parsed?.status === 'error') {
@@ -792,6 +827,13 @@ export function RecipeGenerator() {
                   </button>
                 </div>
               )}
+              {inputMode === 'pantry' && ingredients?.trim() && (
+                <PantryIdeaCard
+                  ingredients={ingredients}
+                  onChoose={generatePantryIdea}
+                  disabled={isGenerating}
+                />
+              )}
               <Button
                 onClick={() => generateRecipe()}
                 className="min-h-11 w-full bg-emerald-700 hover:bg-emerald-800 text-white focus-visible:ring-2 focus-visible:ring-emerald-700 focus-visible:ring-offset-2"
@@ -816,6 +858,7 @@ export function RecipeGenerator() {
               <VoiceChat
                 onIngredientExtracted={(extractedIngredients) => {
                   setIngredients(extractedIngredients);
+                  setInputMode('pantry');
                   setActiveTab('generate');
                 }}
               />
@@ -1380,9 +1423,13 @@ export function RecipeGenerator() {
                   <Link href="/meal-planner" className="flex min-h-11 items-center gap-2 rounded-lg border border-emerald-300 bg-white px-3 py-2 text-sm font-semibold text-emerald-900 hover:bg-emerald-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-700 focus-visible:ring-offset-2">
                     <CalendarDays className="h-4 w-4 shrink-0" aria-hidden="true" /> Plan a meal
                   </Link>
-                  <Link href="/shopping-lists" className="flex min-h-11 items-center gap-2 rounded-lg border border-emerald-300 bg-white px-3 py-2 text-sm font-semibold text-emerald-900 hover:bg-emerald-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-700 focus-visible:ring-offset-2">
-                    <ListChecks className="h-4 w-4 shrink-0" aria-hidden="true" /> Make a shopping list
-                  </Link>
+                  {savedRecipeId && recipe ? (
+                    <PantryCheckDialog
+                      recipeId={savedRecipeId}
+                      recipeTitle={recipe.title}
+                      ingredients={recipe.freshIngredients}
+                    />
+                  ) : null}
                 </div>
               </section>
             )}
