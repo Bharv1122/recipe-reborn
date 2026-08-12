@@ -1,4 +1,5 @@
 import { Redis } from '@upstash/redis';
+import { logServerError } from '@/lib/server-error-log';
 
 const redis =
   process.env.UPSTASH_REDIS_REST_URL && process.env.UPSTASH_REDIS_REST_TOKEN
@@ -23,8 +24,12 @@ export async function markGenerationCanceled(userId: string, generationId: strin
   const cancellationKey = key(userId, generationId);
 
   if (redis) {
-    await redis.set(cancellationKey, '1', { ex: CANCELLATION_TTL_SECONDS });
-    return;
+    try {
+      await redis.set(cancellationKey, '1', { ex: CANCELLATION_TTL_SECONDS });
+      return;
+    } catch (error) {
+      logServerError('generation_cancellation_redis_write_failed', error);
+    }
   }
 
   pruneLocalCancellations();
@@ -34,7 +39,13 @@ export async function markGenerationCanceled(userId: string, generationId: strin
 export async function wasGenerationCanceled(userId: string, generationId: string) {
   const cancellationKey = key(userId, generationId);
 
-  if (redis) return (await redis.get<string>(cancellationKey)) === '1';
+  if (redis) {
+    try {
+      return (await redis.get<string>(cancellationKey)) === '1';
+    } catch (error) {
+      logServerError('generation_cancellation_redis_read_failed', error);
+    }
+  }
 
   pruneLocalCancellations();
   return localCancellations.has(cancellationKey);
@@ -43,8 +54,12 @@ export async function wasGenerationCanceled(userId: string, generationId: string
 export async function clearGenerationCancellation(userId: string, generationId: string) {
   const cancellationKey = key(userId, generationId);
   if (redis) {
-    await redis.del(cancellationKey);
-    return;
+    try {
+      await redis.del(cancellationKey);
+      return;
+    } catch (error) {
+      logServerError('generation_cancellation_redis_delete_failed', error);
+    }
   }
   localCancellations.delete(cancellationKey);
 }
