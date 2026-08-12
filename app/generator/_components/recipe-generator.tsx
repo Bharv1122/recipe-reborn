@@ -261,7 +261,8 @@ export function RecipeGenerator() {
   const generateRecipe = async (
     dietaryRestriction?: string,
     ingredientsOverride?: string,
-    sourceOverride?: 'label' | 'pantry'
+    sourceOverride?: 'label' | 'pantry',
+    pantrySelection?: { title: string; extraIngredient?: string }
   ) => {
     // State set in the same tick (stash handoff, example) hasn't rendered yet —
     // the override carries the value the closure can't see.
@@ -294,6 +295,8 @@ export function RecipeGenerator() {
         // Auto-fired guest/demo runs default to label mode; pantry suggestions
         // explicitly override the source so the request keeps pantry semantics.
         source: effectiveSource,
+        pantryTargetTitle: pantrySelection?.title,
+        pantryExtraIngredient: pantrySelection?.extraIngredient,
       });
 
       setRecipe(generatedRecipe);
@@ -315,13 +318,7 @@ export function RecipeGenerator() {
   };
 
   const generatePantryIdea = (title: string, extraIngredient?: string) => {
-    const pantryRequest = [
-      ingredients,
-      extraIngredient ? `One ingredient to buy: ${extraIngredient}` : '',
-      `Please create this dish: ${title}`,
-    ].filter(Boolean).join('\n');
-
-    generateRecipe(undefined, pantryRequest, 'pantry');
+    generateRecipe(undefined, ingredients, 'pantry', { title, extraIngredient });
   };
 
   const saveRecipe = async () => {

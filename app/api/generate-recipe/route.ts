@@ -58,6 +58,10 @@ export async function POST(request: NextRequest) {
 
     const body = await request.json();
     const { ingredients, dietaryRestriction, isSubstitutionRegeneration, originalRecipe, substitution, source } = body;
+    const pantryTargetTitleResult = z.string().trim().min(1).max(100).safeParse(body.pantryTargetTitle);
+    const pantryExtraIngredientResult = z.string().trim().min(1).max(80).safeParse(body.pantryExtraIngredient);
+    const pantryTargetTitle = pantryTargetTitleResult.success ? pantryTargetTitleResult.data : undefined;
+    const pantryExtraIngredient = pantryExtraIngredientResult.success ? pantryExtraIngredientResult.data : undefined;
     const generationId = z.string().uuid().safeParse(body.generationId);
 
     if (!ingredients) {
@@ -236,8 +240,11 @@ Respond with raw JSON only. Do not include code blocks, markdown, or any other f
       prompt = `You are a professional chef helping users cook with what they already have at home.
 
 The user has these ingredients on hand in their pantry/fridge: ${ingredients}
+${pantryTargetTitle ? `The user selected this specific dish idea: ${pantryTargetTitle}` : ''}
+${pantryExtraIngredient ? `They intentionally chose to buy exactly one additional ingredient: ${pantryExtraIngredient}. Include it as a required ingredient, do not mark it optional, and do not add any other required grocery ingredients beyond basic staples.` : ''}
 
 Create a delicious, healthy recipe that primarily uses these on-hand ingredients. You may assume basic staples (salt, pepper, cooking oil, water). Minimize ingredients they would need to buy — if something extra is truly needed, keep it to one or two common items and mark each as "(optional)" or "(if you have it)" in the ingredient line. Provide clear, step-by-step instructions.
+${pantryTargetTitle ? 'Create the selected dish, keeping its title or a very close equivalent.' : ''}
 
 Provide a JSON response with this exact structure:
 {
