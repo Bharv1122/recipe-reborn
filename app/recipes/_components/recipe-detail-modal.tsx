@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { StarRating } from '@/components/ui/star-rating';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { X, Clock, Users, Save, Wine, Info, Loader2, Share2, Facebook, Twitter, PiggyBank, ChefHat, MessageCircle } from 'lucide-react';
+import { X, Clock, Users, Save, Wine, Info, Loader2, Share2, Facebook, Twitter, PiggyBank, ChefHat, MessageCircle, ShoppingCart } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import toast from 'react-hot-toast';
@@ -79,6 +79,7 @@ export function RecipeDetailModal({ recipe, onClose, onUpdate }: RecipeDetailMod
   const [winePairings, setWinePairings] = useState<WinePairing[]>([]);
   const [isLoadingWine, setIsLoadingWine] = useState(false);
   const [wineLoaded, setWineLoaded] = useState(false);
+  const [addingWine, setAddingWine] = useState<string | null>(null);
 
   // Ingredient info state
   const [selectedIngredient, setSelectedIngredient] = useState<string | null>(null);
@@ -190,6 +191,61 @@ export function RecipeDetailModal({ recipe, onClose, onUpdate }: RecipeDetailMod
       toast.error('Failed to get wine pairing');
     } finally {
       setIsLoadingWine(false);
+    }
+  };
+
+  const addWineToShoppingList = async (pairing: WinePairing) => {
+    setAddingWine(pairing.varietal);
+    try {
+      const listsResponse = await fetch('/api/shopping-lists');
+      if (!listsResponse.ok) throw new Error('Failed to load shopping lists');
+      const lists = await listsResponse.json();
+
+      let listId = Array.isArray(lists) ? lists[0]?.id : undefined;
+      const wineAlreadyListed = Array.isArray(lists)
+        && lists.some((list) => Array.isArray(list?.items)
+          && list.items.some((item: { ingredient?: string; checked?: boolean }) => (
+            !item.checked
+            && item.ingredient?.toLowerCase().includes(pairing.varietal.toLowerCase())
+          )));
+      if (wineAlreadyListed) {
+        toast.success(`${pairing.varietal} is already on your shopping list.`);
+        return;
+      }
+
+      if (!listId) {
+        const createResponse = await fetch('/api/shopping-lists', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            name: `${recipe.title} Shopping List`,
+            notes: `Shopping list for ${recipe.title}.`,
+          }),
+        });
+        if (!createResponse.ok) throw new Error('Failed to create shopping list');
+        listId = (await createResponse.json())?.id;
+      }
+
+      if (!listId) throw new Error('Shopping list was not available');
+      const addResponse = await fetch(`/api/shopping-lists/${listId}/items`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          ingredient: pairing.varietal,
+          quantity: '1',
+          unit: 'bottle',
+          category: 'Wine & Beverages',
+          notes: 'Wine recommendation. Availability varies. Purchaser must be 21+ and show valid ID.',
+        }),
+      });
+      if (!addResponse.ok) throw new Error('Failed to add wine');
+
+      toast.success(`${pairing.varietal} added to your shopping list.`);
+    } catch (error) {
+      console.error('Error adding wine to shopping list:', error);
+      toast.error(error instanceof Error ? error.message : 'Failed to add wine');
+    } finally {
+      setAddingWine(null);
     }
   };
 
@@ -620,6 +676,19 @@ export function RecipeDetailModal({ recipe, onClose, onUpdate }: RecipeDetailMod
                             </span>
                           </div>
                           <p className="text-gray-700 mb-3">{pairing.description}</p>
+                          <Button
+                            type="button"
+                            variant="outline"
+                            className="mb-3 w-full"
+                            onClick={() => addWineToShoppingList(pairing)}
+                            disabled={addingWine === pairing.varietal}
+                          >
+                            {addingWine === pairing.varietal ? (
+                              <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Adding wine...</>
+                            ) : (
+                              <><ShoppingCart className="mr-2 h-4 w-4" /> Add wine to shopping list (21+)</>
+                            )}
+                          </Button>
                           <div className="flex items-center gap-4 text-sm text-gray-600">
                             <span>🌡️ {pairing.servingTemp}</span>
                           </div>

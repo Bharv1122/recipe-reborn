@@ -53,9 +53,11 @@ export default function ShoppingListsPage() {
       if (response.ok) {
         const data = await response.json();
         setLists(data);
-        if (data.length > 0 && !selectedList) {
-          setSelectedList(data[0]);
-        }
+        setSelectedList((currentList) => {
+          if (data.length === 0) return null;
+          if (!currentList) return data[0];
+          return data.find((list: ShoppingList) => list.id === currentList.id) || data[0];
+        });
       } else {
         toast.error('Failed to load shopping lists');
       }

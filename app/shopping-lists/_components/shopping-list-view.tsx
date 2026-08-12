@@ -6,8 +6,9 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Badge } from '@/components/ui/badge';
-import { Plus, Trash2, Package } from 'lucide-react';
+import { Copy, ExternalLink, Package, Plus, Trash2 } from 'lucide-react';
 import toast from 'react-hot-toast';
+import { formatItemsForInstacart } from '@/lib/instacart-list';
 
 interface ShoppingListItem {
   id: string;
@@ -54,6 +55,19 @@ export function ShoppingListView({ list, onUpdate }: ShoppingListViewProps) {
   const categories = Object.keys(itemsByCategory).sort();
   const checkedCount = list.items.filter((item) => item.checked).length;
   const progress = list.items.length > 0 ? Math.round((checkedCount / list.items.length) * 100) : 0;
+  const instacartText = formatItemsForInstacart(list.items);
+
+  const handleCopyForInstacart = async () => {
+    if (!instacartText) return;
+
+    try {
+      await navigator.clipboard.writeText(instacartText);
+      toast.success('List copied. In Instacart Shopping List, tap Paste items.');
+    } catch (error) {
+      console.error('Error copying shopping list:', error);
+      toast.error('Could not copy the list. Please copy the items manually.');
+    }
+  };
 
   const handleToggleItem = async (itemId: string, checked: boolean) => {
     try {
@@ -140,6 +154,37 @@ export function ShoppingListView({ list, onUpdate }: ShoppingListViewProps) {
         </div>
       </CardHeader>
       <CardContent className="space-y-6">
+        {list.items.length > 0 && (
+          <section aria-labelledby="instacart-handoff-title" className="rounded-xl border border-emerald-200 bg-emerald-50 p-4">
+            <h3 id="instacart-handoff-title" className="font-semibold text-emerald-950">
+              Continue in your Instacart app
+            </h3>
+            <p className="mt-1 text-sm text-emerald-900">
+              Copy the unchecked items, open Instacart, then go to Shopping List and tap <strong>Paste items</strong>.
+            </p>
+            <div className="mt-3 flex flex-col gap-2 sm:flex-row">
+              <Button
+                type="button"
+                onClick={handleCopyForInstacart}
+                disabled={!instacartText}
+                className="min-h-11 bg-emerald-700 text-white hover:bg-emerald-800"
+              >
+                <Copy className="mr-2 h-4 w-4" aria-hidden="true" />
+                Copy for Instacart
+              </Button>
+              <Button asChild type="button" variant="outline" className="min-h-11 border-emerald-700 text-emerald-900">
+                <a href="https://www.instacart.com/store" target="_blank" rel="noreferrer">
+                  <ExternalLink className="mr-2 h-4 w-4" aria-hidden="true" />
+                  Open Instacart
+                </a>
+              </Button>
+            </div>
+            <p className="mt-2 text-xs text-emerald-800">
+              Recipe Reborn copies text only. You choose products, retailer, checkout, and delivery in Instacart. Alcohol availability varies; purchasers must be 21+ and show valid ID.
+            </p>
+          </section>
+        )}
+
         {/* Add New Item */}
         <div className="flex gap-2">
           <Input
