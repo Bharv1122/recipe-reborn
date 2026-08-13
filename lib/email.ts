@@ -1,27 +1,34 @@
 /**
- * Transactional email via the Resend REST API.
+ * Transactional email via the Brevo REST API.
  *
- * Deliberately uses plain fetch rather than the `resend` npm package: this repo
+ * Deliberately uses plain fetch rather than adding a provider SDK: this repo
  * installs with --legacy-peer-deps (eslint 9 vs @typescript-eslint 7), so every
  * avoided dependency is one less install that can break the Vercel build.
  *
- * Until RESEND_API_KEY is set the sender is a no-op that returns false. Callers
+ * Until BREVO_API_KEY is set the sender is a no-op that returns false. Callers
  * must NOT surface that failure to the user — see the forgot-password route for
  * why (leaking "no email sent" would also leak which addresses have accounts).
  */
 
-const RESEND_ENDPOINT = 'https://api.resend.com/emails';
+const BREVO_ENDPOINT = 'https://api.brevo.com/v3/smtp/email';
 
 export function isEmailConfigured(): boolean {
-  return Boolean(process.env.RESEND_API_KEY);
+  return Boolean(process.env.BREVO_API_KEY);
 }
 
 /**
- * The address transactional mail is sent from. Resend requires this domain to
- * be verified in their dashboard before delivery to real inboxes will work.
+ * The address transactional mail is sent from. Brevo requires this sender or
+ * domain to be authenticated before delivery to real inboxes will work.
  */
-function fromAddress(): string {
-  return process.env.EMAIL_FROM || 'Recipe Reborn <noreply@recipereborn.com>';
+function sender(): { name: string; email: string } {
+  const configured = process.env.EMAIL_FROM || 'Recipe Reborn <noreply@mail.recipereborn.com>';
+  const match = configured.match(/^\s*(.*?)\s*<([^<>]+)>\s*$/);
+
+  if (match) {
+    return { name: match[1] || 'Recipe Reborn', email: match[2].trim() };
+  }
+
+  return { name: 'Recipe Reborn', email: configured.trim() };
 }
 
 interface SendEmailArgs {
@@ -34,7 +41,7 @@ interface SendEmailArgs {
 export async function sendEmail({ to, subject, html, text }: SendEmailArgs): Promise<boolean> {
   if (!isEmailConfigured()) {
     console.error(
-      '[email] RESEND_API_KEY is not set — skipping send to',
+      '[email] BREVO_API_KEY is not set — skipping send to',
       to,
       '| subject:',
       subject
@@ -43,20 +50,26 @@ export async function sendEmail({ to, subject, html, text }: SendEmailArgs): Pro
   }
 
   try {
-    const response = await fetch(RESEND_ENDPOINT, {
+    const response = await fetch(BREVO_ENDPOINT, {
       method: 'POST',
       headers: {
-        Authorization: `Bearer ${process.env.RESEND_API_KEY}`,
+        'api-key': process.env.BREVO_API_KEY as string,
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify({ from: fromAddress(), to: [to], subject, html, text }),
+      body: JSON.stringify({
+        sender: sender(),
+        to: [{ email: to }],
+        subject,
+        htmlContent: html,
+        textContent: text,
+      }),
     });
 
     if (!response.ok) {
       // Body often explains the failure (unverified domain, bad key) — log it,
       // but never let it reach the client.
       const detail = await response.text().catch(() => '');
-      console.error('[email] Resend rejected send:', response.status, detail.slice(0, 500));
+      console.error('[email] Brevo rejected send:', response.status, detail.slice(0, 500));
       return false;
     }
 

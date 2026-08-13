@@ -70,7 +70,7 @@ export async function POST(request: NextRequest) {
 
     const resetUrl = `${appUrl()}/reset-password?token=${rawToken}`;
 
-    // Local dev without Resend configured has no way to receive the link, which
+    // Local dev without Brevo configured has no way to receive the link, which
     // would make the flow untestable. Print it to the server console instead —
     // never in production, and never when real email is available.
     if (process.env.NODE_ENV !== 'production' && !isEmailConfigured()) {
