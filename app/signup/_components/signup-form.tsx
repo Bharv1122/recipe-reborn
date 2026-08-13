@@ -93,6 +93,7 @@ export function SignupForm() {
               <Input
                 id="email"
                 type="email"
+                autoComplete="email"
                 placeholder="you@example.com"
                 value={email}
                 onChange={(e) => setEmail(e?.target?.value ?? '')}
@@ -109,6 +110,8 @@ export function SignupForm() {
               <Input
                 id="password"
                 type={showPassword ? 'text' : 'password'}
+                autoComplete="new-password"
+                minLength={6}
                 placeholder="At least 6 characters"
                 value={password}
                 onChange={(e) => setPassword(e?.target?.value ?? '')}

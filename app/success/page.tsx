@@ -1,6 +1,7 @@
 import Link from 'next/link';
 import { ChefHat, CheckCircle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { SUPPORT_EMAIL, SUPPORT_MAILTO } from '@/lib/support';
 
 export default function SuccessPage() {
   return (
@@ -33,7 +34,7 @@ export default function SuccessPage() {
               </li>
               <li className="flex items-start">
                 <span className="text-emerald-600 mr-2">✓</span>
-                <span>Generate unlimited fresh recipes</span>
+                <span>Generate up to 100 fresh recipes a month</span>
               </li>
               <li className="flex items-start">
                 <span className="text-emerald-600 mr-2">✓</span>
@@ -62,7 +63,11 @@ export default function SuccessPage() {
 
           {/* Support */}
           <p className="text-xs text-gray-500 mt-6">
-            Need help? Contact us through our support channels.
+            Need help? Email us at{' '}
+            <a href={SUPPORT_MAILTO} className="text-emerald-700 hover:underline">
+              {SUPPORT_EMAIL}
+            </a>
+            .
           </p>
         </div>
       </div>

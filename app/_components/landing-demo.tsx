@@ -38,7 +38,7 @@ export function LandingDemo() {
           </video>
         </div>
         <p className="mt-3 text-center text-sm text-emerald-50/80">
-          Watch the 2-minute walkthrough — a real label transformed, start to finish.
+          Watch the 3-minute walkthrough — a real label transformed, start to finish.
         </p>
       </div>
 

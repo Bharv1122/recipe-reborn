@@ -60,7 +60,7 @@ export default function HackathonPage() {
               href="#walkthrough"
               className="inline-flex min-h-12 items-center justify-center gap-2 rounded-xl bg-orange-400 px-5 py-3 font-bold text-slate-950 outline-none transition hover:bg-orange-300 focus-visible:ring-4 focus-visible:ring-orange-200"
             >
-              Start the 2-minute walkthrough <ArrowRight className="h-5 w-5" aria-hidden="true" />
+              Start the 3-minute walkthrough <ArrowRight className="h-5 w-5" aria-hidden="true" />
             </a>
             <Link
               href="/"

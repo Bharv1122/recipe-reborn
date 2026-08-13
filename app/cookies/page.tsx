@@ -1,5 +1,7 @@
 import Link from 'next/link';
 import Image from 'next/image';
+import { SUPPORT_EMAIL, SUPPORT_MAILTO } from '@/lib/support';
+import { LEGAL_LAST_UPDATED } from '@/lib/legal';
 
 export default function CookiesPage() {
   return (
@@ -11,7 +13,7 @@ export default function CookiesPage() {
             <Image src="/logo-mark.png" alt="Recipe Reborn emblem" width={48} height={48} className="h-12 w-12 rounded-full shadow-md" />
             <h1 className="text-4xl font-bold text-white">Cookie Policy</h1>
           </div>
-          <p className="text-emerald-50/90">Last updated: {new Date().toLocaleDateString()}</p>
+          <p className="text-emerald-50/90">Last updated: {LEGAL_LAST_UPDATED}</p>
         </div>
 
         {/* Content */}
@@ -187,7 +189,11 @@ export default function CookiesPage() {
           <section>
             <h2 className="text-2xl font-semibold text-gray-900 mb-4">9. Contact Us</h2>
             <p className="text-gray-700 leading-relaxed">
-              If you have any questions about our use of cookies or this Cookie Policy, please contact us through our website or support channels. You can also refer to our <Link href="/privacy" className="text-emerald-600 hover:underline">Privacy Policy</Link> for more information about how we handle your data.
+              If you have any questions about our use of cookies or this Cookie Policy, email us at{' '}
+              <a href={SUPPORT_MAILTO} className="text-emerald-700 hover:underline">
+                {SUPPORT_EMAIL}
+              </a>
+              . You can also refer to our <Link href="/privacy" className="text-emerald-600 hover:underline">Privacy Policy</Link> for more information about how we handle your data.
             </p>
           </section>
 

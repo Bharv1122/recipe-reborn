@@ -1,5 +1,7 @@
 import Link from 'next/link';
 import Image from 'next/image';
+import { SUPPORT_EMAIL, SUPPORT_MAILTO } from '@/lib/support';
+import { LEGAL_LAST_UPDATED } from '@/lib/legal';
 
 export default function PrivacyPage() {
   return (
@@ -11,7 +13,7 @@ export default function PrivacyPage() {
             <Image src="/logo-mark.png" alt="Recipe Reborn emblem" width={48} height={48} className="h-12 w-12 rounded-full shadow-md" />
             <h1 className="text-4xl font-bold text-white">Privacy Policy</h1>
           </div>
-          <p className="text-emerald-50/90">Last updated: {new Date().toLocaleDateString()}</p>
+          <p className="text-emerald-50/90">Last updated: {LEGAL_LAST_UPDATED}</p>
         </div>
 
         {/* Content */}
@@ -157,7 +159,13 @@ export default function PrivacyPage() {
           <section>
             <h2 className="text-2xl font-semibold text-gray-900 mb-4">12. Contact Us</h2>
             <p className="text-gray-700 leading-relaxed">
-              If you have any questions, concerns, or requests regarding this Privacy Policy or our privacy practices, please contact us through our website or support channels.
+              If you have any questions, concerns, or requests regarding this Privacy
+              Policy or our privacy practices — including a request to access or delete
+              your data — email us at{' '}
+              <a href={SUPPORT_MAILTO} className="text-emerald-700 hover:underline">
+                {SUPPORT_EMAIL}
+              </a>
+              . We aim to respond within 30 days.
             </p>
           </section>
 

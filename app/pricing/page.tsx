@@ -271,7 +271,10 @@ export default function PricingPage() {
                 Is there a free trial?
               </h3>
               <p className="text-gray-600">
-                Our Free tier gives you access to core features without any credit card required. You can upgrade to Premium (monthly or yearly) anytime to unlock more features.
+                Yes — both Premium plans start with a 7-day free trial. You enter a card
+                to begin the trial and won't be charged until it ends; cancel any time
+                before then and you pay nothing. If you'd rather not enter a card at all,
+                the Free tier gives you 3 recipe generations a month for as long as you like.
               </p>
             </CardContent>
           </Card>

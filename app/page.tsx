@@ -6,6 +6,7 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth-options';
 import { GuestScan } from './_components/guest-scan';
 import { LandingDemo } from './_components/landing-demo';
+import { SUPPORT_EMAIL, SUPPORT_MAILTO } from '@/lib/support';
 
 export default async function HomePage() {
   const session = await getServerSession(authOptions);
@@ -217,6 +218,14 @@ export default async function HomePage() {
               <li><Link href="/terms" className="hover:text-orange-300">Terms of Service</Link></li>
               <li><Link href="/privacy" className="hover:text-orange-300">Privacy Policy</Link></li>
               <li><Link href="/cookies" className="hover:text-orange-300">Cookie Policy</Link></li>
+            </ul>
+            <h4 className="font-semibold text-white mt-6 mb-4">Contact</h4>
+            <ul className="space-y-2 text-sm text-emerald-50/90">
+              <li>
+                <a href={SUPPORT_MAILTO} className="hover:text-orange-300">
+                  {SUPPORT_EMAIL}
+                </a>
+              </li>
             </ul>
           </div>
         </div>
