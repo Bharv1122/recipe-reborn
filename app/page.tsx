@@ -33,15 +33,13 @@ export default async function HomePage() {
               className="w-full h-auto object-cover object-top -translate-y-[2%]"
             />
           </div>
-          <Image
-            src="/logo-text-hero.png"
-            alt=""
+          <div
             aria-hidden="true"
-            width={440}
-            height={104}
-            priority
-            className="mx-auto -mt-4 sm:-mt-6 w-full max-w-[14rem] sm:max-w-md h-auto drop-shadow-md"
-          />
+            className="mx-auto -mt-4 w-fit rounded-full bg-white/95 px-7 py-3 font-serif text-4xl font-bold italic leading-none shadow-md sm:-mt-6 sm:px-10 sm:text-6xl"
+          >
+            <span className="text-emerald-950">Recipe</span>
+            <span className="text-orange-600">Reborn</span>
+          </div>
           <p className="text-base sm:text-2xl text-white max-w-3xl mx-auto drop-shadow-sm">
             Snap a photo of any ingredient label — or scan the barcode — and watch AI turn
             that processed product into a fresh, homemade recipe in seconds.

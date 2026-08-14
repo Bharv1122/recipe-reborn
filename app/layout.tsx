@@ -127,6 +127,14 @@ export default async function RootLayout({
         />
       </head>
       <body className={inter.className}>
+        <Script id="recipe-reborn-color-theme" strategy="beforeInteractive">
+          {`try {
+            var savedTheme = localStorage.getItem('recipe-reborn-color-theme');
+            if (savedTheme === 'forest' || savedTheme === 'sage' || savedTheme === 'warm') {
+              document.documentElement.dataset.colorTheme = savedTheme;
+            }
+          } catch (error) {}`}
+        </Script>
         <Providers session={session}>
           <SrcCapture />
           <Header />

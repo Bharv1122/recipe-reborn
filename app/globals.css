@@ -5,15 +5,44 @@
 /* Brand background — matches the Recipe Reborn logo's green radial gradient
    (#14AB42 bright center-top fading to #054E36 at the edges) so the logo
    artwork blends seamlessly into every page. */
+:root,
+:root[data-color-theme='forest'] {
+  --brand-bg-top: #14ab42;
+  --brand-bg-mid: #0b8540;
+  --brand-bg-low: #076b3b;
+  --brand-bg-edge: #054e36;
+  --brand-header: 4 73 49;
+}
+
+:root[data-color-theme='sage'] {
+  --brand-bg-top: #55a66f;
+  --brand-bg-mid: #397f61;
+  --brand-bg-low: #286451;
+  --brand-bg-edge: #1c493f;
+  --brand-header: 28 73 63;
+}
+
+:root[data-color-theme='warm'] {
+  --brand-bg-top: #0f7c4d;
+  --brand-bg-mid: #075f43;
+  --brand-bg-low: #064c3d;
+  --brand-bg-edge: #04362f;
+  --brand-header: 3 51 42;
+}
+
 body {
   background: radial-gradient(
       ellipse 120% 90% at 50% 0%,
-      #14ab42 0%,
-      #0b8540 40%,
-      #076b3b 70%,
-      #054e36 100%
+      var(--brand-bg-top) 0%,
+      var(--brand-bg-mid) 40%,
+      var(--brand-bg-low) 70%,
+      var(--brand-bg-edge) 100%
     )
     fixed;
+}
+
+.brand-header {
+  background-color: rgb(var(--brand-header) / 0.78);
 }
 
 /* Custom Animations */

@@ -6,26 +6,27 @@ import { useSession, signOut } from 'next-auth/react';
 import { Button } from '@/components/ui/button';
 import { LogOut, User, BookOpen, UserCircle, Calendar, ShoppingCart } from 'lucide-react';
 import { MobileNav } from '@/components/mobile-nav';
+import { ColorThemeSelector } from '@/components/color-theme-selector';
 
 export function Header() {
   const { status } = useSession();
 
   return (
-    <header className="sticky top-0 z-50 w-full border-b border-white/20 bg-emerald-900/40 backdrop-blur-sm transition-all-smooth">
+    <header className="brand-header sticky top-0 z-50 w-full border-b border-white/30 backdrop-blur-sm transition-all-smooth">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex h-16 items-center justify-between">
           {/* Logo */}
           <Link href="/" className="flex items-center space-x-2 group">
             <Image src="/logo-mark.png" alt="Recipe Reborn emblem" width={32} height={32} className="h-8 w-8 rounded-full shadow group-hover:scale-110 transition-all-smooth" />
-            <Image
-              src="/logo-text-hero.png"
-              alt="Recipe Reborn"
-              width={200}
-              height={47}
-              priority
-              className="h-10 w-auto drop-shadow-sm hidden max-lg:block xl:block"
-            />
+            <span className="hidden rounded-full bg-white/95 px-3 py-1 font-serif text-xl font-bold italic leading-none shadow-sm sm:block" aria-label="Recipe Reborn">
+              <span className="text-emerald-950">Recipe</span>
+              <span className="text-orange-600">Reborn</span>
+            </span>
           </Link>
+
+          <div className="ml-auto mr-2 lg:ml-3">
+            <ColorThemeSelector />
+          </div>
 
           {/* Navigation (desktop) */}
           <nav className="hidden lg:flex items-center space-x-2">

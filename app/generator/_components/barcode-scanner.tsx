@@ -21,6 +21,7 @@ export function BarcodeScanner({ onIngredientsExtracted }: BarcodeScannerProps) 
   const [isStartingCamera, setIsStartingCamera] = useState(false);
   const [isLookingUp, setIsLookingUp] = useState(false);
   const [isDecodingImage, setIsDecodingImage] = useState(false);
+  const [isDraggingImage, setIsDraggingImage] = useState(false);
   const [manualCode, setManualCode] = useState('');
 
   const scannerRef = useRef<Html5Qrcode | null>(null);
@@ -148,10 +149,11 @@ export function BarcodeScanner({ onIngredientsExtracted }: BarcodeScannerProps) 
     }
   };
 
-  const handleBarcodeImage = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    e.target.value = ''; // allow re-selecting the same file
-    if (!file) return;
+  const decodeBarcodeImage = async (file: File) => {
+    if (!file.type.startsWith('image/')) {
+      toast.error('Choose an image containing a barcode');
+      return;
+    }
 
     setIsDecodingImage(true);
     try {
@@ -184,6 +186,20 @@ export function BarcodeScanner({ onIngredientsExtracted }: BarcodeScannerProps) 
     }
   };
 
+  const handleBarcodeImage = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = ''; // allow re-selecting the same file
+    if (file) await decodeBarcodeImage(file);
+  };
+
+  const handleBarcodeDrop = async (event: React.DragEvent<HTMLDivElement>) => {
+    event.preventDefault();
+    setIsDraggingImage(false);
+    if (isStartingCamera || isLookingUp || isDecodingImage) return;
+    const file = event.dataTransfer.files?.[0];
+    if (file) await decodeBarcodeImage(file);
+  };
+
   const handleManualLookup = () => {
     const code = manualCode.trim();
     if (!/^\d{6,14}$/.test(code)) {
@@ -197,14 +213,24 @@ export function BarcodeScanner({ onIngredientsExtracted }: BarcodeScannerProps) 
     <div className="space-y-4">
       {/* Camera area */}
       {!isScanning ? (
-        <div className="border-2 border-dashed border-gray-300 rounded-lg p-8 text-center">
+        <div
+          onDragEnter={(event) => {
+            event.preventDefault();
+            if (!isStartingCamera && !isLookingUp && !isDecodingImage) setIsDraggingImage(true);
+          }}
+          onDragOver={(event) => event.preventDefault()}
+          onDragLeave={() => setIsDraggingImage(false)}
+          onDrop={handleBarcodeDrop}
+          className={`rounded-lg border-2 border-dashed p-8 text-center transition-colors ${
+            isDraggingImage ? 'border-emerald-600 bg-emerald-50' : 'border-gray-300 bg-white'
+          }`}
+        >
           <ScanBarcode className="h-12 w-12 mx-auto text-gray-400 mb-4" />
           <h3 className="text-lg font-medium text-gray-900 mb-2">
             Scan a Barcode
           </h3>
           <p className="text-sm text-gray-500 mb-4">
-            Point your camera at the barcode on any packaged food and we&apos;ll
-            look up its ingredients for a fresh homemade version!
+            Point your camera at the barcode, upload a photo, or drag and drop a barcode image here.
           </p>
           <div className="flex flex-col sm:flex-row gap-2 justify-center">
             <Button
@@ -269,7 +295,11 @@ export function BarcodeScanner({ onIngredientsExtracted }: BarcodeScannerProps) 
         className={isScanning ? 'rounded-lg overflow-hidden border border-gray-200' : 'hidden'}
       />
       {/* Off-screen decode target for uploaded barcode photos (must stay mounted) */}
-      <div id={FILE_SCAN_REGION_ID} className="h-0 overflow-hidden" />
+      <div
+        id={FILE_SCAN_REGION_ID}
+        aria-hidden="true"
+        className="fixed left-[-10000px] top-0 h-px w-px overflow-hidden"
+      />
 
       {isScanning && (
         <Button

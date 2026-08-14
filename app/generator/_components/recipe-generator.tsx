@@ -7,7 +7,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Loader2, ChefHat, Sparkles, Save, Clock, Users, Link as LinkIcon, Camera, Upload, X, Mic, PiggyBank, ScanBarcode, AlertTriangle, Leaf, ArrowRight, Ban, CheckCircle2, FolderPlus, CalendarDays } from 'lucide-react';
+import { Loader2, ChefHat, Sparkles, Save, Clock, Users, Link as LinkIcon, Camera, Upload, X, Mic, PiggyBank, ScanBarcode, AlertTriangle, Leaf, ArrowRight, Ban, CheckCircle2, FolderPlus, CalendarDays, HeartPulse } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { InteractiveIngredient } from './interactive-ingredient';
 import { VoiceChat } from './voice-chat';
@@ -36,6 +36,16 @@ interface Recipe {
   servings: string;
   estimatedCostPerServing?: number;
   storeBoughtCost?: number;
+}
+
+interface NutritionEstimate {
+  calories: number | null;
+  protein: number | null;
+  carbs: number | null;
+  fat: number | null;
+  fiber: number | null;
+  sodium: number | null;
+  perServing: true;
 }
 
 interface DietaryButton {
@@ -73,6 +83,9 @@ export function RecipeGenerator() {
   const [detectedAdditives, setDetectedAdditives] = useState<DetectedAdditive[]>([]);
   const [loadingElapsed, setLoadingElapsed] = useState(0);
   const [photoError, setPhotoError] = useState<string | null>(null);
+  const [isPhotoDragging, setIsPhotoDragging] = useState(false);
+  const [nutrition, setNutrition] = useState<NutritionEstimate | null>(null);
+  const [isLoadingNutrition, setIsLoadingNutrition] = useState(false);
   const [isDemoRun, setIsDemoRun] = useState(false);
   const [isSaved, setIsSaved] = useState(false);
   const [savedRecipeId, setSavedRecipeId] = useState<string | null>(null);
@@ -286,6 +299,7 @@ export function RecipeGenerator() {
     setRecipe(null);
     setIsSaved(false);
     setSavedRecipeId(null);
+    setNutrition(null);
     setShowSavePrompt(false);
 
     try {
@@ -377,6 +391,7 @@ export function RecipeGenerator() {
     setRecipe(null);
     setIsSaved(false);
     setSavedRecipeId(null);
+    setNutrition(null);
 
     try {
       const response = await fetch('/api/import-recipe', {
@@ -450,11 +465,7 @@ export function RecipeGenerator() {
       img.src = url;
     });
 
-  const handleImageSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    e.target.value = ''; // allow re-selecting the same file
-    if (!file) return;
-
+  const acceptImageFile = async (file: File) => {
     // Validate file type
     if (!file.type.startsWith('image/')) {
       toast.error('Please select an image file');
@@ -478,9 +489,24 @@ export function RecipeGenerator() {
     reader.readAsDataURL(upload);
   };
 
+  const handleImageSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = ''; // allow re-selecting the same file
+    if (file) await acceptImageFile(file);
+  };
+
+  const handleImageDrop = async (event: React.DragEvent<HTMLDivElement>) => {
+    event.preventDefault();
+    setIsPhotoDragging(false);
+    if (isBusy) return;
+    const file = event.dataTransfer.files?.[0];
+    if (file) await acceptImageFile(file);
+  };
+
   const clearImage = () => {
     setSelectedImage(null);
     setImagePreview(null);
+    setPhotoError(null);
   };
 
   const extractRecipeFromPhoto = async () => {
@@ -493,6 +519,7 @@ export function RecipeGenerator() {
     setRecipe(null);
     setIsSaved(false);
     setSavedRecipeId(null);
+    setNutrition(null);
     setPhotoError(null);
 
     try {
@@ -535,6 +562,7 @@ export function RecipeGenerator() {
           setRecipe(generatedRecipe);
           setIsSaved(false);
           setSavedRecipeId(null);
+          setNutrition(null);
           toast.success('Fresh recipe created from your photo!');
           setShowSavePrompt(true);
         } catch (genError: any) {
@@ -562,6 +590,7 @@ export function RecipeGenerator() {
         setIsDemoRun(false);
         setIsSaved(false);
         setSavedRecipeId(null);
+        setNutrition(null);
         
         // Set ingredients for potential re-generation
         setIngredients(data.ingredients.join(', '));
@@ -595,6 +624,28 @@ export function RecipeGenerator() {
     });
     setIsSaved(false);
     setSavedRecipeId(null);
+    setNutrition(null);
+  };
+
+  const loadNutrition = async () => {
+    if (!savedRecipeId) {
+      toast.error('Save the recipe before calculating nutrition');
+      return;
+    }
+
+    setIsLoadingNutrition(true);
+    try {
+      const response = await fetch(`/api/recipes/${savedRecipeId}/nutrition`, {
+        method: 'POST',
+      });
+      const data = await response.json().catch(() => null);
+      if (!response.ok) throw new Error(data?.error ?? 'Failed to calculate nutrition');
+      setNutrition(data as NutritionEstimate);
+    } catch (error: any) {
+      toast.error(error?.message ?? 'Failed to calculate nutrition');
+    } finally {
+      setIsLoadingNutrition(false);
+    }
   };
 
   const handleSubstituteIngredient = async (index: number, originalIngredient: string, newIngredient: string) => {
@@ -668,6 +719,7 @@ export function RecipeGenerator() {
                 setRecipe(parsed?.result);
                 setIsSaved(false);
                 setSavedRecipeId(null);
+                setNutrition(null);
                 setShowSavePrompt(true);
                 toast.success(`Recipe regenerated with ${newIngredient}!`, { duration: 4000 });
                 return;
@@ -912,13 +964,26 @@ export function RecipeGenerator() {
               <div className="space-y-4">
                 {/* Image Preview or Upload Area */}
                 {!imagePreview ? (
-                  <div className="border-2 border-dashed border-gray-300 rounded-lg p-8 text-center">
+                  <div
+                    onDragEnter={(event) => {
+                      event.preventDefault();
+                      if (!isBusy) setIsPhotoDragging(true);
+                    }}
+                    onDragOver={(event) => event.preventDefault()}
+                    onDragLeave={() => setIsPhotoDragging(false)}
+                    onDrop={handleImageDrop}
+                    className={`rounded-lg border-2 border-dashed p-8 text-center transition-colors ${
+                      isPhotoDragging
+                        ? 'border-emerald-600 bg-emerald-50'
+                        : 'border-gray-300 bg-white'
+                    }`}
+                  >
                     <Camera className="h-12 w-12 mx-auto text-gray-400 mb-4" />
                     <h3 className="text-lg font-medium text-gray-900 mb-2">
                       Snap to Recipe
                     </h3>
                     <p className="text-sm text-gray-500 mb-4">
-                      Take a photo of any ingredient label or product packaging, and we&apos;ll create a fresh recipe for you!
+                      Take a photo, choose a file, or drag and drop an ingredient label here.
                     </p>
                     <div className="flex flex-col sm:flex-row gap-2 justify-center">
                       <Button
@@ -958,7 +1023,7 @@ export function RecipeGenerator() {
                       className="hidden"
                     />
                     <p className="text-xs text-gray-400 mt-4">
-                      Supports JPG, PNG, HEIC. Max size 10MB
+                      Supports JPG, PNG, HEIC. Max size 20MB
                     </p>
                     {/* Nothing to scan right now? Don't dead-end the first visit —
                         one click shows the full additives-reveal on a demo label */}
@@ -1263,6 +1328,63 @@ export function RecipeGenerator() {
                   </div>
                 </div>
               )}
+
+            {/* Nutrition uses the existing saved-recipe analysis; source-label
+                nutrition is deliberately not inferred from ingredient text. */}
+            <section className="rounded-xl border border-blue-200 bg-blue-50/70 p-4" aria-labelledby="nutrition-summary-title">
+              <div className="flex items-start gap-3">
+                <HeartPulse className="mt-0.5 h-5 w-5 shrink-0 text-blue-700" aria-hidden="true" />
+                <div className="min-w-0 flex-1">
+                  <h3 id="nutrition-summary-title" className="font-semibold text-blue-950">
+                    Nutrition for the generated recipe
+                  </h3>
+                  <p className="mt-1 text-sm leading-6 text-blue-900">
+                    A true before-and-after comparison needs the original package&apos;s Nutrition Facts and serving size. An ingredient list alone cannot provide that, so Recipe Reborn does not invent the “before” numbers.
+                  </p>
+
+                  {nutrition ? (
+                    <div className="mt-3 grid grid-cols-2 gap-2 text-sm sm:grid-cols-3">
+                      {[
+                        ['Calories', nutrition.calories, ''],
+                        ['Protein', nutrition.protein, 'g'],
+                        ['Carbs', nutrition.carbs, 'g'],
+                        ['Fat', nutrition.fat, 'g'],
+                        ['Fiber', nutrition.fiber, 'g'],
+                        ['Sodium', nutrition.sodium, 'mg'],
+                      ].map(([label, value, unit]) => (
+                        <div key={String(label)} className="rounded-lg bg-white px-3 py-2 text-gray-900 shadow-sm">
+                          <span className="block text-xs text-gray-500">{label}</span>
+                          <span className="font-semibold">{value ?? '—'}{value == null ? '' : unit}</span>
+                        </div>
+                      ))}
+                      <p className="col-span-2 mt-1 text-xs text-blue-800 sm:col-span-3">
+                        Per serving estimate; USDA matches are used where available, with AI estimation as a fallback.
+                      </p>
+                    </div>
+                  ) : (
+                    <div className="mt-3 flex flex-col gap-2 sm:flex-row sm:items-center">
+                      <Button
+                        type="button"
+                        variant="outline"
+                        onClick={loadNutrition}
+                        disabled={!savedRecipeId || isLoadingNutrition}
+                        className="min-h-11 border-blue-700 text-blue-800 hover:bg-blue-100"
+                      >
+                        {isLoadingNutrition ? (
+                          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                        ) : (
+                          <HeartPulse className="mr-2 h-4 w-4" />
+                        )}
+                        Estimate fresh-recipe nutrition
+                      </Button>
+                      {!savedRecipeId && (
+                        <p className="text-xs text-blue-800">Save the recipe first so the estimate can be stored with it.</p>
+                      )}
+                    </div>
+                  )}
+                </div>
+              </div>
+            </section>
 
             {/* Recipe Meta Info */}
             <div className="flex items-center gap-6 text-sm text-gray-600">
