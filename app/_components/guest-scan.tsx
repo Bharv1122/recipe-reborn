@@ -18,6 +18,7 @@ import {
 import { detectAdditives, type DetectedAdditive } from '@/lib/additives';
 import { EXAMPLE_LABEL as EXAMPLE } from '@/lib/example-label';
 import { downscaleImage } from '@/lib/downscale-image';
+import { TransformProgress } from './transform-progress';
 
 interface GuestRecipe {
   title: string;
@@ -227,6 +228,10 @@ export function GuestScan() {
               </>
             )}
           </Button>
+
+          {/* The additive scan is instant and local, so it lands here while the
+              recipe is still generating instead of after it. */}
+          {loading && <TransformProgress additives={additives} />}
 
           {wallMessage && (
             <div className="mt-4 rounded-lg border border-emerald-200 bg-emerald-50 p-4 text-center space-y-3">
