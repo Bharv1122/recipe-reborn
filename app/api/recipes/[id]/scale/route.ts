@@ -87,14 +87,15 @@ For example, if scaling by 2x:
     const originalServings = parseInt(recipe.servings || '1');
     const scaledServings = Math.round(originalServings * scaleFactor);
 
-    // Scale nutrition if available
-    const scaledNutrition: any = {};
-    if (recipe.calories) scaledNutrition.calories = Math.round(recipe.calories * scaleFactor);
-    if (recipe.protein) scaledNutrition.protein = Math.round(recipe.protein * scaleFactor * 10) / 10;
-    if (recipe.carbs) scaledNutrition.carbs = Math.round(recipe.carbs * scaleFactor * 10) / 10;
-    if (recipe.fat) scaledNutrition.fat = Math.round(recipe.fat * scaleFactor * 10) / 10;
-    if (recipe.fiber) scaledNutrition.fiber = Math.round(recipe.fiber * scaleFactor * 10) / 10;
-    if (recipe.sodium) scaledNutrition.sodium = Math.round(recipe.sodium * scaleFactor);
+    // Nutrition is stored and displayed per serving. Scaling both the ingredient
+    // amounts and serving count keeps those per-serving values unchanged.
+    const scaledNutrition: Record<string, number> = {};
+    if (recipe.calories !== null) scaledNutrition.calories = recipe.calories;
+    if (recipe.protein !== null) scaledNutrition.protein = recipe.protein;
+    if (recipe.carbs !== null) scaledNutrition.carbs = recipe.carbs;
+    if (recipe.fat !== null) scaledNutrition.fat = recipe.fat;
+    if (recipe.fiber !== null) scaledNutrition.fiber = recipe.fiber;
+    if (recipe.sodium !== null) scaledNutrition.sodium = recipe.sodium;
 
     return NextResponse.json({
       scaledIngredients,

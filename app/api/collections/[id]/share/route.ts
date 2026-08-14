@@ -47,7 +47,10 @@ export async function POST(
       },
     });
 
-    const origin = req.headers.get('origin') || 'http://localhost:3000';
+    // `Origin` is absent for non-browser callers (for example native apps or
+    // command-line clients). The request URL is still authoritative, so share
+    // links should never fall back to localhost in production.
+    const origin = req.headers.get('origin') || req.nextUrl.origin;
     const shareUrl = newIsPublic && shareToken
       ? `${origin}/share/collection/${shareToken}`
       : null;

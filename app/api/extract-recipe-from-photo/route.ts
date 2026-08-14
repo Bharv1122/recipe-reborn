@@ -5,6 +5,9 @@ import { AI_CHAT_URL, AI_API_KEY, MODEL_SMART } from '@/lib/ai';
 import { rateLimit } from '@/lib/rate-limit';
 import { extractJsonPayload } from '@/lib/ai-json';
 
+const MAX_IMAGE_BYTES = 8 * 1024 * 1024;
+const ALLOWED_IMAGE_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'image/heic', 'image/heif'];
+
 export async function POST(req: Request) {
   try {
     // Check authentication
@@ -26,12 +29,27 @@ export async function POST(req: Request) {
 
     // Get the uploaded image from form data
     const formData = await req.formData();
-    const imageFile = formData.get('image') as File;
+    const imageFile = formData.get('image');
 
-    if (!imageFile) {
+    if (!imageFile || typeof imageFile === 'string') {
       return NextResponse.json(
         { error: 'No image provided' },
         { status: 400 }
+      );
+    }
+
+    if (imageFile.size > MAX_IMAGE_BYTES) {
+      return NextResponse.json(
+        { error: 'That photo is too large. Try an image under 8 MB.' },
+        { status: 413 }
+      );
+    }
+
+    const mimeType = imageFile.type || 'image/jpeg';
+    if (!ALLOWED_IMAGE_TYPES.includes(mimeType)) {
+      return NextResponse.json(
+        { error: 'That file type is not supported. Use a JPEG, PNG, WebP, HEIC, or HEIF photo.' },
+        { status: 415 }
       );
     }
 
@@ -39,7 +57,6 @@ export async function POST(req: Request) {
     const bytes = await imageFile.arrayBuffer();
     const buffer = Buffer.from(bytes);
     const base64Image = buffer.toString('base64');
-    const mimeType = imageFile.type || 'image/jpeg';
     const imageUrl = `data:${mimeType};base64,${base64Image}`;
 
     // Vision call — Gemini reads the label photo directly
