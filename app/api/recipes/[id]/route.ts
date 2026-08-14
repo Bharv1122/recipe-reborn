@@ -2,8 +2,25 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth-options';
 import { prisma } from '@/lib/db';
+import { z } from 'zod';
 
 export const dynamic = 'force-dynamic';
+
+const recipeUpdateSchema = z.object({
+  rating: z.number().int().min(0).max(5).optional(),
+  notes: z.string().max(10000).nullable().optional(),
+  folderId: z.string().min(1).nullable().optional(),
+  winePairing: z.string().max(50000).nullable().optional(),
+  freshIngredients: z.string().max(50000).optional().refine((value) => {
+    if (value === undefined) return true;
+    try {
+      const parsed = JSON.parse(value);
+      return Array.isArray(parsed) && parsed.every((item) => typeof item === 'string');
+    } catch {
+      return false;
+    }
+  }, 'Fresh ingredients must be a JSON array of strings'),
+});
 
 // Get a single recipe
 export async function GET(
@@ -61,8 +78,25 @@ export async function PATCH(
       return NextResponse.json({ error: 'Recipe not found' }, { status: 404 });
     }
 
-    const body = await request.json();
-    const { rating, notes, folderId, winePairing, freshIngredients } = body;
+    const update = recipeUpdateSchema.safeParse(await request.json());
+    if (!update.success) {
+      return NextResponse.json(
+        { error: 'Invalid recipe update', details: update.error.flatten() },
+        { status: 400 }
+      );
+    }
+
+    const { rating, notes, folderId, winePairing, freshIngredients } = update.data;
+
+    if (folderId) {
+      const folder = await prisma.folder.findFirst({
+        where: { id: folderId, userId: session.user.id },
+        select: { id: true },
+      });
+      if (!folder) {
+        return NextResponse.json({ error: 'Folder not found' }, { status: 404 });
+      }
+    }
 
     const updatedRecipe = await prisma.recipe.update({
       where: { id: params?.id },
