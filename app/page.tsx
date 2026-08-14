@@ -37,7 +37,7 @@ export default async function HomePage() {
             aria-hidden="true"
             className="mx-auto -mt-4 w-fit rounded-full bg-white/95 px-7 py-3 font-serif text-4xl font-bold italic leading-none shadow-md sm:-mt-6 sm:px-10 sm:text-6xl"
           >
-            <span className="text-emerald-950">Recipe</span>
+            <span className="text-orange-600">Recipe</span>
             <span className="text-orange-600">Reborn</span>
           </div>
           <p className="text-base sm:text-2xl text-white max-w-3xl mx-auto drop-shadow-sm">

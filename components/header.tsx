@@ -19,7 +19,7 @@ export function Header() {
           <Link href="/" className="flex items-center space-x-2 group">
             <Image src="/logo-mark.png" alt="Recipe Reborn emblem" width={32} height={32} className="h-8 w-8 rounded-full shadow group-hover:scale-110 transition-all-smooth" />
             <span className="hidden rounded-full bg-white/95 px-3 py-1 font-serif text-xl font-bold italic leading-none shadow-sm sm:block" aria-label="Recipe Reborn">
-              <span className="text-emerald-950">Recipe</span>
+              <span className="text-orange-600">Recipe</span>
               <span className="text-orange-600">Reborn</span>
             </span>
           </Link>
