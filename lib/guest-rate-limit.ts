@@ -16,6 +16,20 @@ function hashIp(ip: string): string {
   return crypto.createHash('sha256').update(ip).digest('hex');
 }
 
+/**
+ * Separate per-IP buckets for separate guest actions. Reading a label photo and
+ * generating a recipe are two different AI calls, and a visitor who snaps a
+ * photo shouldn't lose a generation credit before they've seen anything.
+ *
+ * 'scan' keeps the original unprefixed key so existing counters carry over.
+ */
+export type GuestAction = 'scan' | 'ocr';
+
+function bucketKey(ip: string, action: GuestAction): string {
+  const hashed = hashIp(ip);
+  return action === 'scan' ? hashed : `${action}:${hashed}`;
+}
+
 export type GuestLimitReason = 'ok' | 'ip' | 'global';
 
 export interface GuestLimitResult {
@@ -44,10 +58,13 @@ async function bumpCounter(key: string, now: Date): Promise<number> {
   return updated.count;
 }
 
-export async function checkGuestLimit(ip: string): Promise<GuestLimitResult> {
+export async function checkGuestLimit(
+  ip: string,
+  action: GuestAction = 'scan'
+): Promise<GuestLimitResult> {
   const now = new Date();
   try {
-    const ipCount = await bumpCounter(hashIp(ip), now);
+    const ipCount = await bumpCounter(bucketKey(ip, action), now);
     if (ipCount > GUEST_LIMIT) {
       return { allowed: false, remaining: 0, limit: GUEST_LIMIT, reason: 'ip' };
     }

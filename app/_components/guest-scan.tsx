@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
@@ -12,9 +12,12 @@ import {
   ArrowRight,
   Lock,
   PiggyBank,
+  Camera,
+  Check,
 } from 'lucide-react';
 import { detectAdditives, type DetectedAdditive } from '@/lib/additives';
 import { EXAMPLE_LABEL as EXAMPLE } from '@/lib/example-label';
+import { downscaleImage } from '@/lib/downscale-image';
 
 interface GuestRecipe {
   title: string;
@@ -30,6 +33,53 @@ export function GuestScan() {
   const [recipe, setRecipe] = useState<GuestRecipe | null>(null);
   const [additives, setAdditives] = useState<DetectedAdditive[]>([]);
   const [wallMessage, setWallMessage] = useState<string | null>(null);
+  const [scanning, setScanning] = useState(false);
+  const [scanError, setScanError] = useState<string | null>(null);
+  const [scannedProduct, setScannedProduct] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Photo -> ingredient text. We stop here rather than chaining straight into
+  // generation: showing what we read off the label is fast proof the camera
+  // worked, and lets the visitor fix any misread before spending a generation.
+  const handlePhoto = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    // Reset immediately so picking the same file twice still fires onChange.
+    event.target.value = '';
+    if (!file) return;
+
+    setScanning(true);
+    setScanError(null);
+    setScannedProduct(null);
+    setWallMessage(null);
+
+    try {
+      const prepared = await downscaleImage(file);
+      const body = new FormData();
+      body.append('image', prepared);
+
+      const res = await fetch('/api/guest/extract-label', { method: 'POST', body });
+      const data = await res.json().catch(() => ({}));
+
+      if (!res.ok) {
+        // 429 carries the signup nudge; everything else is a retry hint.
+        if (res.status === 429) {
+          setWallMessage(data?.message ?? 'Sign up free to keep scanning.');
+        } else {
+          setScanError(
+            data?.message ?? data?.error ?? "We couldn't read that photo. Try again."
+          );
+        }
+        return;
+      }
+
+      setIngredients(data.ingredients);
+      setScannedProduct(data.productName ?? 'your label');
+    } catch {
+      setScanError("We couldn't read that photo. Try again, or type the ingredients instead.");
+    } finally {
+      setScanning(false);
+    }
+  };
 
   const transform = async () => {
     if (!ingredients.trim()) return;
@@ -84,22 +134,77 @@ export function GuestScan() {
             See the fresh version — free, no signup
           </h2>
           <p className="text-sm text-gray-500 text-center mb-4">
-            Paste any ingredient list from a packaged food and watch it transform.
+            Snap a photo of the ingredient label, or paste the list — and watch it transform.
           </p>
+
+          {/* Photo capture. On a phone the OS sheet offers Take Photo or the
+              photo library; on desktop it is a normal file picker. */}
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept="image/*"
+            onChange={handlePhoto}
+            className="sr-only"
+            aria-hidden="true"
+            tabIndex={-1}
+          />
+          <Button
+            type="button"
+            onClick={() => fileInputRef.current?.click()}
+            disabled={scanning || loading}
+            className="w-full bg-orange-500 hover:bg-orange-600 text-white text-base py-6 mb-3"
+          >
+            {scanning ? (
+              <>
+                <Loader2 className="mr-2 h-5 w-5 animate-spin" />
+                Reading the label…
+              </>
+            ) : (
+              <>
+                <Camera className="mr-2 h-5 w-5" />
+                Snap the ingredient label
+              </>
+            )}
+          </Button>
+
+          {scanError && (
+            <p className="mb-3 text-center text-sm text-red-600">{scanError}</p>
+          )}
+
+          {scannedProduct && (
+            <p className="mb-3 flex items-center justify-center gap-1.5 text-center text-sm font-medium text-emerald-700">
+              <Check className="h-4 w-4" />
+              Read from {scannedProduct} — check it below, then transform.
+            </p>
+          )}
+
+          <div className="relative mb-3 flex items-center">
+            <div className="flex-grow border-t border-gray-200" />
+            <span className="mx-3 flex-shrink text-xs uppercase tracking-wide text-gray-400">
+              or type it
+            </span>
+            <div className="flex-grow border-t border-gray-200" />
+          </div>
+
           <Textarea
             placeholder="e.g. enriched flour, high fructose corn syrup, palm oil, artificial flavor…"
             value={ingredients}
             onChange={(e) => setIngredients(e.target.value)}
             rows={4}
             className="resize-none text-gray-900"
-            disabled={loading}
+            disabled={loading || scanning}
+            aria-label="Ingredient list from a packaged food"
           />
           <div className="flex justify-center mt-2 mb-4">
             <button
               type="button"
-              onClick={() => setIngredients(EXAMPLE)}
+              onClick={() => {
+                setIngredients(EXAMPLE);
+                setScannedProduct(null);
+                setScanError(null);
+              }}
               className="inline-flex items-center gap-1.5 rounded-full border border-emerald-200 bg-emerald-50 px-4 py-2 text-sm font-medium text-emerald-700 transition-colors hover:bg-emerald-100 disabled:opacity-50"
-              disabled={loading}
+              disabled={loading || scanning}
             >
               <Sparkles className="h-4 w-4" />
               No label handy? Try an example
@@ -107,7 +212,7 @@ export function GuestScan() {
           </div>
           <Button
             onClick={transform}
-            disabled={loading || !ingredients.trim()}
+            disabled={loading || scanning || !ingredients.trim()}
             className="w-full bg-emerald-600 hover:bg-emerald-700 text-white text-lg py-6"
           >
             {loading ? (
@@ -241,6 +346,8 @@ export function GuestScan() {
             onClick={() => {
               setRecipe(null);
               setIngredients('');
+              setScannedProduct(null);
+              setScanError(null);
             }}
             className="w-full text-sm text-gray-500 hover:text-gray-700"
           >
