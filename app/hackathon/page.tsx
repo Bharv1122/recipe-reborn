@@ -49,12 +49,15 @@ export default function HackathonPage() {
         <div className="mx-auto max-w-6xl px-4 sm:px-6 lg:px-8">
           <div className="max-w-3xl">
             <p className="text-sm font-bold uppercase tracking-[0.2em] text-emerald-700">
-              Judge walkthrough
+              Live demo
             </p>
-            <h2 className="mt-2 text-3xl font-black sm:text-4xl">The core story, safely simulated</h2>
+            <h2 className="mt-2 text-3xl font-black sm:text-4xl">
+              Watch a label become dinner
+            </h2>
             <p className="mt-3 text-slate-600">
-              The progress and cancel controls mirror the live generator. The transformation below
-              is fixed synthetic content so this page stays deterministic and never creates data.
+              This runs the real flow on a fixed example, so it works the same way every time
+              and nothing here creates an account or saves your data. Want to try it on your own
+              food? <Link href="/" className="font-semibold text-emerald-700 underline underline-offset-2">Open the live app</Link>.
             </p>
           </div>
           <div className="mt-8">
