@@ -7,6 +7,10 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Check, Sparkles, Crown, Zap, Loader2 } from 'lucide-react';
 import toast from 'react-hot-toast';
+import {
+  PartnerOfferBanner,
+  usePartnerOffer,
+} from '@/app/_components/partner-offer-banner';
 
 interface PricingTier {
   name: string;
@@ -84,6 +88,22 @@ export default function PricingPage() {
   const { data: session, status } = useSession() || {};
   const router = useRouter();
   const [loadingTier, setLoadingTier] = useState<string | null>(null);
+  const partnerOffer = usePartnerOffer();
+
+  // Keep the paid-plan copy in step with the trial checkout will actually
+  // create, so a partner member never reads "7-day" and then gets 30.
+  const applyOffer = (tier: PricingTier): PricingTier => {
+    if (!partnerOffer || tier.priceId === null) return tier;
+    return {
+      ...tier,
+      features: tier.features.map((f) =>
+        f === '7-day free trial'
+          ? `${partnerOffer.trialDays} days free — no credit card`
+          : f
+      ),
+      buttonText: `Start ${partnerOffer.trialDays} Days Free`,
+    };
+  };
 
   const handleSubscribe = async (tier: PricingTier) => {
     if (tier.priceId === null) {
@@ -145,8 +165,9 @@ export default function PricingPage() {
 
       {/* Pricing Cards */}
       <div className="max-w-7xl mx-auto px-4 pb-20">
+        <PartnerOfferBanner />
         <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-          {pricingTiers.map((tier) => (
+          {pricingTiers.map(applyOffer).map((tier) => (
             <Card
               key={tier.name}
               className={`relative shadow-xl border-2 transition-all hover:shadow-2xl ${
@@ -270,12 +291,24 @@ export default function PricingPage() {
               <h3 className="text-lg font-semibold text-gray-900 mb-2">
                 Is there a free trial?
               </h3>
-              <p className="text-gray-600">
-                Yes — both Premium plans start with a 7-day free trial. You enter a card
-                to begin the trial and won't be charged until it ends; cancel any time
-                before then and you pay nothing. If you'd rather not enter a card at all,
-                the Free tier gives you 3 recipe generations a month for as long as you like.
-              </p>
+              {partnerOffer ? (
+                <p className="text-gray-600">
+                  Yes — your {partnerOffer.label} invite gives you{' '}
+                  {partnerOffer.trialDays} days free with <strong>no credit card</strong>,
+                  including{' '}
+                  {partnerOffer.trialRecipeLimit} recipes. When the month is up your account
+                  simply returns to the Free plan. Because we never take a card, nothing can
+                  charge you automatically — if you want to keep Premium after that, you
+                  subscribe deliberately.
+                </p>
+              ) : (
+                <p className="text-gray-600">
+                  Yes — both Premium plans start with a 7-day free trial. You enter a card
+                  to begin the trial and won't be charged until it ends; cancel any time
+                  before then and you pay nothing. If you'd rather not enter a card at all,
+                  the Free tier gives you 3 recipe generations a month for as long as you like.
+                </p>
+              )}
             </CardContent>
           </Card>
         </div>

@@ -3,6 +3,11 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth-options';
 import { stripe } from '@/lib/stripe';
 import { prisma } from '@/lib/db';
+import {
+  DEFAULT_TRIAL_DAYS,
+  findPartnerOffer,
+  isOfferLive,
+} from '@/lib/partner-offers';
 
 export const dynamic = 'force-dynamic';
 
@@ -54,6 +59,26 @@ export async function POST(request: NextRequest) {
       });
     }
 
+    // Extended partner trials are resolved from the stored signupSource, not
+    // from the request body — the client never gets a say in trial length.
+    let trialDays = DEFAULT_TRIAL_DAYS;
+    let offerSlug: string | null = null;
+    const offer = findPartnerOffer(user.signupSource);
+
+    if (offer && isOfferLive(offer)) {
+      // Count accounts from this source rather than tracking redemptions in a
+      // new table: signupSource is already stamped at signup and is the same
+      // thing the cap is meant to limit.
+      const redeemed = await prisma.user.count({
+        where: { signupSource: offer.slug },
+      });
+
+      if (redeemed <= offer.maxRedemptions) {
+        trialDays = offer.trialDays;
+        offerSlug = offer.slug;
+      }
+    }
+
     // Get origin from request headers for dynamic URL construction
     const origin = request.headers.get('origin') || 'http://localhost:3000';
 
@@ -70,15 +95,28 @@ export async function POST(request: NextRequest) {
       ],
       success_url: `${origin}/success?session_id={CHECKOUT_SESSION_ID}`,
       cancel_url: `${origin}/pricing`,
+      // Partner-offer members are promised a free month with no card. With a
+      // 100%-trial the amount due today is $0, so 'if_required' collects
+      // nothing; everyone else still enters a card upfront as before.
+      payment_method_collection: offerSlug ? 'if_required' : 'always',
       subscription_data: {
-        // Card required upfront; converts to paid automatically after 7 days
-        trial_period_days: 7,
+        trial_period_days: trialDays,
+        trial_settings: {
+          end_behavior: {
+            // No card on file at day 30 means the subscription simply ends and
+            // the webhook drops them to the free tier. Never invoice someone
+            // who was told they would not be charged.
+            missing_payment_method: offerSlug ? 'cancel' : 'create_invoice',
+          },
+        },
       },
       allow_promotion_codes: true,
       client_reference_id: user.id,
       metadata: {
         userId: user.id,
         plan: plan || 'unknown',
+        trialDays: String(trialDays),
+        ...(offerSlug ? { partnerOffer: offerSlug } : {}),
       },
     });
 

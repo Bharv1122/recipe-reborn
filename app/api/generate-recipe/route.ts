@@ -4,6 +4,7 @@ import { authOptions } from '@/lib/auth-options';
 import { prisma } from '@/lib/db';
 import { AI_CHAT_URL, AI_API_KEY, MODEL_SMART } from '@/lib/ai';
 import { rateLimit } from '@/lib/rate-limit';
+import { findPartnerOffer, isOfferLive } from '@/lib/partner-offers';
 import { z } from 'zod';
 import { logServerError } from '@/lib/server-error-log';
 import { clearGenerationCancellation, wasGenerationCanceled } from '@/lib/generation-cancellation';
@@ -39,6 +40,10 @@ const TIER_LIMITS = {
   premium: 100,
   pro: Infinity, // legacy fallback for grandfathered Pro subscribers; no longer sold
 };
+
+// Trial users get Premium features but a reduced cap until their first real
+// payment (prevents stockpiling recipes on a free trial).
+const TRIAL_RECIPE_LIMIT = 15;
 
 export async function POST(request: NextRequest) {
   try {
@@ -86,6 +91,7 @@ export async function POST(request: NextRequest) {
         lastGenerationReset: true,
         allergies: true,
         dislikedIngredients: true,
+        signupSource: true,
       },
     });
 
@@ -114,11 +120,19 @@ export async function POST(request: NextRequest) {
 
     // Check subscription limits — trial users get a reduced cap until their
     // first real payment (prevents stockpiling recipes on a free trial)
-    const TRIAL_LIMIT = 15;
     const isTrialing =
       user.subscriptionTier !== 'free' && user.subscriptionStatus === 'trialing';
+
+    // A partner offer runs a month rather than a week, so it carries its own
+    // allowance instead of the standard trial's.
+    const partnerOffer = findPartnerOffer(user.signupSource);
+    const trialLimit =
+      partnerOffer && isOfferLive(partnerOffer)
+        ? partnerOffer.trialRecipeLimit
+        : TRIAL_RECIPE_LIMIT;
+
     const limit = isTrialing
-      ? TRIAL_LIMIT
+      ? trialLimit
       : TIER_LIMITS[user.subscriptionTier as keyof typeof TIER_LIMITS] || TIER_LIMITS.free;
 
     if (user.generationCount >= limit) {
@@ -129,7 +143,11 @@ export async function POST(request: NextRequest) {
           current: user.generationCount,
           tier: user.subscriptionTier,
           message: isTrialing
-            ? `Your free trial includes ${TRIAL_LIMIT} recipes. Your full 100 per month unlocks when your trial converts to Premium.`
+            ? partnerOffer && isOfferLive(partnerOffer)
+              // This trial has no card behind it, so it will never "convert" on
+              // its own — point them at subscribing instead of implying it.
+              ? `Your ${partnerOffer.label} free month includes ${trialLimit} recipes, and you've used them all. Subscribe to Premium for 100 a month.`
+              : `Your free trial includes ${trialLimit} recipes. Your full 100 per month unlocks when your trial converts to Premium.`
             : user.subscriptionTier === 'free'
               ? 'You have reached your free tier limit of 3 recipes per month. Upgrade to Premium for 100 recipes per month.'
               : `You have reached your ${user.subscriptionTier} tier limit of ${limit} recipes this month.`,
