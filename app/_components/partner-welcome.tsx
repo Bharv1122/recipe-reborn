@@ -59,7 +59,9 @@ export function PartnerWelcome() {
           </p>
           <p className="text-gray-700">
             Enjoy your {offer.trialDays} day free trial — special, just for{' '}
-            {offer.label}. That&apos;s {offer.trialRecipeLimit} recipes to play with.
+            {offer.label}. That&apos;s the full Premium run of the place —{' '}
+            {offer.trialRecipeLimit} recipes a month, meal plans, shopping lists,
+            the whole thing.
           </p>
           <p className="text-gray-700">
             I&apos;d love any feedback at{' '}

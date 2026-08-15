@@ -300,10 +300,11 @@ export default function PricingPage() {
               {partnerOffer ? (
                 <p className="text-gray-600">
                   Yes — your {partnerOffer.label} invite gives you{' '}
-                  {partnerOffer.trialDays} days free, including{' '}
-                  {partnerOffer.trialRecipeLimit} recipes. When the month is up your
-                  account simply returns to the Free plan, and you can subscribe to
-                  Premium whenever you like.
+                  {partnerOffer.trialDays} days of full Premium:{' '}
+                  {partnerOffer.trialRecipeLimit} recipes a month, meal plans, shopping
+                  lists and everything else on the paid plan. When the month is up your
+                  account simply returns to the Free plan, and you can subscribe whenever
+                  you like.
                 </p>
               ) : (
                 <p className="text-gray-600">

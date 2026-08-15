@@ -28,6 +28,13 @@ export interface PartnerOffer {
    * number the offer actually delivers and say it out loud.
    */
   trialRecipeLimit: number;
+  /**
+   * Give the member the real Premium experience rather than a reduced trial:
+   * the full monthly recipe allowance and no meal-plan cap. The point of a
+   * community offer is that they see what they would be paying for, so the
+   * caps that exist to stop trial-stockpiling are lifted here.
+   */
+  fullPremium: boolean;
   /** After this date the link still works but reverts to the standard trial. */
   expiresAt: string;
   /**
@@ -52,9 +59,11 @@ export const PARTNER_OFFERS: PartnerOffer[] = [
     slug: 'finnsters',
     label: 'Finnsters',
     trialDays: 30,
-    // Roughly one recipe a day — an easy story to tell, and it bounds the AI
-    // spend at 250 × 30 rather than 250 × 100.
-    trialRecipeLimit: 30,
+    // Full Premium allowance — Finnsters get the real thing for the month,
+    // not a trimmed trial. Worst case is 250 × 100 generations, which the
+    // redemption cap is there to bound.
+    trialRecipeLimit: 100,
+    fullPremium: true,
     expiresAt: '2026-11-14',
     maxRedemptions: 250,
   },

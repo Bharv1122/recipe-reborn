@@ -87,8 +87,9 @@ export function PartnerOfferBanner({
               same banner. Payment is not mentioned at all: the trial involves
               no card and nothing charges at the end, so there is nothing to
               warn about. */}
-          Includes {offer.trialRecipeLimit} recipes. When the {offer.trialDays}{' '}
-          days are up your account simply returns to the free plan.
+          Full Premium — {offer.trialRecipeLimit} recipes a month, meal plans,
+          shopping lists, the lot. When the {offer.trialDays} days are up your
+          account simply returns to the free plan.
         </p>
         {showCta && (
           <a
