@@ -3,6 +3,7 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth-options';
 import { stripe } from '@/lib/stripe';
 import { prisma } from '@/lib/db';
+import { resolvePartnerTrial } from '@/lib/partner-offer-server';
 
 export const dynamic = 'force-dynamic';
 
@@ -54,6 +55,11 @@ export async function POST(request: NextRequest) {
       });
     }
 
+    // Extended partner trials are resolved from the stored account record, not
+    // from the request body — the client never gets a say in trial length.
+    const { offer, trialDays } = await resolvePartnerTrial(user);
+    const offerSlug = offer?.slug ?? null;
+
     // Get origin from request headers for dynamic URL construction
     const origin = request.headers.get('origin') || 'http://localhost:3000';
 
@@ -70,15 +76,28 @@ export async function POST(request: NextRequest) {
       ],
       success_url: `${origin}/success?session_id={CHECKOUT_SESSION_ID}`,
       cancel_url: `${origin}/pricing`,
+      // Partner-offer members are promised a free month with no card. With a
+      // 100%-trial the amount due today is $0, so 'if_required' collects
+      // nothing; everyone else still enters a card upfront as before.
+      payment_method_collection: offerSlug ? 'if_required' : 'always',
       subscription_data: {
-        // Card required upfront; converts to paid automatically after 7 days
-        trial_period_days: 7,
+        trial_period_days: trialDays,
+        trial_settings: {
+          end_behavior: {
+            // No card on file at day 30 means the subscription simply ends and
+            // the webhook drops them to the free tier. Never invoice someone
+            // who was told they would not be charged.
+            missing_payment_method: offerSlug ? 'cancel' : 'create_invoice',
+          },
+        },
       },
       allow_promotion_codes: true,
       client_reference_id: user.id,
       metadata: {
         userId: user.id,
         plan: plan || 'unknown',
+        trialDays: String(trialDays),
+        ...(offerSlug ? { partnerOffer: offerSlug } : {}),
       },
     });
 

@@ -4,6 +4,7 @@ import { authOptions } from '@/lib/auth-options';
 import { prisma } from '@/lib/db';
 import { AI_CHAT_URL, AI_API_KEY, MODEL_SMART } from '@/lib/ai';
 import { extractJsonPayload } from '@/lib/ai-json';
+import { resolvePartnerTrial } from '@/lib/partner-offer-server';
 
 export const dynamic = 'force-dynamic';
 
@@ -55,6 +56,8 @@ export async function POST(req: NextRequest) {
         subscriptionStatus: true,
         generationCount: true,
         lastGenerationReset: true,
+        signupSource: true,
+        createdAt: true,
       },
     });
 
@@ -82,12 +85,17 @@ export async function POST(req: NextRequest) {
     }
 
     // Check subscription limits — trial users get a reduced cap until their
-    // first real payment (prevents stockpiling recipes on a free trial)
-    const TRIAL_LIMIT = 15;
+    // first real payment (prevents stockpiling recipes on a free trial).
+    // Imports draw on the same generationCount as generation, so they must use
+    // the same resolved allowance or a partner member hits a phantom wall here.
     const isTrialing =
       user.subscriptionTier !== 'free' && user.subscriptionStatus === 'trialing';
+
+    const { offer: partnerOffer, trialRecipeLimit: trialLimit } =
+      await resolvePartnerTrial(user);
+
     const limit = isTrialing
-      ? TRIAL_LIMIT
+      ? trialLimit
       : TIER_LIMITS[user.subscriptionTier as keyof typeof TIER_LIMITS] || TIER_LIMITS.free;
 
     if (user.generationCount >= limit) {
@@ -98,7 +106,10 @@ export async function POST(req: NextRequest) {
           current: user.generationCount,
           tier: user.subscriptionTier,
           message: isTrialing
-            ? `Your free trial includes ${TRIAL_LIMIT} recipes. Your full 100 per month unlocks when your trial converts to Premium.`
+            ? partnerOffer
+              // No card behind this trial, so it never converts on its own.
+              ? `Your ${partnerOffer.label} free month includes ${trialLimit} recipes, and you've used them all. Subscribe to Premium for 100 a month.`
+              : `Your free trial includes ${trialLimit} recipes. Your full 100 per month unlocks when your trial converts to Premium.`
             : user.subscriptionTier === 'free'
               ? 'You have reached your free tier limit of 3 recipes per month. Upgrade to Premium for 100 recipes per month.'
               : `You have reached your ${user.subscriptionTier} tier limit of ${limit} recipes this month.`,

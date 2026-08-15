@@ -3,6 +3,8 @@ import { NextResponse } from 'next/server';
 import { authOptions } from '@/lib/auth-options';
 import { prisma } from '@/lib/db';
 import { AI_CHAT_URL, AI_API_KEY, MODEL_SMART } from '@/lib/ai';
+import { DEFAULT_TRIAL_DAYS } from '@/lib/partner-offers';
+import { resolvePartnerTrial } from '@/lib/partner-offer-server';
 
 // POST /api/meal-plans/generate - AI generate a weekly meal plan
 export async function POST(req: Request) {
@@ -37,8 +39,18 @@ export async function POST(req: Request) {
         dislikedIngredients: true,
         subscriptionTier: true,
         subscriptionStatus: true,
+        signupSource: true,
+        createdAt: true,
       },
     });
+
+    // Quote the trial this account would actually get, not a blanket 7 days.
+    const partnerTrial = profile
+      ? await resolvePartnerTrial(profile)
+      : null;
+    const upgradeTrialCopy = partnerTrial?.offer
+      ? `your ${partnerTrial.offer.label} invite includes ${partnerTrial.trialDays} days free, no card`
+      : `your first ${partnerTrial?.trialDays ?? DEFAULT_TRIAL_DAYS} days are free`;
 
     // Meal planning is a Premium feature ('pro' = grandfathered legacy tier)
     const tier = profile?.subscriptionTier ?? 'free';
@@ -46,8 +58,7 @@ export async function POST(req: Request) {
       return NextResponse.json(
         {
           error: 'Premium feature',
-          message:
-            'AI weekly meal plans are a Premium feature. Upgrade for $9.99/mo — your first 7 days are free.',
+          message: `AI weekly meal plans are a Premium feature. Upgrade for $9.99/mo — ${upgradeTrialCopy}.`,
         },
         { status: 403 }
       );
@@ -63,7 +74,10 @@ export async function POST(req: Request) {
         return NextResponse.json(
           {
             error: 'Trial limit reached',
-            message: `Your free trial includes ${TRIAL_MEAL_PLAN_LIMIT} meal plans. Unlimited plans unlock when your trial converts to Premium.`,
+            message: partnerTrial?.offer
+              // No card behind a partner trial, so it never converts on its own.
+              ? `Your ${partnerTrial.offer.label} free month includes ${TRIAL_MEAL_PLAN_LIMIT} meal plans. Subscribe to Premium for unlimited plans.`
+              : `Your free trial includes ${TRIAL_MEAL_PLAN_LIMIT} meal plans. Unlimited plans unlock when your trial converts to Premium.`,
           },
           { status: 403 }
         );

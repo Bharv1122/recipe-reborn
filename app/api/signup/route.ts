@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import bcrypt from 'bcryptjs';
 import { prisma } from '@/lib/db';
 import { rateLimit, getClientIp } from '@/lib/rate-limit';
+import { normalizeSource } from '@/lib/partner-offers';
 
 export async function POST(request: NextRequest) {
   try {
@@ -56,9 +57,10 @@ export async function POST(request: NextRequest) {
 
     const hashedPassword = await bcrypt.hash(password, 12);
 
-    // Optional first-touch attribution from ?src= links (cards, socials)
-    const signupSource =
-      typeof src === 'string' && src.trim() ? src.trim().slice(0, 40) : null;
+    // Optional first-touch attribution from ?src= links (cards, socials).
+    // Normalized to lowercase so ?src=Finnsters and ?src=finnsters are one
+    // population — the partner redemption cap counts on this.
+    const signupSource = normalizeSource(typeof src === 'string' ? src : null);
 
     const user = await prisma.user.create({
       data: {

@@ -128,10 +128,16 @@ export default async function RootLayout({
       </head>
       <body className={inter.className}>
         <Script id="recipe-reborn-color-theme" strategy="beforeInteractive">
+          {/* Applied before paint so a chosen display mode never flashes the
+              default first. Legacy green names map to 'default'. */}
           {`try {
-            var savedTheme = localStorage.getItem('recipe-reborn-color-theme');
-            if (savedTheme === 'forest' || savedTheme === 'sage' || savedTheme === 'warm') {
-              document.documentElement.dataset.colorTheme = savedTheme;
+            var saved = localStorage.getItem('recipe-reborn-color-theme');
+            var legacy = { forest: 'default', sage: 'default', warm: 'default' };
+            var resolved = (saved === 'default' || saved === 'high-contrast' || saved === 'colorblind')
+              ? saved
+              : legacy[saved];
+            if (resolved) {
+              document.documentElement.dataset.colorTheme = resolved;
             }
           } catch (error) {}`}
         </Script>

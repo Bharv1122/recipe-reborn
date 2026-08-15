@@ -11,6 +11,7 @@ import { MealPlanCard } from './_components/meal-plan-card';
 import { GenerateMealPlanDialog } from './_components/generate-meal-plan-dialog';
 import { MealPlanCalendar } from './_components/meal-plan-calendar';
 import { AuthenticatedPageLoading, SessionRequiredState } from '@/components/authenticated-page-state';
+import { usePartnerOffer } from '@/app/_components/partner-offer-banner';
 
 interface MealPlan {
   id: string;
@@ -28,6 +29,7 @@ export default function MealPlannerPage() {
   const [generateDialogOpen, setGenerateDialogOpen] = useState(false);
   const [selectedPlan, setSelectedPlan] = useState<MealPlan | null>(null);
   const [isPremium, setIsPremium] = useState<boolean | null>(null);
+  const partnerOffer = usePartnerOffer();
 
   useEffect(() => {
     if (status === 'authenticated') {
@@ -128,7 +130,11 @@ export default function MealPlannerPage() {
                 <div>
                   <p className="font-semibold text-gray-900">AI weekly meal plans are a Premium feature</p>
                   <p className="text-sm text-gray-600">
-                    21 personalized meals a week, tuned to your allergies and preferences — $9.99/mo with a free 7-day trial
+                    21 personalized meals a week, tuned to your allergies and preferences —
+                    $9.99/mo{' '}
+                    {partnerOffer
+                      ? `with ${partnerOffer.trialDays} days free, no card (${partnerOffer.label})`
+                      : 'with a free 7-day trial'}
                   </p>
                 </div>
               </div>

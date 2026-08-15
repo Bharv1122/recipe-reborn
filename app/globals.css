@@ -2,10 +2,33 @@
 @tailwind components;
 @tailwind utilities;
 
+/* ---------------------------------------------------------------------------
+   Display modes.
+
+   These used to be three shades of green (forest / sage / warm), which looked
+   like a choice but changed nothing that mattered. Each option now addresses a
+   specific vision need:
+
+     default        brand green, unchanged
+     high-contrast  dark neutral ground + brighter foregrounds, for low vision
+                    and contrast sensitivity
+     colorblind     remaps the red/green semantic pair, which is the actual
+                    accessibility problem here: additives are flagged in red and
+                    fresh ingredients in green — the exact axis deuteranopia and
+                    protanopia collapse (~8% of men)
+
+   Scope note: the colorblind mode remaps Tailwind's red and emerald/green
+   utility colors at the root rather than refactoring 15 components to semantic
+   tokens. That reliably separates the two signals by hue AND luminance, but it
+   is a broad remap, not an audited WCAG conformance pass. Do not describe it
+   as certified.
+   ------------------------------------------------------------------------- */
+
 /* Brand background — matches the Recipe Reborn logo's green radial gradient
    (#14AB42 bright center-top fading to #054E36 at the edges) so the logo
    artwork blends seamlessly into every page. */
 :root,
+:root[data-color-theme='default'],
 :root[data-color-theme='forest'] {
   --brand-bg-top: #14ab42;
   --brand-bg-mid: #0b8540;
@@ -14,20 +37,81 @@
   --brand-header: 4 73 49;
 }
 
-:root[data-color-theme='sage'] {
-  --brand-bg-top: #55a66f;
-  --brand-bg-mid: #397f61;
-  --brand-bg-low: #286451;
-  --brand-bg-edge: #1c493f;
-  --brand-header: 28 73 63;
+/* Low vision / contrast sensitivity: drop the mid-tone green ground for a
+   near-neutral dark so white body text and white cards sit at maximum
+   separation from the page behind them. */
+:root[data-color-theme='high-contrast'] {
+  --brand-bg-top: #123a24;
+  --brand-bg-mid: #0a2417;
+  --brand-bg-low: #06170f;
+  --brand-bg-edge: #010806;
+  --brand-header: 1 8 6;
 }
 
-:root[data-color-theme='warm'] {
-  --brand-bg-top: #0f7c4d;
-  --brand-bg-mid: #075f43;
-  --brand-bg-low: #064c3d;
-  --brand-bg-edge: #04362f;
-  --brand-header: 3 51 42;
+:root[data-color-theme='high-contrast'] body {
+  color: #ffffff;
+}
+
+/* Thicker, brighter edges so card and input boundaries stay findable. */
+:root[data-color-theme='high-contrast'] .shadow-lg,
+:root[data-color-theme='high-contrast'] .shadow-xl,
+:root[data-color-theme='high-contrast'] .shadow-2xl {
+  box-shadow: 0 0 0 2px #ffffff, 0 10px 24px rgba(0, 0, 0, 0.7);
+}
+
+:root[data-color-theme='high-contrast'] a:focus-visible,
+:root[data-color-theme='high-contrast'] button:focus-visible,
+:root[data-color-theme='high-contrast'] input:focus-visible,
+:root[data-color-theme='high-contrast'] select:focus-visible,
+:root[data-color-theme='high-contrast'] textarea:focus-visible {
+  outline: 3px solid #ffd400;
+  outline-offset: 2px;
+}
+
+/* Colorblind-friendly: the brand background deliberately stays green.
+   The problem this mode solves is the red/green SEMANTIC pair (flagged
+   additive vs fresh ingredient), not the page colour — and the logo artwork
+   has green baked into it and is edge-masked to melt into a green page, so
+   swapping the ground to a neutral leaves it floating as a green blob.
+   Background unchanged; only the two signals move, to amber and blue, which
+   differ in hue AND luminance and so stay distinct under deuteranopia,
+   protanopia and tritanopia alike. */
+
+/* "Flagged / avoid" signals: red family -> amber */
+:root[data-color-theme='colorblind'] .text-red-500,
+:root[data-color-theme='colorblind'] .text-red-600,
+:root[data-color-theme='colorblind'] .text-red-700 {
+  color: #b45309;
+}
+:root[data-color-theme='colorblind'] .bg-red-50,
+:root[data-color-theme='colorblind'] .bg-red-100 {
+  background-color: #fef3c7;
+}
+:root[data-color-theme='colorblind'] .border-red-200,
+:root[data-color-theme='colorblind'] .border-red-300 {
+  border-color: #f59e0b;
+}
+
+/* "Fresh / good" signals: emerald + green families -> blue */
+:root[data-color-theme='colorblind'] .text-emerald-600,
+:root[data-color-theme='colorblind'] .text-emerald-700,
+:root[data-color-theme='colorblind'] .text-emerald-800,
+:root[data-color-theme='colorblind'] .text-green-600,
+:root[data-color-theme='colorblind'] .text-green-700 {
+  color: #1d4ed8;
+}
+:root[data-color-theme='colorblind'] .bg-emerald-50,
+:root[data-color-theme='colorblind'] .bg-emerald-100,
+:root[data-color-theme='colorblind'] .bg-green-100 {
+  background-color: #dbeafe;
+}
+:root[data-color-theme='colorblind'] .border-emerald-200,
+:root[data-color-theme='colorblind'] .border-emerald-300 {
+  border-color: #3b82f6;
+}
+:root[data-color-theme='colorblind'] .bg-emerald-600,
+:root[data-color-theme='colorblind'] .bg-emerald-700 {
+  background-color: #1d4ed8;
 }
 
 body {

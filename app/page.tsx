@@ -35,7 +35,10 @@ export default async function HomePage() {
           </div>
           <div
             aria-hidden="true"
-            className="mx-auto -mt-4 w-fit rounded-full bg-white/95 px-7 py-3 font-serif text-4xl font-bold italic leading-none shadow-md sm:-mt-6 sm:px-10 sm:text-6xl"
+            /* No pill behind the wordmark — it sits straight on the page green.
+               The drop shadow replaces the old white plate for legibility, since
+               orange on green has far less contrast than orange on white. */
+            className="mx-auto -mt-4 w-fit px-2 py-1 font-serif text-4xl font-bold italic leading-none [text-shadow:0_2px_8px_rgba(0,0,0,0.45)] sm:-mt-6 sm:px-3 sm:text-6xl"
           >
             <span className="text-orange-600">Recipe</span>
             <span className="text-orange-600">Reborn</span>
