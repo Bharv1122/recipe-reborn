@@ -90,6 +90,78 @@ export function appUrl(): string {
   return raw.replace(/\/+$/, '');
 }
 
+/**
+ * Sent a few days before a partner trial lapses.
+ *
+ * These trials have no card behind them, so nothing converts on its own: if we
+ * say nothing, the account quietly drops to the free tier and we never hear
+ * from them again. Deliberately not styled as a billing warning — nobody is
+ * about to be charged — it is a "here is what you made, want to keep going?"
+ */
+export function trialEndingEmail(args: {
+  offerLabel: string;
+  daysLeft: number;
+  recipesCreated: number;
+  pricingUrl: string;
+  feedbackEmail: string;
+}) {
+  const { offerLabel, daysLeft, recipesCreated, pricingUrl, feedbackEmail } = args;
+
+  const dayPhrase = daysLeft <= 1 ? 'tomorrow' : `in ${daysLeft} days`;
+  const madeLine =
+    recipesCreated > 0
+      ? `You've turned ${recipesCreated} packaged product${recipesCreated === 1 ? '' : 's'} into something fresh so far.`
+      : `You haven't generated a recipe yet — there's still time, and it takes about twenty seconds.`;
+
+  const subject = `Your ${offerLabel} free month ends ${dayPhrase}`;
+
+  const text = [
+    `Your ${offerLabel} free month ends ${dayPhrase}.`,
+    '',
+    madeLine,
+    '',
+    'Nothing happens automatically when it ends — we never took a card for the',
+    'trial, so there is nothing to cancel and nothing will be charged. Your',
+    'account simply moves to the free plan (3 recipes a month) and your saved',
+    'recipes stay exactly where they are.',
+    '',
+    `If you'd like to keep the full 100 a month: ${pricingUrl}`,
+    '',
+    `And either way I'd genuinely love to know what you thought — just reply, or write to ${feedbackEmail}.`,
+  ].join('\n');
+
+  const html = `<!doctype html>
+<html>
+  <body style="margin:0;padding:24px;background:#f6f7f6;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;color:#1f2937;">
+    <div style="max-width:520px;margin:0 auto;background:#ffffff;border-radius:12px;padding:32px;">
+      <h1 style="margin:0 0 16px;font-size:22px;color:#065f46;">
+        Your ${offerLabel} free month ends ${dayPhrase}
+      </h1>
+      <p style="margin:0 0 16px;line-height:1.6;">${madeLine}</p>
+      <p style="margin:0 0 16px;line-height:1.6;">
+        Nothing happens automatically when it ends — we never took a card for the
+        trial, so there is nothing to cancel and nothing will be charged. Your account
+        simply moves to the free plan (3 recipes a month), and your saved recipes stay
+        exactly where they are.
+      </p>
+      <p style="margin:0 0 24px;">
+        <a href="${pricingUrl}"
+           style="display:inline-block;background:#059669;color:#ffffff;text-decoration:none;padding:12px 24px;border-radius:8px;font-weight:600;">
+          Keep Premium
+        </a>
+      </p>
+      <p style="margin:0;line-height:1.6;font-size:14px;color:#4b5563;">
+        And either way I'd genuinely love to know what you thought — just reply to this
+        email, or write to
+        <a href="mailto:${feedbackEmail}" style="color:#065f46;">${feedbackEmail}</a>.
+      </p>
+    </div>
+  </body>
+</html>`;
+
+  return { subject, html, text };
+}
+
 export function passwordResetEmail(resetUrl: string, expiryMinutes: number) {
   const text = [
     'Reset your Recipe Reborn password',
