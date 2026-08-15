@@ -99,7 +99,7 @@ export default function PricingPage() {
       ...tier,
       features: tier.features.map((f) =>
         f === '7-day free trial'
-          ? `${partnerOffer.trialDays} days free — no card to start`
+          ? `${partnerOffer.trialDays} days free (${partnerOffer.label})`
           : f
       ),
       buttonText: `Start ${partnerOffer.trialDays} Days Free`,
@@ -300,13 +300,10 @@ export default function PricingPage() {
               {partnerOffer ? (
                 <p className="text-gray-600">
                   Yes — your {partnerOffer.label} invite gives you{' '}
-                  {partnerOffer.trialDays} days free and{' '}
-                  <strong>no card is needed to start</strong>, including{' '}
-                  {partnerOffer.trialRecipeLimit} recipes. Continuing on Premium after that
-                  does require a card. Because you never entered one for the trial, nothing
-                  is on file to charge you automatically: if you do nothing your account
-                  simply returns to the Free plan, and if you want to stay on Premium you
-                  subscribe and add payment details then.
+                  {partnerOffer.trialDays} days free, including{' '}
+                  {partnerOffer.trialRecipeLimit} recipes. When the month is up your
+                  account simply returns to the Free plan, and you can subscribe to
+                  Premium whenever you like.
                 </p>
               ) : (
                 <p className="text-gray-600">

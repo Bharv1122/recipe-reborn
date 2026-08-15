@@ -45,8 +45,11 @@ export async function GET() {
       select: { signupSource: true, createdAt: true },
     });
 
+    // Session JWT with no matching row — a deleted account, or a token issued
+    // before a database restore. We determined nothing, so say so rather than
+    // clearing a banner the visitor's invite link legitimately earned.
     if (!user) {
-      return NextResponse.json(NO_OFFER);
+      return NextResponse.json(UNKNOWN);
     }
 
     // Same resolver checkout uses, so the banner can never promise a trial

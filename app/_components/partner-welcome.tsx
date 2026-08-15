@@ -59,9 +59,7 @@ export function PartnerWelcome() {
           </p>
           <p className="text-gray-700">
             Enjoy your {offer.trialDays} day free trial — special, just for{' '}
-            {offer.label}. That&apos;s {offer.trialRecipeLimit} recipes with no card to
-            start. If you want to stay on Premium afterwards you&apos;ll add a card
-            then; otherwise your account just returns to the free plan.
+            {offer.label}. That&apos;s {offer.trialRecipeLimit} recipes to play with.
           </p>
           <p className="text-gray-700">
             I&apos;d love any feedback at{' '}

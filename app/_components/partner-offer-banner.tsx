@@ -75,11 +75,13 @@ export function PartnerOfferBanner({ className = '' }: { className?: string }) {
           Special, just for {offer.label}: {offer.trialDays} days free
         </p>
         <p className="text-sm text-emerald-800/80">
-          Applied automatically, nothing to type. Includes{' '}
-          {offer.trialRecipeLimit} recipes, and <strong>no card to start</strong>.
-          Staying on Premium after the {offer.trialDays} days does need a card — add
-          one then if you want to continue, or do nothing and your account returns to
-          the free plan.
+          {/* Deliberately does not say "applied automatically" — that is only
+              true of the invite link; someone who typed the code sees this
+              same banner. Payment is not mentioned at all: the trial involves
+              no card and nothing charges at the end, so there is nothing to
+              warn about. */}
+          Includes {offer.trialRecipeLimit} recipes. When the {offer.trialDays}{' '}
+          days are up your account simply returns to the free plan.
         </p>
       </div>
     </div>
