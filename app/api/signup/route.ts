@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import bcrypt from 'bcryptjs';
 import { prisma } from '@/lib/db';
 import { rateLimit, getClientIp } from '@/lib/rate-limit';
-import { normalizeSource } from '@/lib/partner-offers';
+import { findPartnerOffer, normalizeSource } from '@/lib/partner-offers';
 
 export async function POST(request: NextRequest) {
   try {
@@ -16,7 +16,7 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json();
-    const { email: rawEmail, password, confirmPassword, src } = body;
+    const { email: rawEmail, password, confirmPassword, src, code } = body;
     // Case-insensitive matching: mixed-case signups created duplicate/unfindable
     // accounts in the old app — always store lowercase
     const email = typeof rawEmail === 'string' ? rawEmail.trim().toLowerCase() : rawEmail;
@@ -60,7 +60,14 @@ export async function POST(request: NextRequest) {
     // Optional first-touch attribution from ?src= links (cards, socials).
     // Normalized to lowercase so ?src=Finnsters and ?src=finnsters are one
     // population — the partner redemption cap counts on this.
-    const signupSource = normalizeSource(typeof src === 'string' ? src : null);
+    //
+    // A typed community code wins over a passive ?src: someone who deliberately
+    // entered "Finnsters" has told us more than a stale link parameter did.
+    // Only a recognised code overrides, so a typo cannot wipe real attribution.
+    const typedOffer = findPartnerOffer(typeof code === 'string' ? code : null);
+    const signupSource = typedOffer
+      ? typedOffer.slug
+      : normalizeSource(typeof src === 'string' ? src : null);
 
     const user = await prisma.user.create({
       data: {

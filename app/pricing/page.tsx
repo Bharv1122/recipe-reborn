@@ -11,6 +11,7 @@ import {
   PartnerOfferBanner,
   usePartnerOffer,
 } from '@/app/_components/partner-offer-banner';
+import { PartnerCodeEntry } from '@/app/_components/partner-code-entry';
 
 interface PricingTier {
   name: string;
@@ -166,6 +167,11 @@ export default function PricingPage() {
       {/* Pricing Cards */}
       <div className="max-w-7xl mx-auto px-4 pb-20">
         <PartnerOfferBanner />
+        {/* Only offered when there is nothing to apply yet, and only to people
+            who are signed in — redeeming needs an account to attach to. */}
+        {!partnerOffer && status === 'authenticated' && (
+          <PartnerCodeEntry onRedeemed={() => window.location.reload()} />
+        )}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
           {pricingTiers.map(applyOffer).map((tier) => (
             <Card

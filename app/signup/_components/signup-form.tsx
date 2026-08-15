@@ -7,13 +7,14 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent } from '@/components/ui/card';
-import { Loader2, Mail, Lock, Eye, EyeOff } from 'lucide-react';
+import { Loader2, Mail, Lock, Eye, EyeOff, Ticket } from 'lucide-react';
 import toast from 'react-hot-toast';
 
 export function SignupForm() {
   const router = useRouter();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [code, setCode] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
 
@@ -48,6 +49,7 @@ export function SignupForm() {
           // signup conversion); the API still validates it, so mirror password.
           confirmPassword: password,
           ...(src ? { src } : {}),
+          ...(code.trim() ? { code: code.trim() } : {}),
         }),
       });
 
@@ -129,6 +131,24 @@ export function SignupForm() {
                 {showPassword ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
               </button>
             </div>
+          </div>
+          {/* Optional, and last, so it never slows down an ordinary signup —
+              but present, because the code is the whole point for a Finnster. */}
+          <div className="space-y-2">
+            <Label htmlFor="code" className="flex items-center gap-2">
+              <Ticket className="h-4 w-4 text-emerald-600" />
+              Community code <span className="text-gray-400">(optional)</span>
+            </Label>
+            <Input
+              id="code"
+              value={code}
+              onChange={(e) => setCode(e?.target?.value ?? '')}
+              placeholder="e.g. Finnsters"
+              autoComplete="off"
+              autoCapitalize="none"
+              spellCheck={false}
+              disabled={isLoading}
+            />
           </div>
           <Button
             type="submit"
