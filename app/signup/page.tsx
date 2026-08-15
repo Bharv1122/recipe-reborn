@@ -17,7 +17,16 @@ export default function SignupPage({
         <div className="text-center">
           <Link href="/" className="inline-flex items-center space-x-2 group">
             <Image src="/logo-mark.png" alt="Recipe Reborn emblem" width={48} height={48} className="h-12 w-12 rounded-full shadow-md group-hover:scale-105 transition-transform" />
-            <Image src="/logo-text-hero.png" alt="Recipe Reborn" width={220} height={52} className="h-12 w-auto" />
+            {/* Text rather than logo-text-hero.png: that PNG still has the old
+                green "Recipe" baked in, so it drifted out of step when the
+                wordmark went fully orange. Matches the header markup. */}
+            <span
+              className="font-serif text-2xl font-bold italic leading-none [text-shadow:0_1px_5px_rgba(0,0,0,0.45)] sm:text-3xl"
+              aria-label="Recipe Reborn"
+            >
+              <span className="text-orange-600">Recipe</span>
+              <span className="text-orange-600">Reborn</span>
+            </span>
           </Link>
           <h2 className="mt-6 text-3xl font-extrabold text-white">
             {fromUnlock ? 'Unlock your fresh recipe' : 'Create your account'}
