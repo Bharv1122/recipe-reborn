@@ -2,6 +2,7 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth-options';
 import { redirect } from 'next/navigation';
 import { RecipeGenerator } from './_components/recipe-generator';
+import { PartnerWelcome } from '@/app/_components/partner-welcome';
 
 export default async function GeneratorPage() {
   const session = await getServerSession(authOptions);
@@ -21,6 +22,9 @@ export default async function GeneratorPage() {
             Enter your processed food ingredients and let AI create a healthy, fresh recipe for you.
           </p>
         </div>
+        {/* Greets a partner-offer member once, on the page they land on
+            straight after signup. */}
+        <PartnerWelcome />
         <RecipeGenerator />
       </div>
     </div>
