@@ -50,6 +50,17 @@ export interface PartnerOffer {
    * shown them the banner promising it. See resolvePartnerTrial().
    */
   maxRedemptions: number;
+  /**
+   * A comp rather than a trial: redeeming grants Premium permanently and never
+   * involves Stripe at all.
+   *
+   * Deliberately not implemented as a Stripe 100%-off-forever coupon. That
+   * would create a real subscription that has to keep succeeding every month,
+   * and a lapsed card or a webhook we miss would quietly revoke a gift. Setting
+   * the tier directly means nothing can expire it: no subscription, no invoice,
+   * no renewal to fail. `trialDays` is ignored for these.
+   */
+  lifetime?: boolean;
 }
 
 export const PARTNER_OFFERS: PartnerOffer[] = [
@@ -66,6 +77,19 @@ export const PARTNER_OFFERS: PartnerOffer[] = [
     fullPremium: true,
     expiresAt: '2026-11-14',
     maxRedemptions: 250,
+  },
+  {
+    // Personal comp. maxRedemptions 1 so the code cannot be passed around,
+    // and a far-future end date because the point of it is that it does not
+    // run out.
+    slug: 'stephanie',
+    label: 'Stephanie',
+    lifetime: true,
+    trialDays: 0, // ignored for lifetime comps
+    trialRecipeLimit: 100,
+    fullPremium: true,
+    expiresAt: '2099-12-31',
+    maxRedemptions: 1,
   },
 ];
 
