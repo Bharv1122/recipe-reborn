@@ -49,7 +49,7 @@ export async function POST(req: Request) {
       ? await resolvePartnerTrial(profile)
       : null;
     const upgradeTrialCopy = partnerTrial?.offer
-      ? `your ${partnerTrial.offer.label} invite includes ${partnerTrial.trialDays} days free, no card`
+      ? `your ${partnerTrial.offer.label} invite includes ${partnerTrial.trialDays} days free with no card to start`
       : `your first ${partnerTrial?.trialDays ?? DEFAULT_TRIAL_DAYS} days are free`;
 
     // Meal planning is a Premium feature ('pro' = grandfathered legacy tier)
