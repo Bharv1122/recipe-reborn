@@ -4,7 +4,7 @@ import { authOptions } from '@/lib/auth-options';
 import { prisma } from '@/lib/db';
 import { AI_CHAT_URL, AI_API_KEY, MODEL_SMART } from '@/lib/ai';
 import { rateLimit } from '@/lib/rate-limit';
-import { findPartnerOffer, isOfferLive } from '@/lib/partner-offers';
+import { resolvePartnerTrial } from '@/lib/partner-offer-server';
 import { z } from 'zod';
 import { logServerError } from '@/lib/server-error-log';
 import { clearGenerationCancellation, wasGenerationCanceled } from '@/lib/generation-cancellation';
@@ -40,10 +40,6 @@ const TIER_LIMITS = {
   premium: 100,
   pro: Infinity, // legacy fallback for grandfathered Pro subscribers; no longer sold
 };
-
-// Trial users get Premium features but a reduced cap until their first real
-// payment (prevents stockpiling recipes on a free trial).
-const TRIAL_RECIPE_LIMIT = 15;
 
 export async function POST(request: NextRequest) {
   try {
@@ -92,6 +88,7 @@ export async function POST(request: NextRequest) {
         allergies: true,
         dislikedIngredients: true,
         signupSource: true,
+        createdAt: true,
       },
     });
 
@@ -119,17 +116,14 @@ export async function POST(request: NextRequest) {
     }
 
     // Check subscription limits — trial users get a reduced cap until their
-    // first real payment (prevents stockpiling recipes on a free trial)
+    // first real payment (prevents stockpiling recipes on a free trial). A
+    // partner offer runs a month rather than a week, so it carries its own
+    // allowance; resolvePartnerTrial is the single authority on which applies.
     const isTrialing =
       user.subscriptionTier !== 'free' && user.subscriptionStatus === 'trialing';
 
-    // A partner offer runs a month rather than a week, so it carries its own
-    // allowance instead of the standard trial's.
-    const partnerOffer = findPartnerOffer(user.signupSource);
-    const trialLimit =
-      partnerOffer && isOfferLive(partnerOffer)
-        ? partnerOffer.trialRecipeLimit
-        : TRIAL_RECIPE_LIMIT;
+    const { offer: partnerOffer, trialRecipeLimit: trialLimit } =
+      await resolvePartnerTrial(user);
 
     const limit = isTrialing
       ? trialLimit
@@ -143,7 +137,7 @@ export async function POST(request: NextRequest) {
           current: user.generationCount,
           tier: user.subscriptionTier,
           message: isTrialing
-            ? partnerOffer && isOfferLive(partnerOffer)
+            ? partnerOffer
               // This trial has no card behind it, so it will never "convert" on
               // its own — point them at subscribing instead of implying it.
               ? `Your ${partnerOffer.label} free month includes ${trialLimit} recipes, and you've used them all. Subscribe to Premium for 100 a month.`

@@ -3,11 +3,7 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth-options';
 import { stripe } from '@/lib/stripe';
 import { prisma } from '@/lib/db';
-import {
-  DEFAULT_TRIAL_DAYS,
-  findPartnerOffer,
-  isOfferLive,
-} from '@/lib/partner-offers';
+import { resolvePartnerTrial } from '@/lib/partner-offer-server';
 
 export const dynamic = 'force-dynamic';
 
@@ -59,25 +55,10 @@ export async function POST(request: NextRequest) {
       });
     }
 
-    // Extended partner trials are resolved from the stored signupSource, not
+    // Extended partner trials are resolved from the stored account record, not
     // from the request body — the client never gets a say in trial length.
-    let trialDays = DEFAULT_TRIAL_DAYS;
-    let offerSlug: string | null = null;
-    const offer = findPartnerOffer(user.signupSource);
-
-    if (offer && isOfferLive(offer)) {
-      // Count accounts from this source rather than tracking redemptions in a
-      // new table: signupSource is already stamped at signup and is the same
-      // thing the cap is meant to limit.
-      const redeemed = await prisma.user.count({
-        where: { signupSource: offer.slug },
-      });
-
-      if (redeemed <= offer.maxRedemptions) {
-        trialDays = offer.trialDays;
-        offerSlug = offer.slug;
-      }
-    }
+    const { offer, trialDays } = await resolvePartnerTrial(user);
+    const offerSlug = offer?.slug ?? null;
 
     // Get origin from request headers for dynamic URL construction
     const origin = request.headers.get('origin') || 'http://localhost:3000';

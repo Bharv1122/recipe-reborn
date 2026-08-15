@@ -34,14 +34,23 @@ export interface PartnerOffer {
    * Cap on how many accounts from this source get the extended trial. A month
    * of Premium is 100 AI generations, so an uncapped public link is an
    * uncapped bill. Past the cap, signups still work at the standard trial.
+   *
+   * REDEMPTION IS DEFINED AS SIGNUP POSITION, not trial activation: the first
+   * N accounts ever created from this source are entitled, and that position
+   * never changes afterwards. The alternative — counting live trials — would
+   * mean someone who signed up on day one could be refused the offer weeks
+   * later because other people signed up in between, after we had already
+   * shown them the banner promising it. See resolvePartnerTrial().
    */
   maxRedemptions: number;
 }
 
 export const PARTNER_OFFERS: PartnerOffer[] = [
   {
-    slug: 'alexfinn',
-    label: 'Alex Finn Community',
+    // The community calls itself the Finnsters, so that is the code in the
+    // link. Matching is case-insensitive — ?src=Finnsters works too.
+    slug: 'finnsters',
+    label: 'Finnsters',
     trialDays: 30,
     // Roughly one recipe a day — an easy story to tell, and it bounds the AI
     // spend at 250 × 30 rather than 250 × 100.
@@ -51,9 +60,22 @@ export const PARTNER_OFFERS: PartnerOffer[] = [
   },
 ];
 
+/**
+ * The single normalization rule for attribution values.
+ *
+ * ?src=Finnsters and ?src=finnsters have to end up as one value, or the
+ * redemption cap counts two separate populations and never fires. Applied at
+ * signup so everything downstream compares like with like.
+ */
+export function normalizeSource(raw: string | null | undefined): string | null {
+  if (typeof raw !== 'string') return null;
+  const normalized = raw.trim().toLowerCase().slice(0, 40);
+  return normalized || null;
+}
+
 export function findPartnerOffer(slug: string | null | undefined): PartnerOffer | null {
-  if (!slug) return null;
-  const normalized = slug.trim().toLowerCase();
+  const normalized = normalizeSource(slug);
+  if (!normalized) return null;
   return PARTNER_OFFERS.find((o) => o.slug === normalized) ?? null;
 }
 

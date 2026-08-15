@@ -38,9 +38,15 @@ export function usePartnerOffer(): PartnerOffer | null {
     fetch('/api/user/offer')
       .then((r) => (r.ok ? r.json() : null))
       .then((data) => {
-        if (cancelled) return;
+        if (cancelled || !data) return;
+
+        // Only a signed-in answer is authoritative. When it is, trust it in
+        // both directions: an account past the cap or after the end date must
+        // stop being shown an offer it would not actually receive.
+        if (!data.authenticated) return;
+
         const fromApi = findPartnerOffer(data?.offer?.slug);
-        if (fromApi && isOfferLive(fromApi)) setOffer(fromApi);
+        setOffer(fromApi && isOfferLive(fromApi) ? fromApi : null);
       })
       .catch(() => {
         // Display-only; the pricing page must render regardless.
@@ -66,12 +72,12 @@ export function PartnerOfferBanner({ className = '' }: { className?: string }) {
       <Gift className="mt-0.5 h-5 w-5 flex-shrink-0 text-emerald-600" />
       <div className="text-left">
         <p className="font-semibold text-emerald-900">
-          {offer.label}: {offer.trialDays} days free — no credit card
+          {offer.trialDays} days free — no credit card
         </p>
         <p className="text-sm text-emerald-800/80">
-          Applied automatically, no code needed. Includes {offer.trialRecipeLimit}{' '}
-          recipes. When the month is up it simply ends and you drop back to the free
-          plan — we never ask for a card, so you can&apos;t be charged by surprise.
+          Your <strong>{offer.label}</strong> invite is applied automatically, nothing
+          to type. Includes {offer.trialRecipeLimit} recipes, then your account returns
+          to the free plan. We never take a card, so nothing can charge you.
         </p>
       </div>
     </div>
