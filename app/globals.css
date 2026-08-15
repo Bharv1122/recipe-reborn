@@ -92,27 +92,13 @@
   border-color: #f59e0b;
 }
 
-/* "Fresh / good" signals: emerald + green families -> blue */
-:root[data-color-theme='colorblind'] .text-emerald-600,
-:root[data-color-theme='colorblind'] .text-emerald-700,
-:root[data-color-theme='colorblind'] .text-emerald-800,
-:root[data-color-theme='colorblind'] .text-green-600,
-:root[data-color-theme='colorblind'] .text-green-700 {
-  color: #1d4ed8;
-}
-:root[data-color-theme='colorblind'] .bg-emerald-50,
-:root[data-color-theme='colorblind'] .bg-emerald-100,
-:root[data-color-theme='colorblind'] .bg-green-100 {
-  background-color: #dbeafe;
-}
-:root[data-color-theme='colorblind'] .border-emerald-200,
-:root[data-color-theme='colorblind'] .border-emerald-300 {
-  border-color: #3b82f6;
-}
-:root[data-color-theme='colorblind'] .bg-emerald-600,
-:root[data-color-theme='colorblind'] .bg-emerald-700 {
-  background-color: #1d4ed8;
-}
+/* Green is deliberately left alone.
+   An earlier version also remapped the emerald/green families to blue, which
+   recoloured every checkmark, badge and button in the product — brand chrome
+   that carries no red-vs-green meaning — and just looked like a broken blue
+   theme on a green page. Moving only the red signal is enough: amber against
+   green separates on luminance as well as hue, which is exactly what
+   deuteranopia and protanopia need, and the rest of the UI stays itself. */
 
 body {
   background: radial-gradient(

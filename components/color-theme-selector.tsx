@@ -27,7 +27,7 @@ const THEMES = [
   {
     value: 'colorblind',
     label: 'Colorblind friendly',
-    hint: 'Flagged additives shown in amber and fresh ingredients in blue, instead of red and green',
+    hint: 'Flagged additives shown in amber instead of red, so they stay distinct from the green fresh-ingredient markers',
   },
 ] as const;
 
