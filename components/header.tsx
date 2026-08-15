@@ -18,7 +18,9 @@ export function Header() {
           {/* Logo */}
           <Link href="/" className="flex items-center space-x-2 group">
             <Image src="/logo-mark.png" alt="Recipe Reborn emblem" width={32} height={32} className="h-8 w-8 rounded-full shadow group-hover:scale-110 transition-all-smooth" />
-            <span className="hidden rounded-full bg-white/95 px-3 py-1 font-serif text-xl font-bold italic leading-none shadow-sm sm:block" aria-label="Recipe Reborn">
+            {/* No white plate behind the wordmark — it sits on the header green,
+                with a drop shadow doing the legibility work instead. */}
+            <span className="hidden px-1 font-serif text-xl font-bold italic leading-none [text-shadow:0_1px_5px_rgba(0,0,0,0.45)] sm:block" aria-label="Recipe Reborn">
               <span className="text-orange-600">Recipe</span>
               <span className="text-orange-600">Reborn</span>
             </span>
