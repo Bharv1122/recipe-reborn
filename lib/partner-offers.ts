@@ -56,7 +56,7 @@ export const PARTNER_OFFERS: PartnerOffer[] = [
     // spend at 250 × 30 rather than 250 × 100.
     trialRecipeLimit: 30,
     expiresAt: '2026-11-14',
-    maxRedemptions: 500,
+    maxRedemptions: 250,
   },
 ];
 
