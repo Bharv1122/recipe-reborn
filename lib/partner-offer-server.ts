@@ -27,12 +27,18 @@ export interface ResolvedTrial {
   trialDays: number;
   /** Recipes/imports allowed while status is 'trialing'. */
   trialRecipeLimit: number;
+  /**
+   * True when the trial should behave as real Premium: full allowance and no
+   * meal-plan cap. Callers that enforce trial-only limits must check this.
+   */
+  fullPremium: boolean;
 }
 
 const STANDARD: ResolvedTrial = {
   offer: null,
   trialDays: DEFAULT_TRIAL_DAYS,
   trialRecipeLimit: STANDARD_TRIAL_RECIPE_LIMIT,
+  fullPremium: false,
 };
 
 /**
@@ -75,6 +81,7 @@ export async function resolvePartnerTrial(user: {
       offer,
       trialDays: offer.trialDays,
       trialRecipeLimit: offer.trialRecipeLimit,
+      fullPremium: offer.fullPremium,
     };
   } catch (error) {
     // A database hiccup must not hand out an unbounded offer, and must not

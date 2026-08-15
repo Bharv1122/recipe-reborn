@@ -64,9 +64,11 @@ export async function POST(req: Request) {
       );
     }
 
-    // Trial cap: each plan is 21 recipes, so limit trials to 2 plans
+    // Trial cap: each plan is 21 recipes, so limit trials to 2 plans.
+    // Partner offers marked fullPremium are exempt — the point of a community
+    // month is that they use the product as a paying subscriber would.
     const TRIAL_MEAL_PLAN_LIMIT = 2;
-    if (profile?.subscriptionStatus === 'trialing') {
+    if (profile?.subscriptionStatus === 'trialing' && !partnerTrial?.fullPremium) {
       const planCount = await prisma.mealPlan.count({
         where: { userId: session.user.id },
       });
