@@ -54,10 +54,12 @@ export default function HackathonPage() {
             <h2 className="mt-2 text-3xl font-black sm:text-4xl">
               Watch a label become dinner
             </h2>
+            {/* Deliberately no "open the live app" link here — the way out sits
+                after the pitch below, so a visitor sees the case for it before
+                they get the chance to leave. */}
             <p className="mt-3 text-slate-600">
               This runs the real flow on a fixed example, so it works the same way every time
-              and nothing here creates an account or saves your data. Want to try it on your own
-              food? <Link href="/" className="font-semibold text-emerald-700 underline underline-offset-2">Open the live app</Link>.
+              and nothing here creates an account or saves your data.
             </p>
           </div>
           <div className="mt-8">
