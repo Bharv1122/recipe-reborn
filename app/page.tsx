@@ -7,6 +7,7 @@ import { authOptions } from '@/lib/auth-options';
 import { GuestScan } from './_components/guest-scan';
 import { LandingDemo } from './_components/landing-demo';
 import { SUPPORT_EMAIL, SUPPORT_MAILTO } from '@/lib/support';
+import { PartnerOfferBanner } from './_components/partner-offer-banner';
 
 export default async function HomePage() {
   const session = await getServerSession(authOptions);
@@ -52,6 +53,15 @@ export default async function HomePage() {
               Sits ABOVE the auth buttons on purpose: for a cold visitor the free
               demo is the call to action, and Sign In is for people who already
               converted (it's also in the header). */}
+          {/* Community members land here from their invite link, so the offer
+              has to be visible before the guest scan — otherwise they have no
+              idea signing up gets them anything. */}
+          {!session && (
+            <div className="pt-1 sm:pt-2">
+              <PartnerOfferBanner showCta />
+            </div>
+          )}
+
           {!session && (
             <div className="pt-1 sm:pt-2">
               <GuestScan />

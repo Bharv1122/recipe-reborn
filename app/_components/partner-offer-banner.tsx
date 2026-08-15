@@ -60,7 +60,14 @@ export function usePartnerOffer(): PartnerOffer | null {
   return offer;
 }
 
-export function PartnerOfferBanner({ className = '' }: { className?: string }) {
+export function PartnerOfferBanner({
+  className = '',
+  showCta = false,
+}: {
+  className?: string;
+  /** Landing pages need a way onward; signup/pricing already have the form. */
+  showCta?: boolean;
+}) {
   const offer = usePartnerOffer();
 
   if (!offer) return null;
@@ -83,6 +90,14 @@ export function PartnerOfferBanner({ className = '' }: { className?: string }) {
           Includes {offer.trialRecipeLimit} recipes. When the {offer.trialDays}{' '}
           days are up your account simply returns to the free plan.
         </p>
+        {showCta && (
+          <a
+            href="/signup"
+            className="mt-3 inline-block rounded-lg bg-emerald-600 px-5 py-2.5 font-semibold text-white transition-colors hover:bg-emerald-700"
+          >
+            Claim your {offer.trialDays} days
+          </a>
+        )}
       </div>
     </div>
   );
