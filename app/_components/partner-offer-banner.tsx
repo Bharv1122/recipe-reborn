@@ -79,7 +79,9 @@ export function PartnerOfferBanner({
       <Gift className="mt-0.5 h-5 w-5 flex-shrink-0 text-emerald-600" />
       <div className="text-left">
         <p className="font-semibold text-emerald-900">
-          Special, just for {offer.label}: {offer.trialDays} days free
+          {offer.lifetime
+            ? `${offer.label} — Premium, free for good`
+            : `Special, just for ${offer.label}: ${offer.trialDays} days free`}
         </p>
         <p className="text-sm text-emerald-800/80">
           {/* Deliberately does not say "applied automatically" — that is only
@@ -87,9 +89,19 @@ export function PartnerOfferBanner({
               same banner. Payment is not mentioned at all: the trial involves
               no card and nothing charges at the end, so there is nothing to
               warn about. */}
-          Full Premium — {offer.trialRecipeLimit} recipes a month, meal plans,
-          shopping lists, the lot. When the {offer.trialDays} days are up your
-          account simply returns to the free plan.
+          {offer.lifetime ? (
+            <>
+              Full Premium — {offer.trialRecipeLimit} recipes a month, meal plans,
+              shopping lists, the lot. It does not expire and there is nothing to
+              renew.
+            </>
+          ) : (
+            <>
+              Full Premium — {offer.trialRecipeLimit} recipes a month, meal plans,
+              shopping lists, the lot. When the {offer.trialDays} days are up your
+              account simply returns to the free plan.
+            </>
+          )}
         </p>
         {showCta && (
           <a

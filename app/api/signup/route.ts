@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import bcrypt from 'bcryptjs';
 import { prisma } from '@/lib/db';
 import { rateLimit, getClientIp } from '@/lib/rate-limit';
-import { findPartnerOffer, normalizeSource } from '@/lib/partner-offers';
+import { findPartnerOffer, isOfferLive, normalizeSource } from '@/lib/partner-offers';
 
 export async function POST(request: NextRequest) {
   try {
@@ -69,11 +69,30 @@ export async function POST(request: NextRequest) {
       ? typedOffer.slug
       : normalizeSource(typeof src === 'string' ? src : null);
 
+    // A lifetime comp typed at signup lands the account on Premium straight
+    // away, so they never see the free tier at all. Capacity is checked here
+    // too — otherwise the signup form would be a way around the redeem
+    // endpoint's limit.
+    let lifetimeGranted = false;
+    if (typedOffer?.lifetime && isOfferLive(typedOffer)) {
+      const taken = await prisma.user.count({
+        where: {
+          signupSource: { equals: typedOffer.slug, mode: 'insensitive' },
+          subscriptionTier: 'premium',
+          stripeSubscriptionId: null,
+        },
+      });
+      lifetimeGranted = taken < typedOffer.maxRedemptions;
+    }
+
     const user = await prisma.user.create({
       data: {
         email,
         password: hashedPassword,
         ...(signupSource ? { signupSource } : {}),
+        ...(lifetimeGranted
+          ? { subscriptionTier: 'premium', subscriptionStatus: 'active' }
+          : {}),
       },
     });
 

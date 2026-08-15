@@ -75,6 +75,44 @@ export async function POST(request: NextRequest) {
       });
     }
 
+    // A lifetime comp is granted here and then simply exists. No Stripe
+    // subscription, so there is no renewal to fail and no webhook that can
+    // later revoke it — currentPeriodEnd stays null, which every entitlement
+    // check already treats as "not time-limited".
+    if (offer.lifetime) {
+      const taken = await prisma.user.count({
+        where: {
+          signupSource: { equals: offer.slug, mode: 'insensitive' },
+          subscriptionTier: 'premium',
+          stripeSubscriptionId: null,
+          id: { not: user.id },
+        },
+      });
+
+      if (taken >= offer.maxRedemptions) {
+        return NextResponse.json(
+          { error: 'That code has already been used.' },
+          { status: 409 }
+        );
+      }
+
+      await prisma.user.update({
+        where: { id: user.id },
+        data: { subscriptionTier: 'premium', subscriptionStatus: 'active' },
+      });
+
+      return NextResponse.json({
+        message: `${offer.label} — Premium unlocked for good. No trial, no card, nothing to renew.`,
+        offer: {
+          slug: offer.slug,
+          label: offer.label,
+          lifetime: true,
+          trialDays: 0,
+          trialRecipeLimit: offer.trialRecipeLimit,
+        },
+      });
+    }
+
     // Re-resolve after writing so the response reflects reality — including
     // the case where the offer is full and they get the standard trial.
     const resolved = await resolvePartnerTrial({
