@@ -92,7 +92,7 @@ export async function POST(request: NextRequest) {
     }
 
     return NextResponse.json({
-      message: `${offer.label} unlocked — ${resolved.trialDays} days free, no card needed.`,
+      message: `${offer.label} unlocked — ${resolved.trialDays} days free, no card to start.`,
       offer: {
         slug: offer.slug,
         label: offer.label,

@@ -58,8 +58,10 @@ export function PartnerWelcome() {
             Thank you, {singular(offer.label)}, for signing up!
           </p>
           <p className="text-gray-700">
-            Enjoy your {singular(offer.label)}-only {offer.trialDays} day free trial —{' '}
-            {offer.trialRecipeLimit} recipes, no credit card, nothing to cancel.
+            Enjoy your {offer.trialDays} day free trial — special, just for{' '}
+            {offer.label}. That&apos;s {offer.trialRecipeLimit} recipes with no card to
+            start. If you want to stay on Premium afterwards you&apos;ll add a card
+            then; otherwise your account just returns to the free plan.
           </p>
           <p className="text-gray-700">
             I&apos;d love any feedback at{' '}

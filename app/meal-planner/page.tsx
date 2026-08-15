@@ -133,7 +133,7 @@ export default function MealPlannerPage() {
                     21 personalized meals a week, tuned to your allergies and preferences —
                     $9.99/mo{' '}
                     {partnerOffer
-                      ? `with ${partnerOffer.trialDays} days free, no card (${partnerOffer.label})`
+                      ? `with ${partnerOffer.trialDays} days free, no card to start (${partnerOffer.label})`
                       : 'with a free 7-day trial'}
                   </p>
                 </div>

@@ -72,12 +72,14 @@ export function PartnerOfferBanner({ className = '' }: { className?: string }) {
       <Gift className="mt-0.5 h-5 w-5 flex-shrink-0 text-emerald-600" />
       <div className="text-left">
         <p className="font-semibold text-emerald-900">
-          {offer.trialDays} days free — no credit card
+          Special, just for {offer.label}: {offer.trialDays} days free
         </p>
         <p className="text-sm text-emerald-800/80">
-          Your <strong>{offer.label}</strong> invite is applied automatically, nothing
-          to type. Includes {offer.trialRecipeLimit} recipes, then your account returns
-          to the free plan. We never take a card, so nothing can charge you.
+          Applied automatically, nothing to type. Includes{' '}
+          {offer.trialRecipeLimit} recipes, and <strong>no card to start</strong>.
+          Staying on Premium after the {offer.trialDays} days does need a card — add
+          one then if you want to continue, or do nothing and your account returns to
+          the free plan.
         </p>
       </div>
     </div>
