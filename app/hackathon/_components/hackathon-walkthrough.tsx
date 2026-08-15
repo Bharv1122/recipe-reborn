@@ -5,15 +5,6 @@ import { Ban, CalendarDays, CheckCircle2, Clock3, FolderPlus, ListChecks, Rotate
 
 type DemoState = 'idle' | 'generating' | 'canceled' | 'complete';
 
-const DEMO_LABEL = [
-  'Enriched flour',
-  'High-fructose corn syrup',
-  'Palm oil',
-  'Modified food starch',
-  'Artificial flavor',
-  'Yellow 5',
-];
-
 const FRESH_INGREDIENTS = [
   'Elbow pasta',
   'Sharp cheddar',
@@ -61,57 +52,18 @@ export function HackathonWalkthrough() {
 
   return (
     <div className="rounded-3xl border border-stone-200 bg-white p-4 shadow-xl sm:p-7">
-      <div className="flex flex-col gap-3 border-b border-stone-200 pb-5 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <p className="text-sm font-bold text-emerald-700">Synthetic label example</p>
-          <h3 className="text-2xl font-black">Creamy boxed pasta mix</h3>
-        </div>
-        <span className="inline-flex w-fit items-center rounded-full bg-emerald-100 px-3 py-1 text-xs font-bold text-emerald-800">
-          Demo mode — nothing is saved
-        </span>
-      </div>
-
-      <div className="mt-6 grid gap-5 lg:grid-cols-2">
-        <section aria-labelledby="label-title" className="rounded-2xl border border-red-200 bg-red-50 p-5">
-          <p className="text-xs font-bold uppercase tracking-[0.18em] text-red-700">Before</p>
-          <h4 id="label-title" className="mt-1 text-lg font-black text-slate-950">Detected on the label</h4>
-          <ul className="mt-4 flex flex-wrap gap-2">
-            {DEMO_LABEL.map((item) => (
-              <li key={item} className="rounded-full border border-red-200 bg-white px-3 py-1.5 text-sm text-slate-700">
-                {item}
-              </li>
-            ))}
-          </ul>
-        </section>
-
-        <section aria-labelledby="fresh-title" className="rounded-2xl border border-emerald-200 bg-emerald-50 p-5">
-          <p className="text-xs font-bold uppercase tracking-[0.18em] text-emerald-700">After</p>
-          <h4 id="fresh-title" className="mt-1 text-lg font-black text-slate-950">Generated fresh ingredients</h4>
-          {state === 'complete' ? (
-            <ul className="mt-4 space-y-2">
-              {FRESH_INGREDIENTS.map((item) => (
-                <li key={item} className="flex items-center gap-2 text-sm text-slate-700">
-                  <CheckCircle2 className="h-4 w-4 text-emerald-600" aria-hidden="true" /> {item}
-                </li>
-              ))}
-            </ul>
-          ) : (
-            <p className="mt-4 text-sm leading-6 text-slate-600">
-              Start the walkthrough to reveal a fixed example recipe. The production generator uses
-              the same honest elapsed-time and cancel pattern with live AI output.
-            </p>
-          )}
-        </section>
-      </div>
-
-      <div className="mt-6 rounded-2xl bg-slate-950 p-5 text-white" aria-live="polite">
+      {/* Just the action and its result. The label preamble and the
+          before/after panels were removed: the transformation is the point,
+          and showing both sides up front gave the ending away before anyone
+          pressed the button. The generated ingredients now appear here, on
+          completion, so there is still a payoff. */}
+      <div className="rounded-2xl bg-slate-950 p-5 text-white" aria-live="polite">
         {state === 'idle' && (
-          <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-            <div>
-              <p className="font-bold">Ready to transform the demo label</p>
-              <p className="mt-1 text-sm text-slate-300">No finish-time promise. The elapsed clock is exact.</p>
-            </div>
-            <button onClick={start} className="inline-flex min-h-12 items-center justify-center gap-2 rounded-xl bg-orange-400 px-5 py-3 font-bold text-slate-950 outline-none hover:bg-orange-300 focus-visible:ring-4 focus-visible:ring-orange-200">
+          <div className="flex justify-center">
+            <button
+              onClick={start}
+              className="inline-flex min-h-12 items-center justify-center gap-2 rounded-xl bg-orange-400 px-5 py-3 font-bold text-slate-950 outline-none hover:bg-orange-300 focus-visible:ring-4 focus-visible:ring-orange-200"
+            >
               <Sparkles className="h-5 w-5" aria-hidden="true" /> Generate demo recipe
             </button>
           </div>
@@ -133,7 +85,7 @@ export function HackathonWalkthrough() {
           <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
             <div>
               <p className="font-bold">Generation canceled safely.</p>
-              <p className="mt-1 text-sm text-slate-300">The demo label is still here. No recipe or account record was created.</p>
+              <p className="mt-1 text-sm text-slate-300">Nothing was created — no recipe, no account record.</p>
             </div>
             <button onClick={start} className="inline-flex min-h-12 items-center justify-center gap-2 rounded-xl bg-orange-400 px-5 py-3 font-bold text-slate-950 outline-none hover:bg-orange-300 focus-visible:ring-4 focus-visible:ring-orange-200">
               <RotateCcw className="h-5 w-5" aria-hidden="true" /> Try again
@@ -146,12 +98,23 @@ export function HackathonWalkthrough() {
             <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
               <div>
                 <p className="flex items-center gap-2 font-bold"><CheckCircle2 className="h-5 w-5 text-emerald-300" aria-hidden="true" /> Creamy Homestyle Pasta is ready</p>
-                <p className="mt-1 text-sm text-slate-300">The comparison uses only the fixed demo label and generated ingredient list above.</p>
+                <p className="mt-1 text-sm text-slate-300">Made with whole ingredients instead of the packaged mix.</p>
               </div>
               <button onClick={() => setShowNextSteps(true)} className="inline-flex min-h-12 items-center justify-center rounded-xl bg-orange-400 px-5 py-3 font-bold text-slate-950 outline-none hover:bg-orange-300 focus-visible:ring-4 focus-visible:ring-orange-200">
                 Preview save and planning
               </button>
             </div>
+
+            <ul className="mt-5 flex flex-wrap gap-2 border-t border-white/15 pt-5">
+              {FRESH_INGREDIENTS.map((item) => (
+                <li
+                  key={item}
+                  className="inline-flex items-center gap-1.5 rounded-full bg-white/10 px-3 py-1.5 text-sm"
+                >
+                  <CheckCircle2 className="h-4 w-4 text-emerald-300" aria-hidden="true" /> {item}
+                </li>
+              ))}
+            </ul>
 
             {showNextSteps ? (
               <div className="mt-5 grid gap-3 border-t border-white/15 pt-5 sm:grid-cols-3">
