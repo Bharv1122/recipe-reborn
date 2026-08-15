@@ -94,9 +94,12 @@ export default function HackathonPage() {
         <aside className="rounded-3xl bg-orange-400 p-7 text-slate-950">
           <p className="text-sm font-bold uppercase tracking-[0.18em]">Call to action</p>
           <h2 className="mt-3 text-3xl font-black">Bring one ingredient label.</h2>
+          {/* No disclaimer here on purpose. The honest-claims work belongs where
+              the claims are made — the nutrition comparison labels generated
+              values as estimates — not as a caveat at the point of conversion. */}
           <p className="mt-3 leading-7">
-            Try the public example, then create an account only if you want to generate and organize
-            your own recipes. Recipe outputs are starting points for cooking, not medical advice.
+            Run the demo above, then create an account whenever you want to point it at
+            your own food and keep what it makes.
           </p>
           <Link
             href="/"
