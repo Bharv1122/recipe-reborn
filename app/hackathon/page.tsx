@@ -1,114 +1,60 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
-import { CheckCircle2, Megaphone, Sparkles, Target, Users } from 'lucide-react';
-import { HackathonWalkthrough } from './_components/hackathon-walkthrough';
 
 export const metadata: Metadata = {
-  title: 'Hackathon Demo | Recipe Reborn',
+  title: 'Walkthrough | Recipe Reborn',
   description:
-    'A judge-ready, no-account walkthrough of Recipe Reborn: processed ingredient label to a fresh recipe plan.',
+    'A recorded walkthrough of Recipe Reborn: a processed ingredient label turned into a fresh recipe.',
 };
 
-const story = [
-  {
-    icon: Target,
-    title: 'Problem',
-    copy: 'Ingredient labels are hard to translate into an achievable homemade alternative. People need a practical starting point, not another list of warnings.',
-  },
-  {
-    icon: Users,
-    title: 'Target user',
-    copy: 'Busy home cooks who want to understand a packaged product and explore a fresh version that fits their preferences and available time.',
-  },
-  {
-    icon: Sparkles,
-    title: 'Unique transformation',
-    copy: 'Recipe Reborn turns label text into a structured recipe, then clearly separates detected label items from the generated fresh ingredient list.',
-  },
-  {
-    icon: Megaphone,
-    title: 'Why now',
-    copy: 'Multimodal AI can finally read labels, reason over substitutions, and return a usable cooking workflow in one focused experience.',
-  },
-];
-
-const channels = [
-  'Short label-to-recipe demos on TikTok, Instagram Reels, and YouTube Shorts',
-  'QR cards and demos with independent grocers, cooking classes, and community kitchens',
-  'Search content for specific packaged-food alternatives and dietary preferences',
-  'Referral moments built around saved recipes, collections, meal plans, and shopping lists',
-];
-
-export default function HackathonPage() {
+/**
+ * /hackathon is the walkthrough video and nothing else.
+ *
+ * The interactive demo card, the pitch cards and the go-to-market section that
+ * used to live here were removed. The URL is kept rather than deleted because
+ * it was already shared publicly — anyone following that link lands on the
+ * video, which is what they came for.
+ */
+export default function WalkthroughPage() {
   return (
-    <main className="min-h-screen overflow-x-hidden bg-gradient-to-b from-emerald-950 via-emerald-900 to-slate-950 text-white">
-      {/* Opens straight into the walkthrough. The intro hero was removed so a
-          judge lands on the demo itself rather than a page about the demo; the
-          problem/user/why-now cards moved below it. */}
-      <section id="walkthrough" className="scroll-mt-6 bg-stone-50 pb-16 pt-10 text-slate-950 sm:pt-14">
-        <div className="mx-auto max-w-6xl px-4 sm:px-6 lg:px-8">
-          <div className="max-w-3xl">
-            <p className="text-sm font-bold uppercase tracking-[0.2em] text-emerald-700">
-              Live demo
-            </p>
-            <h2 className="mt-2 text-3xl font-black sm:text-4xl">
-              Watch a label become dinner
-            </h2>
-            {/* Deliberately no "open the live app" link here — the way out sits
-                after the pitch below, so a visitor sees the case for it before
-                they get the chance to leave. */}
-            <p className="mt-3 text-slate-600">
-              This runs the real flow on a fixed example, so it works the same way every time
-              and nothing here creates an account or saves your data.
-            </p>
-          </div>
-          <div className="mt-8">
-            <HackathonWalkthrough />
-          </div>
-        </div>
-      </section>
+    <main className="min-h-screen bg-gradient-to-b from-emerald-950 via-emerald-900 to-slate-950 text-white">
+      <div className="mx-auto max-w-5xl px-4 py-10 sm:px-6 sm:py-16 lg:px-8">
+        <p className="text-sm font-bold uppercase tracking-[0.24em] text-orange-300">
+          Walkthrough
+        </p>
+        <h1 className="mt-3 text-3xl font-black tracking-tight sm:text-5xl">
+          A label, turned into dinner
+        </h1>
 
-      <section className="mx-auto grid max-w-6xl gap-5 px-4 pb-16 sm:grid-cols-2 sm:px-6 lg:grid-cols-4 lg:px-8">
-        {story.map(({ icon: Icon, title, copy }) => (
-          <article key={title} className="rounded-2xl border border-white/10 bg-white/5 p-5">
-            <Icon className="h-7 w-7 text-orange-300" aria-hidden="true" />
-            <h2 className="mt-4 text-xl font-bold">{title}</h2>
-            <p className="mt-2 text-sm leading-6 text-emerald-50/80">{copy}</p>
-          </article>
-        ))}
-      </section>
-
-      <section className="mx-auto grid max-w-6xl gap-8 px-4 py-16 sm:px-6 lg:grid-cols-[1.1fr_0.9fr] lg:px-8">
-        <div>
-          <p className="text-sm font-bold uppercase tracking-[0.2em] text-orange-300">Go to market</p>
-          <h2 className="mt-2 text-3xl font-black">Show the transformation where cooks already look for ideas.</h2>
-          <ul className="mt-6 space-y-4">
-            {channels.map((channel) => (
-              <li key={channel} className="flex gap-3 text-emerald-50/90">
-                <CheckCircle2 className="mt-0.5 h-5 w-5 shrink-0 text-orange-300" aria-hidden="true" />
-                <span>{channel}</span>
-              </li>
-            ))}
-          </ul>
+        <div className="mt-8 overflow-hidden rounded-2xl border border-white/15 bg-black shadow-2xl">
+          <video
+            className="h-auto w-full"
+            controls
+            preload="metadata"
+            playsInline
+            poster="/recipe-reborn-demo-poster.jpg"
+          >
+            <source src="/recipe-reborn-demo.mp4" type="video/mp4" />
+            Your browser doesn&apos;t support video. Recipe Reborn turns any processed
+            ingredient label into a fresh homemade recipe.
+          </video>
         </div>
-        <aside className="rounded-3xl bg-orange-400 p-7 text-slate-950">
-          <p className="text-sm font-bold uppercase tracking-[0.18em]">Call to action</p>
-          <h2 className="mt-3 text-3xl font-black">Bring one ingredient label.</h2>
-          {/* No disclaimer here on purpose. The honest-claims work belongs where
-              the claims are made — the nutrition comparison labels generated
-              values as estimates — not as a caveat at the point of conversion. */}
-          <p className="mt-3 leading-7">
-            Run the demo above, then create an account whenever you want to point it at
-            your own food and keep what it makes.
-          </p>
+
+        <div className="mt-8 flex flex-col gap-3 sm:flex-row">
           <Link
             href="/"
-            className="mt-6 inline-flex min-h-12 w-full items-center justify-center rounded-xl bg-slate-950 px-5 py-3 font-bold text-white outline-none transition hover:bg-slate-800 focus-visible:ring-4 focus-visible:ring-white/70"
+            className="inline-flex min-h-12 items-center justify-center rounded-xl bg-orange-400 px-6 py-3 font-bold text-slate-950 outline-none transition hover:bg-orange-300 focus-visible:ring-4 focus-visible:ring-orange-200"
           >
             Try Recipe Reborn
           </Link>
-        </aside>
-      </section>
+          <Link
+            href="/finnsters"
+            className="inline-flex min-h-12 items-center justify-center rounded-xl border border-white/30 px-6 py-3 font-semibold outline-none transition hover:bg-white/10 focus-visible:ring-4 focus-visible:ring-white/30"
+          >
+            Finnsters: 30 days free
+          </Link>
+        </div>
+      </div>
     </main>
   );
 }
