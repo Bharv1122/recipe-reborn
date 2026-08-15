@@ -5,15 +5,7 @@ import { prisma } from '@/lib/db';
 import { AI_CHAT_URL, AI_API_KEY, MODEL_FAST } from '@/lib/ai';
 import { extractJsonPayload } from '@/lib/ai-json';
 import { lookupNutrients } from '@/lib/usda';
-
-interface NutritionValues {
-  calories: number;
-  protein: number;
-  carbs: number;
-  fat: number;
-  fiber: number;
-  sodium: number;
-}
+import type { NutritionValues } from '@/lib/nutrition-facts';
 
 interface ParsedIngredient {
   name: string;
@@ -227,7 +219,10 @@ export async function POST(
       return NextResponse.json({ error: 'Recipe not found' }, { status: 404 });
     }
 
-    // If nutrition already exists, return it
+    const servings = Math.max(1, parseInt(recipe.servings || '1') || 1);
+
+    // If nutrition already exists, return it. Older rows did not store the
+    // calculation method, so label that limitation instead of inventing one.
     if (recipe.calories) {
       return NextResponse.json({
         calories: recipe.calories,
@@ -237,15 +232,20 @@ export async function POST(
         fiber: recipe.fiber,
         sodium: recipe.sodium,
         perServing: true,
+        accuracy: 'estimated',
+        basisLabel: `Per recipe serving (recipe makes ${servings})`,
+        sourceLabel: 'Saved estimate • calculation method not recorded',
       });
     }
 
-    const servings = Math.max(1, parseInt(recipe.servings || '1') || 1);
-
     // Hybrid first (real USDA data), pure-AI estimate as fallback
     let nutrition: NutritionValues | null = null;
+    let sourceLabel = 'Estimated from recipe ingredients with Gemini';
     try {
       nutrition = await usdaHybridEstimate(recipe.freshIngredients, servings);
+      if (nutrition) {
+        sourceLabel = 'USDA-backed estimate from parsed ingredient amounts';
+      }
     } catch (hybridError) {
       console.error('USDA hybrid estimate failed:', hybridError);
     }
@@ -280,6 +280,9 @@ export async function POST(
       fiber: updatedRecipe.fiber,
       sodium: updatedRecipe.sodium,
       perServing: true,
+      accuracy: 'estimated',
+      basisLabel: `Per recipe serving (recipe makes ${servings})`,
+      sourceLabel,
     });
   } catch (error) {
     console.error('Error analyzing nutrition:', error);

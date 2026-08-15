@@ -6,9 +6,14 @@ import { Input } from '@/components/ui/input';
 import { Loader2, ScanBarcode, Camera, StopCircle, Search, Upload } from 'lucide-react';
 import toast from 'react-hot-toast';
 import type { Html5Qrcode } from 'html5-qrcode';
+import type { OriginalNutrition } from '@/lib/nutrition-facts';
 
 interface BarcodeScannerProps {
-  onIngredientsExtracted?: (ingredients: string, productName?: string) => void;
+  onIngredientsExtracted?: (
+    ingredients: string,
+    productName?: string,
+    originalNutrition?: OriginalNutrition | null
+  ) => void;
 }
 
 // html5-qrcode renders its camera feed into this element
@@ -140,7 +145,7 @@ export function BarcodeScanner({ onIngredientsExtracted }: BarcodeScannerProps) 
           : 'Product found! Ingredients loaded — ready to generate.',
         { duration: 4000 }
       );
-      onIngredientsExtracted?.(data.ingredients_text, data?.name);
+      onIngredientsExtracted?.(data.ingredients_text, data?.name, data?.originalNutrition ?? null);
     } catch (error: any) {
       console.error('Barcode lookup error:', error);
       toast.error(error?.message || 'Failed to look up barcode');

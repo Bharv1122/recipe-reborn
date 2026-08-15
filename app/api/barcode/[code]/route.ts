@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth-options';
+import { originalNutritionFromOpenFoodFactsProduct } from '@/lib/nutrition-facts';
 
 export const dynamic = 'force-dynamic';
 
@@ -30,7 +31,7 @@ export async function GET(
     }
 
     const response = await fetch(
-      `https://world.openfoodfacts.org/api/v2/product/${code}.json?fields=product_name,ingredients_text`,
+      `https://world.openfoodfacts.org/api/v2/product/${code}.json?fields=product_name,ingredients_text,serving_size,nutriments`,
       {
         headers: {
           // OpenFoodFacts asks API consumers to identify their app
@@ -60,9 +61,13 @@ export async function GET(
       .replace(/_/g, '')
       .trim();
 
+    const productName = String(data.product.product_name ?? '').trim();
+    const originalNutrition = originalNutritionFromOpenFoodFactsProduct(data.product);
+
     return NextResponse.json({
-      name: String(data.product.product_name ?? '').trim(),
+      name: productName,
       ingredients_text: ingredientsText,
+      originalNutrition,
       found: true,
     });
   } catch (error) {

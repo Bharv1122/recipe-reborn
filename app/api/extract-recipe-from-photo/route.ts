@@ -4,6 +4,7 @@ import { authOptions } from '@/lib/auth-options';
 import { AI_CHAT_URL, AI_API_KEY, MODEL_SMART } from '@/lib/ai';
 import { rateLimit } from '@/lib/rate-limit';
 import { extractJsonPayload } from '@/lib/ai-json';
+import { originalNutritionFromLabelScan } from '@/lib/nutrition-facts';
 
 const MAX_IMAGE_BYTES = 8 * 1024 * 1024;
 const ALLOWED_IMAGE_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'image/heic', 'image/heif'];
@@ -84,13 +85,26 @@ Return ONLY a valid JSON object with this exact structure:
   "prepTime": "15 minutes",
   "cookTime": "30 minutes",
   "servings": 4,
-  "dietaryTags": ["vegetarian", "gluten-free", etc]
+  "dietaryTags": ["vegetarian", "gluten-free", etc],
+  "nutritionFacts": {
+    "basisLabel": "the exact serving basis printed on the label, such as Per 1 tray (283 g)",
+    "servingsPerContainer": <number or null>,
+    "calories": <number or null>,
+    "protein": <grams as number or null>,
+    "carbs": <grams as number or null>,
+    "fat": <grams as number or null>,
+    "fiber": <grams as number or null>,
+    "sodium": <milligrams as number or null>
+  } OR null
 }
 
 IMPORTANT RULES:
 - If this is a COMPLETE RECIPE: Extract title, all ingredients with measurements, and step-by-step instructions
 - If this is a PRODUCT/NUTRITION LABEL: Set type to "ingredient_list", extract ALL ingredients from the label (even if the text is small), and leave instructions as empty array
 - For ingredient lists: Be thorough - extract every single ingredient you can see, even preservatives and additives
+- For nutritionFacts: copy ONLY values visibly printed in the image. Never estimate, infer, calculate, or fill a missing nutrient. Use null for anything unreadable or absent.
+- Preserve the printed serving basis in basisLabel. Do not convert the label to a different serving size.
+- Return calories in kcal, protein/carbs/fat/fiber in grams, and sodium in milligrams exactly as printed.
 - Estimate times and servings with reasonable defaults if not visible
 - Infer dietary tags based on ingredients
 - Return ONLY the JSON, no other text`;
@@ -195,6 +209,9 @@ IMPORTANT RULES:
       ? recipeData.dietaryTags
       : [];
 
+    const originalNutrition = originalNutritionFromLabelScan(recipeData.nutritionFacts);
+    delete recipeData.nutritionFacts;
+
     // Set defaults if missing
     recipeData.prepTime = recipeData.prepTime || '15 minutes';
     recipeData.cookTime = recipeData.cookTime || '30 minutes';
@@ -205,7 +222,8 @@ IMPORTANT RULES:
 
     return NextResponse.json({
       ...recipeData,
-      type: extractionType
+      type: extractionType,
+      originalNutrition,
     });
   } catch (error) {
     console.error('Error extracting recipe from photo:', error);
