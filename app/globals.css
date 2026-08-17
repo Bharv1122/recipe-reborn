@@ -68,14 +68,10 @@
   outline-offset: 2px;
 }
 
-/* Colorblind-friendly: the brand background deliberately stays green.
-   The problem this mode solves is the red/green SEMANTIC pair (flagged
-   additive vs fresh ingredient), not the page colour — and the logo artwork
-   has green baked into it and is edge-masked to melt into a green page, so
-   swapping the ground to a neutral leaves it floating as a green blob.
-   Background unchanged; only the two signals move, to amber and blue, which
-   differ in hue AND luminance and so stay distinct under deuteranopia,
-   protanopia and tritanopia alike. */
+/* Colorblind-friendly: keep the brand ground and logo intact, but remap the
+   two semantic signals used in recipe results. Warning/avoid stays amber;
+   fresh/recommended moves to blue. That separates the meanings by hue and
+   luminance for common red-green colour-vision deficiencies. */
 
 /* "Flagged / avoid" signals: red family -> amber */
 :root[data-color-theme='colorblind'] .text-red-500,
@@ -84,6 +80,7 @@
   color: #b45309;
 }
 :root[data-color-theme='colorblind'] .bg-red-50,
+:root[data-color-theme='colorblind'] .bg-red-50\/60,
 :root[data-color-theme='colorblind'] .bg-red-100 {
   background-color: #fef3c7;
 }
@@ -92,13 +89,46 @@
   border-color: #f59e0b;
 }
 
-/* Green is deliberately left alone.
-   An earlier version also remapped the emerald/green families to blue, which
-   recoloured every checkmark, badge and button in the product — brand chrome
-   that carries no red-vs-green meaning — and just looked like a broken blue
-   theme on a green page. Moving only the red signal is enough: amber against
-   green separates on luminance as well as hue, which is exactly what
-   deuteranopia and protanopia need, and the rest of the UI stays itself. */
+/* Fresh / recommended signals: emerald and green -> blue. The logo and page
+   background are images or custom brand tokens, so they remain recognisably
+   Recipe Reborn while the information-bearing colours become distinct. */
+:root[data-color-theme='colorblind'] .text-emerald-500,
+:root[data-color-theme='colorblind'] .text-emerald-600,
+:root[data-color-theme='colorblind'] .text-emerald-700,
+:root[data-color-theme='colorblind'] .text-emerald-800,
+:root[data-color-theme='colorblind'] .text-emerald-900,
+:root[data-color-theme='colorblind'] .text-green-500,
+:root[data-color-theme='colorblind'] .text-green-600,
+:root[data-color-theme='colorblind'] .text-green-700 {
+  color: #1d4ed8;
+}
+:root[data-color-theme='colorblind'] .bg-emerald-50,
+:root[data-color-theme='colorblind'] .bg-emerald-50\/60,
+:root[data-color-theme='colorblind'] .bg-emerald-100,
+:root[data-color-theme='colorblind'] .bg-green-50,
+:root[data-color-theme='colorblind'] .bg-green-100 {
+  background-color: #dbeafe;
+}
+:root[data-color-theme='colorblind'] .border-emerald-200,
+:root[data-color-theme='colorblind'] .border-emerald-300,
+:root[data-color-theme='colorblind'] .border-emerald-600,
+:root[data-color-theme='colorblind'] .border-green-200,
+:root[data-color-theme='colorblind'] .border-green-300 {
+  border-color: #60a5fa;
+}
+:root[data-color-theme='colorblind'] .bg-emerald-500,
+:root[data-color-theme='colorblind'] .bg-emerald-600,
+:root[data-color-theme='colorblind'] .bg-emerald-700,
+:root[data-color-theme='colorblind'] .bg-green-500,
+:root[data-color-theme='colorblind'] .bg-green-600,
+:root[data-color-theme='colorblind'] .bg-green-700 {
+  background-color: #2563eb;
+}
+:root[data-color-theme='colorblind'] .hover\:bg-emerald-700:hover,
+:root[data-color-theme='colorblind'] .hover\:bg-emerald-800:hover,
+:root[data-color-theme='colorblind'] .hover\:bg-green-700:hover {
+  background-color: #1d4ed8;
+}
 
 body {
   background: radial-gradient(
