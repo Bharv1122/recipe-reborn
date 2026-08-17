@@ -1,6 +1,5 @@
 'use client';
 
-import { Button } from '@/components/ui/button';
 import {
   NUTRIENT_FIELDS,
   hasNutritionValues,
@@ -20,8 +19,6 @@ interface NutritionComparisonProps {
   original: OriginalNutrition | null;
   fresh: FreshNutritionEstimate | null;
   isLoading: boolean;
-  canLoadFresh: boolean;
-  onLoadFresh: () => void;
 }
 
 function NutritionCard({
@@ -61,8 +58,6 @@ export function NutritionComparison({
   original,
   fresh,
   isLoading,
-  canLoadFresh,
-  onLoadFresh,
 }: NutritionComparisonProps) {
   const originalReady = Boolean(
     original && !original.reviewRequired && hasNutritionValues(original.values)
@@ -111,25 +106,13 @@ export function NutritionComparison({
             ) : (
               <div className="rounded-xl border border-emerald-200 bg-emerald-50/80 p-4 text-emerald-950">
                 <h4 className="font-semibold">Fresh recipe</h4>
-                <p className="mt-2 text-sm leading-6">
-                  Save this recipe to see its per-serving nutrition estimate.
-                </p>
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={onLoadFresh}
-                  disabled={!canLoadFresh || isLoading}
-                  className="mt-3 min-h-11 border-emerald-700 text-emerald-800 hover:bg-emerald-100"
-                >
-                  {isLoading ? (
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden="true" />
-                  ) : (
-                    <HeartPulse className="mr-2 h-4 w-4" aria-hidden="true" />
-                  )}
-                  Estimate fresh-recipe nutrition
-                </Button>
-                {!canLoadFresh && (
-                  <p className="mt-2 text-xs">Save the recipe first so its estimate can be stored.</p>
+                {isLoading ? (
+                  <p className="mt-2 flex items-center gap-2 text-sm leading-6">
+                    <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
+                    Calculating your per-serving estimate…
+                  </p>
+                ) : (
+                  <p className="mt-2 text-sm leading-6">Your per-serving estimate is unavailable right now.</p>
                 )}
               </div>
             )}

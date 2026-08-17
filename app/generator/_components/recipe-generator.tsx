@@ -74,6 +74,7 @@ export function RecipeGenerator() {
   // Additives found in the ORIGINAL processed ingredients — powers the
   // before/after transformation reveal. Empty for pantry / fresh input.
   const [detectedAdditives, setDetectedAdditives] = useState<DetectedAdditive[]>([]);
+  const [isLabelTransformation, setIsLabelTransformation] = useState(false);
   const [loadingElapsed, setLoadingElapsed] = useState(0);
   const [photoError, setPhotoError] = useState<string | null>(null);
   const [isPhotoDragging, setIsPhotoDragging] = useState(false);
@@ -138,6 +139,34 @@ export function RecipeGenerator() {
         block: 'start',
       });
     }
+  }, [recipe]);
+
+  // Nutrition belongs with a generated recipe. This is deliberately separate
+  // from saving, so browsing a result never creates an unwanted saved recipe.
+  useEffect(() => {
+    if (!recipe) return;
+    const controller = new AbortController();
+    const estimateNutrition = async () => {
+      setNutrition(null);
+      setIsLoadingNutrition(true);
+      try {
+        const response = await fetch('/api/nutrition/estimate', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(recipe),
+          signal: controller.signal,
+        });
+        const data = await response.json().catch(() => null);
+        if (!response.ok) throw new Error(data?.error ?? 'Failed to calculate nutrition');
+        setNutrition(data as FreshNutritionEstimate);
+      } catch (error: any) {
+        if (error?.name !== 'AbortError') toast.error(error?.message ?? 'Failed to calculate nutrition');
+      } finally {
+        if (!controller.signal.aborted) setIsLoadingNutrition(false);
+      }
+    };
+    estimateNutrition();
+    return () => controller.abort();
   }, [recipe]);
 
   // Guest → signup handoff: a visitor who transformed a label on the landing
@@ -286,6 +315,7 @@ export function RecipeGenerator() {
     const effectiveSource = sourceOverride ?? (ingredientsOverride ? 'label' : inputMode);
     if (!dietaryRestriction) {
       setDetectedAdditives(effectiveSource === 'pantry' ? [] : detectAdditives(inputText));
+      setIsLabelTransformation(effectiveSource !== 'pantry');
       if (effectiveSource === 'pantry') setOriginalNutrition(null);
     }
     if (!ingredientsOverride && !dietaryRestriction) {
@@ -367,9 +397,9 @@ export function RecipeGenerator() {
       const recipeId = data?.recipe?.id;
       if (!recipeId) throw new Error('Saved recipe ID was missing');
 
-      toast.success('Recipe saved successfully!');
       setIsSaved(true);
       setSavedRecipeId(recipeId);
+      toast.success('Recipe saved successfully!');
     } catch (error) {
       console.error('Save recipe error:', error);
       toast.error('Failed to save recipe');
@@ -386,6 +416,8 @@ export function RecipeGenerator() {
 
     setIsImporting(true);
     setRecipe(null);
+    setDetectedAdditives([]);
+    setIsLabelTransformation(false);
     setOriginalNutrition(null);
     setIsSaved(false);
     setSavedRecipeId(null);
@@ -544,6 +576,7 @@ export function RecipeGenerator() {
         setIngredients(extractedIngredients);
         // Snapshot the additives on this label for the transformation reveal
         setDetectedAdditives(detectAdditives(extractedIngredients));
+        setIsLabelTransformation(true);
         setIsDemoRun(false);
         clearImage(); // Clear the photo preview
 
@@ -624,27 +657,6 @@ export function RecipeGenerator() {
     setIsSaved(false);
     setSavedRecipeId(null);
     setNutrition(null);
-  };
-
-  const loadNutrition = async () => {
-    if (!savedRecipeId) {
-      toast.error('Save the recipe before calculating nutrition');
-      return;
-    }
-
-    setIsLoadingNutrition(true);
-    try {
-      const response = await fetch(`/api/recipes/${savedRecipeId}/nutrition`, {
-        method: 'POST',
-      });
-      const data = await response.json().catch(() => null);
-      if (!response.ok) throw new Error(data?.error ?? 'Failed to calculate nutrition');
-      setNutrition(data as FreshNutritionEstimate);
-    } catch (error: any) {
-      toast.error(error?.message ?? 'Failed to calculate nutrition');
-    } finally {
-      setIsLoadingNutrition(false);
-    }
   };
 
   const handleSubstituteIngredient = async (index: number, originalIngredient: string, newIngredient: string) => {
@@ -1256,7 +1268,7 @@ export function RecipeGenerator() {
             )}
 
             {/* Truthful transformation reveal: detected source items vs generated output. */}
-            {detectedAdditives.length > 0 && (
+            {isLabelTransformation && (
               <div className="rounded-xl border border-emerald-200 overflow-hidden">
                 <div className="bg-gradient-to-r from-amber-50 via-white to-emerald-50 px-4 py-3 border-b border-emerald-100">
                   <p className="text-center text-sm font-semibold text-gray-700">
@@ -1273,8 +1285,11 @@ export function RecipeGenerator() {
                       </span>
                     </div>
                     <p className="text-2xl font-bold text-red-600 mb-2">
-                      {detectedAdditives.length} flagged item{detectedAdditives.length === 1 ? '' : 's'}
+                      {detectedAdditives.length > 0
+                        ? `${detectedAdditives.length} flagged item${detectedAdditives.length === 1 ? '' : 's'}`
+                        : 'No common additives matched'}
                     </p>
+                    {detectedAdditives.length > 0 ? (
                     <div className="flex flex-wrap gap-1.5">
                       {detectedAdditives.slice(0, 6).map((a) => (
                         <span
@@ -1291,6 +1306,9 @@ export function RecipeGenerator() {
                         </span>
                       )}
                     </div>
+                    ) : (
+                      <p className="text-sm text-red-700">The label is still shown next to its fresh-ingredient replacement.</p>
+                    )}
                   </div>
 
                   {/* Arrow */}
@@ -1345,8 +1363,6 @@ export function RecipeGenerator() {
               original={originalNutrition}
               fresh={nutrition}
               isLoading={isLoadingNutrition}
-              canLoadFresh={Boolean(savedRecipeId)}
-              onLoadFresh={loadNutrition}
             />
 
             {/* Recipe Meta Info */}
