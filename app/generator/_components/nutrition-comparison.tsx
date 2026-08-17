@@ -26,16 +26,12 @@ interface NutritionComparisonProps {
 
 function NutritionCard({
   title,
-  badge,
   basis,
-  source,
   values,
   tone,
 }: {
   title: string;
-  badge: string;
   basis: string;
-  source: string;
   values: NutritionValues;
   tone: 'before' | 'after';
 }) {
@@ -45,12 +41,8 @@ function NutritionCard({
 
   return (
     <div className={`rounded-xl border p-4 ${palette}`}>
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <h4 className="font-semibold">{title}</h4>
-        <span className="rounded-full bg-white px-2.5 py-1 text-xs font-bold shadow-sm">{badge}</span>
-      </div>
-      <p className="mt-2 text-sm font-medium">{basis}</p>
-      <p className="mt-1 text-xs leading-5 opacity-80">Source: {source}</p>
+      <h4 className="font-semibold">{title}</h4>
+      <p className="mt-1 text-xs leading-5 opacity-80">{basis}</p>
       <dl className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-2">
         {NUTRIENT_FIELDS.map((field) => (
           <div key={field.key} className="rounded-lg bg-white px-3 py-2 text-gray-900 shadow-sm">
@@ -82,10 +74,10 @@ export function NutritionComparison({
         <HeartPulse className="mt-0.5 h-5 w-5 shrink-0 text-blue-700" aria-hidden="true" />
         <div className="min-w-0 flex-1">
           <h3 id="nutrition-comparison-title" className="font-semibold text-blue-950">
-            Before and after nutrition
+            Nutrition
           </h3>
           <p className="mt-1 text-sm leading-6 text-blue-900">
-            Original values are copied from a stated source. Fresh-recipe values are estimates. Their serving bases are shown separately so unlike portions are never presented as a calculated improvement.
+            Fresh-recipe values are estimates based on ingredients, portions, brand choices, preparation, and available nutrition data. Actual values can vary.
           </p>
 
           {!original && (
@@ -101,30 +93,26 @@ export function NutritionComparison({
 
           <div className="mt-4 grid gap-3 lg:grid-cols-2">
             {originalReady && original && (
-              <NutritionCard
-                title="Before: original product"
-                badge="Exact source values"
+                <NutritionCard
+                title="Original product"
                 basis={original.basisLabel}
-                source={original.sourceLabel}
                 values={original.values}
                 tone="before"
               />
             )}
 
             {fresh ? (
-              <NutritionCard
-                title="After: generated recipe"
-                badge="Estimated"
+                <NutritionCard
+                title="Fresh recipe"
                 basis={fresh.basisLabel}
-                source={fresh.sourceLabel}
                 values={fresh}
                 tone="after"
               />
             ) : (
               <div className="rounded-xl border border-emerald-200 bg-emerald-50/80 p-4 text-emerald-950">
-                <h4 className="font-semibold">After: generated recipe</h4>
+                <h4 className="font-semibold">Fresh recipe</h4>
                 <p className="mt-2 text-sm leading-6">
-                  Save this recipe, then calculate its per-serving estimate using USDA matches where available and AI only as a fallback.
+                  Save this recipe to see its per-serving nutrition estimate.
                 </p>
                 <Button
                   type="button"
@@ -148,7 +136,7 @@ export function NutritionComparison({
           </div>
 
           <p className="mt-3 text-xs leading-5 text-blue-900">
-            No nutrient delta or percentage claim is calculated unless both sides use the same stated serving basis.
+            Original package values are shown separately when provided. No percentage improvement is claimed when serving sizes differ.
           </p>
         </div>
       </div>
