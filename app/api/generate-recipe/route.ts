@@ -225,8 +225,6 @@ Provide a JSON response with this exact structure:
   "storeBoughtCost": 6.75
 }
 
-For the cost fields, estimate using average US grocery prices: "estimatedCostPerServing" is the cost in USD to make one serving of this recipe from the fresh ingredients, and "storeBoughtCost" is the cost in USD of one serving of the equivalent store-bought/packaged product. Both must be plain numbers (not strings), rounded to 2 decimal places.
-
 Respond with raw JSON only. Do not include code blocks, markdown, or any other formatting.`;
     } else if (dietaryRestriction) {
       prompt = `Transform the following recipe to be ${dietaryRestriction} compliant. Ensure ALL ingredients and instructions align with ${dietaryRestriction} dietary restrictions.
@@ -244,8 +242,6 @@ Provide a JSON response with this exact structure:
   "estimatedCostPerServing": 2.50,
   "storeBoughtCost": 6.75
 }
-
-For the cost fields, estimate using average US grocery prices: "estimatedCostPerServing" is the cost in USD to make one serving of this recipe from the fresh ingredients, and "storeBoughtCost" is the cost in USD of one serving of the equivalent store-bought/packaged product. Both must be plain numbers (not strings), rounded to 2 decimal places.
 
 Respond with raw JSON only. Do not include code blocks, markdown, or any other formatting.`;
     } else if (source === 'pantry') {
@@ -269,8 +265,6 @@ Provide a JSON response with this exact structure:
   "estimatedCostPerServing": 2.50,
   "storeBoughtCost": 6.75
 }
-
-For the cost fields, estimate using average US grocery prices: "estimatedCostPerServing" is the cost in USD of one serving of this recipe, and "storeBoughtCost" is the cost in USD of one serving of the closest equivalent store-bought, takeout, or packaged version of this dish. Both must be plain numbers (not strings), rounded to 2 decimal places.
 
 Respond with raw JSON only. Do not include code blocks, markdown, or any other formatting.`;
     } else {
@@ -301,8 +295,6 @@ Provide a JSON response with this exact structure:
   "estimatedCostPerServing": 2.50,
   "storeBoughtCost": 6.75
 }
-
-For the cost fields, estimate using average US grocery prices: "estimatedCostPerServing" is the cost in USD to make one serving of this recipe from the fresh ingredients, and "storeBoughtCost" is the cost in USD of one serving of the equivalent store-bought/packaged product. Both must be plain numbers (not strings), rounded to 2 decimal places.
 
 Respond with raw JSON only. Do not include code blocks, markdown, or any other formatting.`;
     }
@@ -340,9 +332,9 @@ Respond with raw JSON only. Do not include code blocks, markdown, or any other f
         model: MODEL_SMART,
         messages: messages,
         stream: true,
-        // Gemini 2.5 thinking tokens count against this budget; cost estimation
-        // added in Phase 3e needs the extra headroom or the JSON gets truncated
-        max_tokens: 6000,
+        // Keep the interactive recipe response focused and concise. Cost and
+        // nutrition estimates run after the recipe is visible to the user.
+        max_tokens: 3500,
         reasoning_effort: 'low',
         response_format: { type: 'json_object' },
       }),

@@ -169,6 +169,28 @@ export function RecipeGenerator() {
     return () => controller.abort();
   }, [recipe]);
 
+  useEffect(() => {
+    if (!recipe) return;
+    const controller = new AbortController();
+    const estimateCost = async () => {
+      try {
+        const response = await fetch('/api/recipe-cost/estimate', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(recipe),
+          signal: controller.signal,
+        });
+        const data = await response.json().catch(() => null);
+        if (!response.ok) return;
+        setRecipe((current) => current ? { ...current, ...data } : current);
+      } catch (error: any) {
+        if (error?.name !== 'AbortError') console.error('Recipe cost estimate failed:', error);
+      }
+    };
+    estimateCost();
+    return () => controller.abort();
+  }, [recipe?.title, recipe?.freshIngredients, recipe?.servings]);
+
   // Guest → signup handoff: a visitor who transformed a label on the landing
   // page and then signed up lands here with their ingredients already loaded
   // AND the generation already running — they typed the label and clicked
