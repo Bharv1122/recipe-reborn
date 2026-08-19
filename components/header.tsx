@@ -26,12 +26,12 @@ export function Header() {
             </span>
           </Link>
 
-          <div className="ml-auto mr-2 lg:ml-3">
+          <div className="ml-auto mr-2 xl:ml-3">
             <ColorThemeSelector />
           </div>
 
           {/* Navigation (desktop) */}
-          <nav className="hidden lg:flex items-center space-x-2">
+          <nav className="hidden xl:flex items-center gap-0">
             {status === 'loading' ? (
               <span className="px-3 text-sm text-emerald-50/80" role="status">
                 Checking account…
@@ -39,35 +39,35 @@ export function Header() {
             ) : status === 'authenticated' ? (
               <>
                 <Link href="/generator">
-                  <Button variant="ghost" className="text-white hover:text-emerald-900 hover:bg-white/90">
+                  <Button variant="ghost" className="px-2 text-white hover:text-emerald-900 hover:bg-white/90">
                     Recipe Generator
                   </Button>
                 </Link>
                 <Link href="/recipes">
-                  <Button variant="ghost" className="text-white hover:text-emerald-900 hover:bg-white/90">
+                  <Button variant="ghost" className="px-2 text-white hover:text-emerald-900 hover:bg-white/90">
                     My Recipes
                   </Button>
                 </Link>
                 <Link href="/collections">
-                  <Button variant="ghost" className="text-white hover:text-emerald-900 hover:bg-white/90">
+                  <Button variant="ghost" className="px-2 text-white hover:text-emerald-900 hover:bg-white/90">
                     <BookOpen className="h-4 w-4 mr-2" />
                     Collections
                   </Button>
                 </Link>
                 <Link href="/meal-planner">
-                  <Button variant="ghost" className="text-white hover:text-emerald-900 hover:bg-white/90">
+                  <Button variant="ghost" className="px-2 text-white hover:text-emerald-900 hover:bg-white/90">
                     <Calendar className="h-4 w-4 mr-2" />
                     Meal Planner
                   </Button>
                 </Link>
                 <Link href="/shopping-lists">
-                  <Button variant="ghost" className="text-white hover:text-emerald-900 hover:bg-white/90">
+                  <Button variant="ghost" className="px-2 text-white hover:text-emerald-900 hover:bg-white/90">
                     <ShoppingCart className="h-4 w-4 mr-2" />
                     Shopping
                   </Button>
                 </Link>
                 <Link href="/account">
-                  <Button variant="ghost" className="text-white hover:text-emerald-900 hover:bg-white/90">
+                  <Button variant="ghost" className="px-2 text-white hover:text-emerald-900 hover:bg-white/90">
                     <UserCircle className="h-4 w-4 mr-2" />
                     Account
                   </Button>
@@ -75,7 +75,7 @@ export function Header() {
                 <Button
                   variant="ghost"
                   onClick={() => signOut({ callbackUrl: '/' })}
-                  className="text-white hover:text-red-200 hover:bg-red-900/30"
+                  className="px-2 text-white hover:text-red-200 hover:bg-red-900/30"
                 >
                   <LogOut className="h-4 w-4 mr-2" />
                   Logout
@@ -104,7 +104,7 @@ export function Header() {
           </nav>
 
           {/* Navigation (mobile) */}
-          <div className="lg:hidden">
+          <div className="xl:hidden">
             <MobileNav authStatus={status} />
           </div>
         </div>

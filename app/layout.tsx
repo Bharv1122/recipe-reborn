@@ -7,8 +7,7 @@ import { Providers } from './providers';
 import { Header } from '@/components/header';
 import { Toaster } from 'react-hot-toast';
 import { SrcCapture } from './_components/src-capture';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/auth-options';
+import { getVerifiedServerSession } from '@/lib/verified-session';
 
 const inter = Inter({ subsets: ['latin'] });
 
@@ -100,7 +99,7 @@ export default async function RootLayout({
 }: Readonly<{
   children: React.ReactNode;
 }>) {
-  const session = await getServerSession(authOptions);
+  const { session, invalidSession } = await getVerifiedServerSession();
 
   return (
     <html lang="en" suppressHydrationWarning>
@@ -141,7 +140,7 @@ export default async function RootLayout({
             }
           } catch (error) {}`}
         </Script>
-        <Providers session={session}>
+        <Providers session={session} invalidSession={invalidSession}>
           <SrcCapture />
           <Header />
           <main>{children}</main>

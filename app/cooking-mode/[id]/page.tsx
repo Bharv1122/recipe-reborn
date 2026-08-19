@@ -1,5 +1,4 @@
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/auth-options';
+import { getVerifiedServerSession } from '@/lib/verified-session';
 import { redirect } from 'next/navigation';
 import { prisma } from '@/lib/db';
 import { CookingModeClient } from './_components/cooking-mode-client';
@@ -21,10 +20,10 @@ export default async function CookingModePage({
 }: {
   params: { id: string };
 }) {
-  const session = await getServerSession(authOptions);
+  const { session, invalidSession } = await getVerifiedServerSession();
 
   if (!session?.user?.id) {
-    redirect('/login');
+    redirect(invalidSession ? '/login?error=SessionExpired' : '/login');
   }
 
   const recipe = await prisma.recipe.findFirst({

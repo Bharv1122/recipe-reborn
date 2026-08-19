@@ -1,14 +1,13 @@
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/auth-options';
+import { getVerifiedServerSession } from '@/lib/verified-session';
 import { redirect } from 'next/navigation';
 import { RecipeGenerator } from './_components/recipe-generator';
 import { PartnerWelcome } from '@/app/_components/partner-welcome';
 
 export default async function GeneratorPage() {
-  const session = await getServerSession(authOptions);
+  const { session, invalidSession } = await getVerifiedServerSession();
 
   if (!session) {
-    redirect('/login');
+    redirect(invalidSession ? '/login?error=SessionExpired' : '/login');
   }
 
   return (

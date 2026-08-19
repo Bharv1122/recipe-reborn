@@ -2,15 +2,14 @@ import Link from 'next/link';
 import Image from 'next/image';
 import { Button } from '@/components/ui/button';
 import { Sparkles, Heart, Leaf } from 'lucide-react';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/auth-options';
+import { getVerifiedServerSession } from '@/lib/verified-session';
 import { GuestScan } from './_components/guest-scan';
 import { LandingDemo } from './_components/landing-demo';
 import { SUPPORT_EMAIL, SUPPORT_MAILTO } from '@/lib/support';
 import { PartnerOfferBanner } from './_components/partner-offer-banner';
 
 export default async function HomePage() {
-  const session = await getServerSession(authOptions);
+  const { session } = await getVerifiedServerSession();
 
   return (
     <div className="min-h-screen">

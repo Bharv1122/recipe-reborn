@@ -5,7 +5,7 @@ import Image from 'next/image';
 export default function LoginPage({
   searchParams,
 }: {
-  searchParams?: { callbackUrl?: string };
+  searchParams?: { callbackUrl?: string; error?: string };
 }) {
   return (
     <div className="min-h-screen flex items-center justify-center py-12 px-4 sm:px-6 lg:px-8">
@@ -28,6 +28,14 @@ export default function LoginPage({
             Sign in to your account to continue
           </p>
         </div>
+        {searchParams?.error === 'SessionExpired' && (
+          <p
+            role="status"
+            className="rounded-lg border border-amber-300/70 bg-amber-50 px-4 py-3 text-center text-sm font-medium text-amber-900"
+          >
+            Your previous session is no longer available. Sign in again to continue.
+          </p>
+        )}
         <LoginForm callbackUrl={searchParams?.callbackUrl} />
         <div className="text-center text-sm">
           <span className="text-emerald-50/90">Don't have an account? </span>
