@@ -42,6 +42,28 @@ export function LandingDemo() {
         </p>
       </div>
 
+      <div className="mx-auto mb-14 w-full max-w-3xl">
+        <h3 className="mb-4 text-center text-2xl font-bold text-white drop-shadow-sm">
+          Meet Chef Cooper &amp; Riker
+        </h3>
+        <div className="overflow-hidden rounded-2xl border border-white/20 bg-black shadow-2xl">
+          <video
+            controls
+            preload="metadata"
+            playsInline
+            poster="/recipe-reborn-chef-cooper-riker-poster.jpg"
+            className="block h-auto w-full"
+          >
+            <source src="/recipe-reborn-chef-cooper-riker.mp4" type="video/mp4" />
+            Your browser doesn&apos;t support video. Chef Cooper and Riker use Recipe
+            Reborn to turn packaged food into a fresh meal.
+          </video>
+        </div>
+        <p className="mt-3 text-center text-sm text-emerald-50/80">
+          Chef Cooper and Riker put Recipe Reborn to work.
+        </p>
+      </div>
+
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 items-center">
         {/* Animated phone demo */}
         <div className="flex justify-center">
