@@ -38,7 +38,12 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Photo analysis is temporarily unavailable.' }, { status: 503 });
     }
 
-    const formData = await request.formData();
+    let formData: FormData;
+    try {
+      formData = await request.formData();
+    } catch {
+      return NextResponse.json({ error: 'Upload photos using the photo picker.' }, { status: 400 });
+    }
     const images = formData.getAll('images').filter((entry): entry is File => typeof entry !== 'string');
     const rawLocations = formData.getAll('locations').map(String);
 
