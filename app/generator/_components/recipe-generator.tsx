@@ -19,6 +19,7 @@ import { NutritionComparison, type FreshNutritionEstimate } from './nutrition-co
 import { detectAdditives, type DetectedAdditive } from '@/lib/additives';
 import { EXAMPLE_LABEL } from '@/lib/example-label';
 import type { OriginalNutrition } from '@/lib/nutrition-facts';
+import { trackFunnelEvent } from '@/lib/funnel-analytics';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -54,7 +55,13 @@ const dietaryButtons: DietaryButton[] = [
   { label: 'Make it Low-Carb', value: 'low-carb' },
 ];
 
-export function RecipeGenerator() {
+interface RecipeGeneratorProps {
+  savedRecipeCount?: number;
+  recentIngredients?: string[];
+  daysSinceLastRecipe?: number | null;
+}
+
+export function RecipeGenerator({ savedRecipeCount = 0, recentIngredients = [], daysSinceLastRecipe = null }: RecipeGeneratorProps) {
   const [ingredients, setIngredients] = useState('');
   const [recipeUrl, setRecipeUrl] = useState('');
   const [recipe, setRecipe] = useState<Recipe | null>(null);
@@ -275,7 +282,10 @@ export function RecipeGenerator() {
             continue;
           }
 
-          if (parsed.status === 'completed' && parsed.result) return parsed.result;
+          if (parsed.status === 'completed' && parsed.result) {
+            void trackFunnelEvent('recipe_generated');
+            return parsed.result;
+          }
           if (parsed.status === 'error') {
             throw new Error(parsed.message ?? 'Generation failed');
           }
@@ -776,6 +786,38 @@ export function RecipeGenerator() {
 
   return (
     <div className="space-y-8 overflow-x-hidden">
+      {(savedRecipeCount === 1 || recentIngredients.length > 0 || (daysSinceLastRecipe ?? 0) >= 3) && (
+        <section className="rounded-2xl border border-orange-200 bg-white p-4 shadow-sm sm:p-5">
+          <h2 className="text-lg font-bold text-gray-900">
+            {(daysSinceLastRecipe ?? 0) >= 3 ? 'Welcome back — ready for something fresh?' : savedRecipeCount === 1 ? 'Make your second recipe' : 'Pick up where you left off'}
+          </h2>
+          <p className="mt-1 text-sm text-gray-600">
+            Reuse a recent ingredient list or start with something new. Nothing is saved until you choose Save.
+          </p>
+          {recentIngredients.length > 0 && (
+            <div className="mt-3">
+              <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">Recently viewed ingredients</p>
+              <div className="mt-2 flex flex-wrap gap-2">
+                {recentIngredients.map((item) => (
+                  <button
+                    key={item}
+                    type="button"
+                    onClick={() => {
+                      setIngredients(item);
+                      setInputMode('label');
+                      setActiveTab('generate');
+                    }}
+                    className="max-w-full truncate rounded-full border border-orange-200 bg-orange-50 px-3 py-2 text-sm font-medium text-orange-800 hover:bg-orange-100"
+                    title={item}
+                  >
+                    {item.length > 52 ? `${item.slice(0, 52)}…` : item}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+        </section>
+      )}
       <section
         aria-labelledby="guided-demo-title"
         className="rounded-2xl border border-emerald-200 bg-gradient-to-br from-emerald-50 via-white to-orange-50 p-4 sm:p-6 shadow-sm"
@@ -1527,6 +1569,21 @@ export function RecipeGenerator() {
                 </p>
               </div>
             </div>
+
+            <section className="rounded-xl border border-orange-200 bg-orange-50 p-4 sm:flex sm:items-center sm:justify-between sm:gap-4">
+              <div>
+                <h3 className="font-semibold text-orange-950">Cooking for a dog too?</h3>
+                <p className="mt-1 text-sm text-orange-900">
+                  Cheffo Doggo calculates dog-safe calories, portions, and weekly batch amounts from a dog&rsquo;s profile.
+                </p>
+              </div>
+              <a
+                href="https://cheffodoggo.com/?src=recipe-reborn"
+                className="mt-3 inline-flex min-h-11 shrink-0 items-center justify-center gap-2 rounded-lg bg-orange-600 px-4 py-2 text-sm font-semibold text-white hover:bg-orange-700 sm:mt-0"
+              >
+                Try Cheffo Doggo <ArrowRight className="h-4 w-4" aria-hidden="true" />
+              </a>
+            </section>
 
             {isSaved && (
               <section aria-labelledby="recipe-next-steps" className="rounded-xl border border-emerald-200 bg-emerald-50 p-4">

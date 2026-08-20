@@ -265,3 +265,15 @@ model ShoppingListItem {
   @@index([category])
   @@index([checked])
 }
+
+// Privacy-safe product funnel counts. No user ID, email, recipe contents, or
+// raw network identifiers are stored here.
+model FunnelEvent {
+  id        String   @id @default(cuid())
+  eventName String
+  path      String?
+  source    String?
+  createdAt DateTime @default(now())
+
+  @@index([eventName, createdAt])
+}

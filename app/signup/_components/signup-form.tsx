@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { signIn } from 'next-auth/react';
 import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
@@ -9,6 +9,7 @@ import { Label } from '@/components/ui/label';
 import { Card, CardContent } from '@/components/ui/card';
 import { Loader2, Mail, Lock, Eye, EyeOff, Ticket } from 'lucide-react';
 import toast from 'react-hot-toast';
+import { trackFunnelEvent } from '@/lib/funnel-analytics';
 
 export function SignupForm() {
   const router = useRouter();
@@ -16,7 +17,12 @@ export function SignupForm() {
   const [password, setPassword] = useState('');
   const [code, setCode] = useState('');
   const [showPassword, setShowPassword] = useState(false);
+  const [showCommunityCode, setShowCommunityCode] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+
+  useEffect(() => {
+    void trackFunnelEvent('signup_viewed');
+  }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -59,6 +65,8 @@ export function SignupForm() {
         toast.error(data?.error ?? 'Something went wrong');
         return;
       }
+
+      await trackFunnelEvent('signup_completed');
 
       toast.success('Account created successfully!');
 
@@ -132,24 +140,30 @@ export function SignupForm() {
               </button>
             </div>
           </div>
-          {/* Optional, and last, so it never slows down an ordinary signup —
-              but present, because the code is the whole point for a Finnster. */}
-          <div className="space-y-2">
-            <Label htmlFor="code" className="flex items-center gap-2">
-              <Ticket className="h-4 w-4 text-emerald-600" />
-              Community code <span className="text-gray-400">(optional)</span>
-            </Label>
-            <Input
-              id="code"
-              value={code}
-              onChange={(e) => setCode(e?.target?.value ?? '')}
-              placeholder="e.g. Finnsters"
-              autoComplete="off"
-              autoCapitalize="none"
-              spellCheck={false}
-              disabled={isLoading}
-            />
-          </div>
+          <button
+            type="button"
+            onClick={() => setShowCommunityCode((current) => !current)}
+            className="flex min-h-11 w-full items-center justify-center gap-2 rounded-lg border border-emerald-200 bg-emerald-50 px-4 text-sm font-medium text-emerald-800 hover:bg-emerald-100"
+            aria-expanded={showCommunityCode}
+          >
+            <Ticket className="h-4 w-4" />
+            Have a community code?
+          </button>
+          {showCommunityCode && (
+            <div className="space-y-2">
+              <Label htmlFor="code">Community code</Label>
+              <Input
+                id="code"
+                value={code}
+                onChange={(e) => setCode(e?.target?.value ?? '')}
+                placeholder="e.g. Finnsters"
+                autoComplete="off"
+                autoCapitalize="none"
+                spellCheck={false}
+                disabled={isLoading}
+              />
+            </div>
+          )}
           <Button
             type="submit"
             className="w-full bg-emerald-600 hover:bg-emerald-700 text-white"

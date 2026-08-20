@@ -19,6 +19,7 @@ import { detectAdditives, type DetectedAdditive } from '@/lib/additives';
 import { EXAMPLE_LABEL as EXAMPLE } from '@/lib/example-label';
 import { downscaleImage } from '@/lib/downscale-image';
 import { TransformProgress } from './transform-progress';
+import { trackFunnelEvent } from '@/lib/funnel-analytics';
 
 interface GuestRecipe {
   title: string;
@@ -102,6 +103,7 @@ export function GuestScan() {
         return;
       }
       setRecipe(data.recipe);
+      void trackFunnelEvent('preview_started');
     } catch {
       setWallMessage('Something went wrong — please try again.');
     } finally {

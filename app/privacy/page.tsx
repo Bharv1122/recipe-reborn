@@ -133,6 +133,9 @@ export default function PrivacyPage() {
             <p className="text-gray-700 leading-relaxed">
               We use cookies and similar tracking technologies to provide functionality and improve your experience. For detailed information, please see our <Link href="/cookies" className="text-emerald-600 hover:underline">Cookie Policy</Link>.
             </p>
+            <p className="mt-3 text-gray-700 leading-relaxed">
+              We count a small set of product steps, such as preview started, signup completed, preferences completed, and recipe generated. These funnel events store only the event name, page, acquisition source, and time; they do not include email, recipe contents, or raw IP addresses. Local storage remembers the time of your last visit so we can count a return after at least 24 hours.
+            </p>
           </section>
 
           <section>

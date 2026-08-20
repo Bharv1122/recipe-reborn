@@ -21,6 +21,7 @@ import {
   UtensilsCrossed,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
+import { trackFunnelEvent } from '@/lib/funnel-analytics';
 import Link from 'next/link';
 import { AuthenticatedPageLoading, SessionRequiredState } from '@/components/authenticated-page-state';
 
@@ -105,6 +106,7 @@ export default function AccountPage() {
         const prefs = await response.json();
         setAllergies((prefs.allergies || []).join(', '));
         setDislikes((prefs.dislikedIngredients || []).join(', '));
+        await trackFunnelEvent('profile_completed');
         toast.success('Food preferences saved — all new recipes will respect them');
       } else {
         toast.error('Failed to save preferences');

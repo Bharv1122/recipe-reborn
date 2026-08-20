@@ -2,12 +2,14 @@ import type { Metadata } from 'next';
 import { Inter } from 'next/font/google';
 import Script from 'next/script';
 import { Analytics } from '@vercel/analytics/next';
+import { SpeedInsights } from '@vercel/speed-insights/next';
 import './globals.css';
 import { Providers } from './providers';
 import { Header } from '@/components/header';
 import { Toaster } from 'react-hot-toast';
 import { SrcCapture } from './_components/src-capture';
 import { getVerifiedServerSession } from '@/lib/verified-session';
+import { FunnelVisitTracker } from './_components/funnel-visit-tracker';
 
 const inter = Inter({ subsets: ['latin'] });
 
@@ -142,11 +144,13 @@ export default async function RootLayout({
         </Script>
         <Providers session={session} invalidSession={invalidSession}>
           <SrcCapture />
+          <FunnelVisitTracker />
           <Header />
           <main>{children}</main>
           <Toaster position="top-center" />
         </Providers>
         <Analytics />
+        <SpeedInsights />
 
         {/* Google Analytics - only loads if GA_ID is set */}
         {GA_ID && (
