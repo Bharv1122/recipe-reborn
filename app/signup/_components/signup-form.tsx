@@ -156,7 +156,7 @@ export function SignupForm() {
                 id="code"
                 value={code}
                 onChange={(e) => setCode(e?.target?.value ?? '')}
-                placeholder="e.g. Finnsters"
+                placeholder="Enter community code"
                 autoComplete="off"
                 autoCapitalize="none"
                 spellCheck={false}

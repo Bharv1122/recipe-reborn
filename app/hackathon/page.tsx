@@ -47,12 +47,6 @@ export default function WalkthroughPage() {
           >
             Try Recipe Reborn
           </Link>
-          <Link
-            href="/finnsters"
-            className="inline-flex min-h-12 items-center justify-center rounded-xl border border-white/30 px-6 py-3 font-semibold outline-none transition hover:bg-white/10 focus-visible:ring-4 focus-visible:ring-white/30"
-          >
-            Finnsters: 30 days free
-          </Link>
         </div>
       </div>
     </main>

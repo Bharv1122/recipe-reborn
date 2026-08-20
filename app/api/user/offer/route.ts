@@ -15,8 +15,7 @@ export const dynamic = 'force-dynamic';
  * number on the pricing page instead of the generic 7 days.
  *
  * `authenticated` distinguishes "this account definitively has no offer" from
- * "I could not determine anything". Only the former should clear a banner the
- * client already decided to show from its invite link.
+ * "I could not determine anything".
  */
 const UNKNOWN = {
   authenticated: false,
@@ -34,8 +33,7 @@ export async function GET() {
   try {
     const session = await getServerSession(authOptions);
 
-    // A signed-out visitor holding a valid invite link must still see the
-    // banner, so this is "unknown", not "no offer".
+    // Signed-out visitors cannot have a code-derived account offer yet.
     if (!session?.user?.id) {
       return NextResponse.json(UNKNOWN);
     }
@@ -46,8 +44,7 @@ export async function GET() {
     });
 
     // Session JWT with no matching row — a deleted account, or a token issued
-    // before a database restore. We determined nothing, so say so rather than
-    // clearing a banner the visitor's invite link legitimately earned.
+    // before a database restore. We determined nothing, so report unknown.
     if (!user) {
       return NextResponse.json(UNKNOWN);
     }

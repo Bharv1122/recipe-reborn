@@ -7,6 +7,7 @@
     "start": "next start",
     "lint": "next lint",
     "verify:meal-plan": "tsx scripts/verify-meal-plan-safety.ts",
+    "verify:partner-code": "tsx scripts/verify-partner-code.ts",
     "postinstall": "prisma generate"
   },
   "prisma": {

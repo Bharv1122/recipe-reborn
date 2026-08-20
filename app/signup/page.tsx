@@ -2,7 +2,6 @@ import { SignupForm } from './_components/signup-form';
 import Link from 'next/link';
 import Image from 'next/image';
 import { Sparkles } from 'lucide-react';
-import { PartnerOfferBanner } from '@/app/_components/partner-offer-banner';
 
 export default function SignupPage({
   searchParams,
@@ -37,10 +36,6 @@ export default function SignupPage({
               : 'Save your fresh recipes, track your savings, cook real food.'}
           </p>
         </div>
-
-        {/* Community members arrive here straight from the partner link, so the
-            offer has to be visible before they decide to create an account. */}
-        <PartnerOfferBanner className="mb-0" />
 
         {fromUnlock && (
           <div className="rounded-xl border border-emerald-300/60 bg-white/10 backdrop-blur px-4 py-3 text-center">

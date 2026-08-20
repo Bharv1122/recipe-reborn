@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import bcrypt from 'bcryptjs';
 import { prisma } from '@/lib/db';
 import { rateLimit, getClientIp } from '@/lib/rate-limit';
-import { findPartnerOffer, isOfferLive, normalizeSource } from '@/lib/partner-offers';
+import { isOfferLive, resolveSignupAttribution } from '@/lib/partner-offers';
 
 export async function POST(request: NextRequest) {
   try {
@@ -57,17 +57,12 @@ export async function POST(request: NextRequest) {
 
     const hashedPassword = await bcrypt.hash(password, 12);
 
-    // Optional first-touch attribution from ?src= links (cards, socials).
-    // Normalized to lowercase so ?src=Finnsters and ?src=finnsters are one
-    // population — the partner redemption cap counts on this.
-    //
-    // A typed community code wins over a passive ?src: someone who deliberately
-    // entered "Finnsters" has told us more than a stale link parameter did.
-    // Only a recognised code overrides, so a typo cannot wipe real attribution.
-    const typedOffer = findPartnerOffer(typeof code === 'string' ? code : null);
-    const signupSource = typedOffer
-      ? typedOffer.slug
-      : normalizeSource(typeof src === 'string' ? src : null);
+    // Community offers are code-only. Campaign links still provide ordinary
+    // attribution, but a URL such as ?src=Finnsters cannot grant the trial.
+    const { typedOffer, signupSource } = resolveSignupAttribution(
+      typeof code === 'string' ? code : null,
+      typeof src === 'string' ? src : null,
+    );
 
     // A lifetime comp typed at signup lands the account on Premium straight
     // away, so they never see the free tier at all. Capacity is checked here

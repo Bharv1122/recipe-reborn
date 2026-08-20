@@ -13,11 +13,9 @@ const INVALID = 'That code is not recognised. Check the spelling and try again.'
 /**
  * Redeem a community code on an existing account.
  *
- * The code is stored in User.signupSource, the same field the invite links
- * populate — typing "Finnsters" and arriving via the Finnsters link mean the
- * same thing, so they should not be two separate mechanisms. Entitlement is
- * still recomputed server-side at checkout; this only records which community
- * the account belongs to.
+ * The typed code is stored in User.signupSource. URL parameters never populate
+ * a community offer. Entitlement is recomputed server-side at checkout; this
+ * endpoint only records which code the account redeemed.
  */
 export async function POST(request: NextRequest) {
   try {

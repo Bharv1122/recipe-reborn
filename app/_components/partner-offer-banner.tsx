@@ -12,14 +12,9 @@ import {
 /**
  * Resolves the visitor's partner offer for display.
  *
- * Two sources, because the offer matters at two different moments:
- *  - localStorage rr_src covers someone who just arrived on the community link
- *    and has not signed up yet — the moment that actually decides conversion.
- *  - /api/user/offer covers a logged-in member whose browser storage was since
- *    cleared, and is the value checkout will really use.
- *
- * The API answer wins when present. Neither is trusted for entitlement:
- * create-checkout-session re-resolves everything server-side.
+ * Only the signed-in account can supply an offer. URL parameters and browser
+ * storage are intentionally ignored; create-checkout-session re-resolves the
+ * same code-derived account value server-side.
  */
 export function usePartnerOffer(): PartnerOffer | null {
   const [offer, setOffer] = useState<PartnerOffer | null>(null);
@@ -27,22 +22,12 @@ export function usePartnerOffer(): PartnerOffer | null {
   useEffect(() => {
     let cancelled = false;
 
-    try {
-      const stored = localStorage.getItem('rr_src');
-      const local = findPartnerOffer(stored);
-      if (local && isOfferLive(local)) setOffer(local);
-    } catch {
-      // localStorage unavailable (private mode) — fall through to the API
-    }
-
     fetch('/api/user/offer')
       .then((r) => (r.ok ? r.json() : null))
       .then((data) => {
         if (cancelled || !data) return;
 
-        // Only a signed-in answer is authoritative. When it is, trust it in
-        // both directions: an account past the cap or after the end date must
-        // stop being shown an offer it would not actually receive.
+        // Only a signed-in answer is authoritative.
         if (!data.authenticated) return;
 
         const fromApi = findPartnerOffer(data?.offer?.slug);
@@ -84,11 +69,8 @@ export function PartnerOfferBanner({
             : `Special, just for ${offer.label}: ${offer.trialDays} days free`}
         </p>
         <p className="text-sm text-emerald-800/80">
-          {/* Deliberately does not say "applied automatically" — that is only
-              true of the invite link; someone who typed the code sees this
-              same banner. Payment is not mentioned at all: the trial involves
-              no card and nothing charges at the end, so there is nothing to
-              warn about. */}
+          {/* Payment is not mentioned because the trial involves no card and
+              nothing charges at the end. */}
           {offer.lifetime ? (
             <>
               Full Premium — {offer.trialRecipeLimit} recipes a month, meal plans,

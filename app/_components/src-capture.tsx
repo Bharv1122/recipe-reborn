@@ -12,20 +12,13 @@ export function SrcCapture() {
     try {
       const raw = new URLSearchParams(window.location.search).get('src');
       const src = normalizeSource(raw);
-      if (!src) return;
+      // Community offers are deliberately code-only. Do not retain a known
+      // offer name from the URL, even as attribution, because entitlement is
+      // derived from signupSource on the server.
+      if (!src || findPartnerOffer(src)) return;
 
       const existing = localStorage.getItem('rr_src');
-
-      // First touch wins for ordinary channels, but a partner invite always
-      // wins: someone who browsed the site once weeks ago and then follows a
-      // community link has genuinely been invited, and silently withholding
-      // the offer after showing them the link would be worse than losing the
-      // original attribution.
-      const isInvite = Boolean(findPartnerOffer(src));
-
-      if (!existing || (isInvite && existing !== src)) {
-        localStorage.setItem('rr_src', src);
-      }
+      if (!existing) localStorage.setItem('rr_src', src);
     } catch {
       // localStorage unavailable (private mode) — attribution is best-effort
     }

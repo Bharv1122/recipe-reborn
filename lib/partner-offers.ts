@@ -1,21 +1,17 @@
 /**
  * Extended trials for specific communities we partner with.
  *
- * These key off the existing first-touch attribution (?src=… → localStorage →
- * User.signupSource), so a partner link needs no new URL parameter and no new
- * database column. Crucially the offer is resolved SERVER-SIDE from the stored
- * account record at checkout time, never from anything the client sends — so a
- * visitor cannot award themselves a longer trial by editing a request.
- *
- * To add a community: add an entry here and hand them
- * https://recipereborn.com/?src=<slug>
+ * Members type a code on the signup or pricing page. A valid code is stored in
+ * User.signupSource, then resolved SERVER-SIDE at checkout time. URL parameters
+ * never grant an offer, so sharing an ordinary campaign link cannot unlock a
+ * trial accidentally.
  */
 
-/** Trial length for everyone who doesn't arrive through a partner link. */
+/** Trial length for everyone who has not redeemed a community code. */
 export const DEFAULT_TRIAL_DAYS = 7;
 
 export interface PartnerOffer {
-  /** Matches ?src=<slug> and the value stored on User.signupSource. */
+  /** Matches the typed code and the value stored on User.signupSource. */
   slug: string;
   /** Shown to the visitor so the offer is visible, not a hidden surprise. */
   label: string;
@@ -65,8 +61,8 @@ export interface PartnerOffer {
 
 export const PARTNER_OFFERS: PartnerOffer[] = [
   {
-    // The community calls itself the Finnsters, so that is the code in the
-    // link. Matching is case-insensitive — ?src=Finnsters works too.
+    // The community calls itself the Finnsters, so that is the typed code.
+    // Matching is case-insensitive.
     slug: 'finnsters',
     label: 'Finnsters',
     trialDays: 30,
@@ -96,9 +92,8 @@ export const PARTNER_OFFERS: PartnerOffer[] = [
 /**
  * The single normalization rule for attribution values.
  *
- * ?src=Finnsters and ?src=finnsters have to end up as one value, or the
- * redemption cap counts two separate populations and never fires. Applied at
- * signup so everything downstream compares like with like.
+ * Codes and ordinary acquisition sources are normalized before storage so
+ * matching and redemption limits remain case-insensitive.
  */
 export function normalizeSource(raw: string | null | undefined): string | null {
   if (typeof raw !== 'string') return null;
@@ -110,6 +105,25 @@ export function findPartnerOffer(slug: string | null | undefined): PartnerOffer 
   const normalized = normalizeSource(slug);
   if (!normalized) return null;
   return PARTNER_OFFERS.find((o) => o.slug === normalized) ?? null;
+}
+
+/**
+ * Resolve signup attribution without allowing a URL source to redeem an offer.
+ * Ordinary sources such as `fb` and `card` remain useful for analytics, while
+ * `?src=Finnsters` is ignored unless Finnsters was also typed in the code box.
+ */
+export function resolveSignupAttribution(
+  code: string | null | undefined,
+  rawSource: string | null | undefined,
+): { typedOffer: PartnerOffer | null; signupSource: string | null } {
+  const typedOffer = findPartnerOffer(code);
+  if (typedOffer) return { typedOffer, signupSource: typedOffer.slug };
+
+  const source = normalizeSource(rawSource);
+  return {
+    typedOffer: null,
+    signupSource: source && !findPartnerOffer(source) ? source : null,
+  };
 }
 
 /** An offer past its end date is inert — the link keeps working, at 7 days. */
