@@ -72,6 +72,7 @@ model User {
   collections   Collection[]
   mealPlans     MealPlan[]
   shoppingLists ShoppingList[]
+  pantryInventory PantryInventory?
 }
 
 model VerificationToken {
@@ -264,6 +265,17 @@ model ShoppingListItem {
   @@index([shoppingListId])
   @@index([category])
   @@index([checked])
+}
+
+model PantryInventory {
+  id         String   @id @default(cuid())
+  userId     String   @unique
+  items      Json
+  reviewedAt DateTime
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 }
 
 // Privacy-safe product funnel counts. No user ID, email, recipe contents, or

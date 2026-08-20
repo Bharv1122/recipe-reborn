@@ -14,6 +14,7 @@ import { VoiceChat } from './voice-chat';
 import { BarcodeScanner } from './barcode-scanner';
 import { PantryCheckDialog } from './pantry-check-dialog';
 import { PantryIdeaCard } from './pantry-idea-card';
+import { PantryPhotoInventory } from './pantry-photo-inventory';
 import { OriginalNutritionForm } from './original-nutrition-form';
 import { NutritionComparison, type FreshNutritionEstimate } from './nutrition-comparison';
 import { detectAdditives, type DetectedAdditive } from '@/lib/additives';
@@ -928,6 +929,17 @@ export function RecipeGenerator({ savedRecipeCount = 0, recentIngredients = [], 
                   From My Pantry
                 </button>
               </div>
+              {inputMode === 'pantry' && (
+                <PantryPhotoInventory
+                  disabled={isGenerating}
+                  onUseInventory={(inventoryText) => {
+                    setIngredients(inventoryText);
+                    setOriginalNutrition(null);
+                    setDetectedAdditives([]);
+                    setIsLabelTransformation(false);
+                  }}
+                />
+              )}
               <Textarea
                 aria-label={inputMode === 'pantry' ? 'Ingredients in your pantry or refrigerator' : 'Processed food ingredient list'}
                 placeholder={

@@ -45,6 +45,8 @@ export default function PrivacyPage() {
               <li>Recipes generated and saved</li>
               <li>Recipe ratings and personal notes</li>
               <li>Ingredient inputs and customization preferences</li>
+              <li>Confirmed refrigerator and pantry inventory lists</li>
+              <li>Fridge and pantry photos are sent for AI analysis but are not saved by RecipeReborn</li>
               <li>Search queries and filter selections</li>
               <li>Login times and session data</li>
             </ul>
