@@ -41,7 +41,7 @@ interface MealPlanCalendarProps {
 }
 
 const DAYS = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'];
-const MEAL_TYPES = ['breakfast', 'lunch', 'dinner'];
+const MEAL_TYPES = ['breakfast', 'lunch', 'dinner', 'snack'];
 
 const DAY_LABELS: Record<string, string> = {
   monday: 'Monday',
@@ -63,10 +63,19 @@ const MEAL_LABELS: Record<string, string> = {
 export function MealPlanCalendar({ plan, onUpdate }: MealPlanCalendarProps) {
   const router = useRouter();
   const [generating, setGenerating] = useState(false);
+  const visibleMealTypes = MEAL_TYPES.filter((mealType) =>
+    plan.mealPlanRecipes.some((meal) => meal.mealType === mealType),
+  );
+  const gridColumns = {
+    1: 'md:grid-cols-1',
+    2: 'md:grid-cols-2',
+    3: 'md:grid-cols-3',
+    4: 'md:grid-cols-4',
+  }[visibleMealTypes.length] || 'md:grid-cols-1';
 
   // Organize meals by day and type
   const mealsByDay = DAYS.reduce((acc, day) => {
-    acc[day] = MEAL_TYPES.reduce((mealAcc, type) => {
+    acc[day] = visibleMealTypes.reduce((mealAcc, type) => {
       mealAcc[type] = plan.mealPlanRecipes.filter(
         (mpr) => mpr.day === day && mpr.mealType === type
       );
@@ -143,8 +152,8 @@ export function MealPlanCalendar({ plan, onUpdate }: MealPlanCalendarProps) {
                   )}
                 </div>
 
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                  {MEAL_TYPES.map((mealType) => {
+                <div className={`grid grid-cols-1 gap-3 ${gridColumns}`}>
+                  {visibleMealTypes.map((mealType) => {
                     const meals = mealsByDay[day][mealType];
                     
                     return (

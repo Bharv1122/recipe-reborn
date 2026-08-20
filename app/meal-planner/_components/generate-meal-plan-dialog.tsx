@@ -24,6 +24,15 @@ const DIETARY_OPTIONS = [
   { id: 'keto', label: 'Keto' },
 ];
 
+const MEAL_TYPE_OPTIONS = [
+  { id: 'breakfast', label: 'Breakfast' },
+  { id: 'lunch', label: 'Lunch' },
+  { id: 'dinner', label: 'Dinner' },
+  { id: 'snack', label: 'Snack' },
+] as const;
+
+type MealType = (typeof MEAL_TYPE_OPTIONS)[number]['id'];
+
 export function GenerateMealPlanDialog({ open, onOpenChange, onPlanGenerated }: GenerateMealPlanDialogProps) {
   const [loading, setLoading] = useState(false);
   const [weekStartDate, setWeekStartDate] = useState(() => {
@@ -34,11 +43,16 @@ export function GenerateMealPlanDialog({ open, onOpenChange, onPlanGenerated }: 
   });
   const [selectedDietary, setSelectedDietary] = useState<string[]>([]);
   const [calorieTarget, setCalorieTarget] = useState('');
-  const [mealsPerDay, setMealsPerDay] = useState('3');
+  const [selectedMealTypes, setSelectedMealTypes] = useState<MealType[]>([
+    'breakfast',
+    'lunch',
+    'dinner',
+  ]);
   const [servings, setServings] = useState('2');
   const [allergies, setAllergies] = useState('');
   const [dislikes, setDislikes] = useState('');
   const [prefsLoaded, setPrefsLoaded] = useState(false);
+  const [elapsedSeconds, setElapsedSeconds] = useState(0);
 
   // Pre-fill from the profile's saved food preferences (editable per plan)
   useEffect(() => {
@@ -55,6 +69,20 @@ export function GenerateMealPlanDialog({ open, onOpenChange, onPlanGenerated }: 
       .catch(() => setPrefsLoaded(true));
   }, [open, prefsLoaded]);
 
+  useEffect(() => {
+    if (!loading) {
+      setElapsedSeconds(0);
+      return;
+    }
+
+    const startedAt = Date.now();
+    const timer = window.setInterval(() => {
+      setElapsedSeconds(Math.floor((Date.now() - startedAt) / 1000));
+    }, 1000);
+
+    return () => window.clearInterval(timer);
+  }, [loading]);
+
   const splitList = (value: string) =>
     value.split(',').map((item) => item.trim()).filter(Boolean);
 
@@ -64,7 +92,23 @@ export function GenerateMealPlanDialog({ open, onOpenChange, onPlanGenerated }: 
     );
   };
 
+  const toggleMealType = (mealType: MealType) => {
+    setSelectedMealTypes((current) => {
+      const next = current.includes(mealType)
+        ? current.filter((type) => type !== mealType)
+        : [...current, mealType];
+      return MEAL_TYPE_OPTIONS
+        .map((option) => option.id)
+        .filter((type) => next.includes(type));
+    });
+  };
+
   const handleGenerate = async () => {
+    if (selectedMealTypes.length === 0) {
+      toast.error('Select at least one meal type.');
+      return;
+    }
+
     try {
       setLoading(true);
       const response = await fetch('/api/meal-plans/generate', {
@@ -74,7 +118,8 @@ export function GenerateMealPlanDialog({ open, onOpenChange, onPlanGenerated }: 
           weekStartDate,
           dietaryPreferences: selectedDietary,
           calorieTarget: calorieTarget ? parseInt(calorieTarget) : undefined,
-          mealsPerDay: parseInt(mealsPerDay),
+          mealTypes: selectedMealTypes,
+          mealsPerDay: selectedMealTypes.length,
           servings: parseInt(servings),
           allergies: splitList(allergies),
           dislikedIngredients: splitList(dislikes),
@@ -124,31 +169,41 @@ export function GenerateMealPlanDialog({ open, onOpenChange, onPlanGenerated }: 
             />
           </div>
 
-          {/* Meals Per Day */}
-          <div className="grid grid-cols-2 gap-4">
-            <div className="space-y-2">
-              <Label htmlFor="mealsPerDay">Meals Per Day</Label>
-              <Input
-                id="mealsPerDay"
-                type="number"
-                min="1"
-                max="4"
-                value={mealsPerDay}
-                onChange={(e) => setMealsPerDay(e.target.value)}
-              />
+          {/* Exact meal types and servings */}
+          <div className="space-y-2">
+            <Label>Meals Each Day</Label>
+            <div className="grid grid-cols-2 gap-3 rounded-lg border p-3">
+              {MEAL_TYPE_OPTIONS.map((option) => (
+                <div key={option.id} className="flex items-center space-x-2">
+                  <Checkbox
+                    id={`meal-${option.id}`}
+                    checked={selectedMealTypes.includes(option.id)}
+                    onCheckedChange={() => toggleMealType(option.id)}
+                  />
+                  <Label
+                    htmlFor={`meal-${option.id}`}
+                    className="cursor-pointer text-sm font-normal"
+                  >
+                    {option.label}
+                  </Label>
+                </div>
+              ))}
             </div>
+            <p className="text-xs text-muted-foreground">
+              Exactly {selectedMealTypes.length * 7} meals will be created for the week.
+            </p>
+          </div>
 
-            <div className="space-y-2">
-              <Label htmlFor="servings">Servings</Label>
-              <Input
-                id="servings"
-                type="number"
-                min="1"
-                max="8"
-                value={servings}
-                onChange={(e) => setServings(e.target.value)}
-              />
-            </div>
+          <div className="space-y-2">
+            <Label htmlFor="servings">Servings Per Recipe</Label>
+            <Input
+              id="servings"
+              type="number"
+              min="1"
+              max="8"
+              value={servings}
+              onChange={(e) => setServings(e.target.value)}
+            />
           </div>
 
           {/* Calorie Target */}
@@ -209,6 +264,17 @@ export function GenerateMealPlanDialog({ open, onOpenChange, onPlanGenerated }: 
             </div>
           </div>
         </div>
+
+        {loading && (
+          <div className="rounded-lg border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-900">
+            <p className="font-medium">
+              Creating {selectedMealTypes.length * 7} meals · {elapsedSeconds}s elapsed
+            </p>
+            <p className="mt-1 text-xs text-emerald-800">
+              The plan is checked for exact meal types, servings, and allergens before it is saved.
+            </p>
+          </div>
+        )}
 
         <DialogFooter>
           <Button variant="outline" onClick={() => onOpenChange(false)} disabled={loading}>

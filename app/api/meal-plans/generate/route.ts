@@ -1,37 +1,205 @@
+import { randomUUID } from 'node:crypto';
 import { getServerSession } from 'next-auth';
 import { NextResponse } from 'next/server';
+import { z } from 'zod';
 import { authOptions } from '@/lib/auth-options';
 import { prisma } from '@/lib/db';
-import { AI_CHAT_URL, AI_API_KEY, MODEL_SMART } from '@/lib/ai';
+import { AI_CHAT_URL, AI_API_KEY, MODEL_FAST } from '@/lib/ai';
 import { DEFAULT_TRIAL_DAYS } from '@/lib/partner-offers';
 import { resolvePartnerTrial } from '@/lib/partner-offer-server';
+import {
+  DAYS,
+  MEAL_TYPES,
+  normalizeMealTypes,
+  parseMealPlanContent,
+  validateMealPlan,
+  type MealType,
+  type ValidatedDayPlan,
+} from '@/lib/meal-plan-validation';
 
-// POST /api/meal-plans/generate - AI generate a weekly meal plan
+const requestSchema = z.object({
+  weekStartDate: z.string().trim().min(1).refine(
+    (value) => !Number.isNaN(new Date(value).getTime()),
+    'Invalid week start date',
+  ),
+  dietaryPreferences: z.array(z.string().trim().min(1).max(80)).max(20).default([]),
+  calorieTarget: z.number().int().min(500).max(10000).optional(),
+  servings: z.number().int().min(1).max(8).default(2),
+  allergies: z.array(z.string().trim().min(1).max(100)).max(30).default([]),
+  dislikedIngredients: z.array(z.string().trim().min(1).max(100)).max(50).default([]),
+  mealTypes: z.array(z.enum(MEAL_TYPES)).min(1).max(MEAL_TYPES.length),
+});
+
+interface GeneratePlanOptions {
+  weekStartDate: string;
+  dietaryPreferences: string[];
+  calorieTarget?: number;
+  mealTypes: MealType[];
+  servings: number;
+  allergies: string[];
+  dislikedIngredients: string[];
+}
+
+class MealPlanSafetyError extends Error {
+  constructor() {
+    super('The generated meal plan failed safety validation twice.');
+    this.name = 'MealPlanSafetyError';
+  }
+}
+
+function buildPrompt(options: GeneratePlanOptions): string {
+  const dietaryInfo = options.dietaryPreferences.length > 0
+    ? `Dietary preferences: ${options.dietaryPreferences.join(', ')}`
+    : 'No specific dietary restrictions';
+  const calorieInfo = options.calorieTarget
+    ? `Target daily calories across the selected meals: ${options.calorieTarget}`
+    : 'No specific calorie target';
+  const allergyInfo = options.allergies.length > 0
+    ? `FOOD ALLERGIES: ${options.allergies.join(', ')}. Never include these allergens, their derivatives, sauces, stocks, seasonings, or cross-named ingredients. Do not mention an allergen even in a "free-from" ingredient label; choose an unambiguous alternative instead.`
+    : 'No food allergies were supplied';
+  const dislikeInfo = options.dislikedIngredients.length > 0
+    ? `Disliked ingredients: ${options.dislikedIngredients.join(', ')}. Avoid them and use alternatives.`
+    : 'No disliked ingredients were supplied';
+  const mealKeys = options.mealTypes.join(', ');
+  const mealTemplate = options.mealTypes.map((mealType) => `
+    "${mealType}": {
+      "title": "Recipe name",
+      "ingredients": ["measured ingredient 1", "measured ingredient 2"],
+      "instructions": "Concise step-by-step instructions",
+      "prepTime": "10 min",
+      "cookTime": "20 min",
+      "servings": ${options.servings},
+      "dietaryTags": ["tag"],
+      "estimatedCalories": 450
+    }`).join(',');
+
+  return `Create one practical seven-day meal plan.
+
+Requirements:
+- Week starting: ${new Date(options.weekStartDate).toLocaleDateString()}
+- ${dietaryInfo}
+- ${calorieInfo}
+- Exact meal types for every day: ${mealKeys}
+- Exactly ${options.mealTypes.length} meals per day and ${DAYS.length * options.mealTypes.length} meals total
+- Exactly ${options.servings} serving${options.servings === 1 ? '' : 's'} per recipe
+- ${allergyInfo}
+- ${dislikeInfo}
+- Use varied, achievable home-cooking recipes with measured ingredient quantities
+- Keep instructions concise but complete to reduce waiting time
+
+Return only a valid JSON array with exactly seven objects, Monday through Sunday. Each day must contain "day" plus exactly these meal keys: ${mealKeys}. Never add breakfast, lunch, dinner, or snack unless it is in that exact list.
+
+[
+  {
+    "day": "monday",${mealTemplate}
+  }
+]
+
+Repeat that exact structure for all seven days. Do not include markdown or prose.`;
+}
+
+async function requestMealPlan(prompt: string, maxTokens: number): Promise<string> {
+  const response = await fetch(AI_CHAT_URL, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${AI_API_KEY}`,
+    },
+    body: JSON.stringify({
+      model: MODEL_FAST,
+      messages: [
+        {
+          role: 'system',
+          content: 'Return only valid JSON. Follow meal counts, servings, and allergy exclusions exactly.',
+        },
+        { role: 'user', content: prompt },
+      ],
+      temperature: 0.35,
+      max_tokens: Math.min(12000, Math.max(5000, maxTokens)),
+    }),
+  });
+
+  if (!response.ok) {
+    throw new Error(`Meal-plan model request failed with status ${response.status}`);
+  }
+
+  const data = await response.json();
+  const content = data.choices?.[0]?.message?.content;
+  if (typeof content !== 'string' || content.trim() === '') {
+    throw new Error('Meal-plan model returned no content');
+  }
+  if (data.choices?.[0]?.finish_reason === 'length') {
+    throw new Error('Meal-plan model response was truncated');
+  }
+
+  return content;
+}
+
+async function generateValidatedPlan(
+  options: GeneratePlanOptions,
+): Promise<{ plan: ValidatedDayPlan[]; attempts: number }> {
+  const basePrompt = buildPrompt(options);
+  const maxTokens = DAYS.length * options.mealTypes.length * 350;
+  let retryReasons: string[] = [];
+
+  for (let attempt = 1; attempt <= 2; attempt += 1) {
+    const retryInstruction = retryReasons.length > 0
+      ? `\n\nYour previous response was rejected. Correct every issue and generate the full plan again:\n${retryReasons.slice(0, 12).map((reason) => `- ${reason}`).join('\n')}`
+      : '';
+    const content = await requestMealPlan(`${basePrompt}${retryInstruction}`, maxTokens);
+
+    let parsed: unknown;
+    try {
+      parsed = parseMealPlanContent(content);
+    } catch {
+      retryReasons = ['Return parseable JSON with one complete array and no surrounding text.'];
+      continue;
+    }
+
+    const validation = validateMealPlan(parsed, {
+      mealTypes: options.mealTypes,
+      servings: options.servings,
+      allergies: options.allergies,
+    });
+    if (validation.success) return { plan: validation.plan, attempts: attempt };
+
+    retryReasons = validation.errors.map((error) => error.message);
+  }
+
+  throw new MealPlanSafetyError();
+}
+
+// Generate, validate, and atomically save a weekly plan.
 export async function POST(req: Request) {
+  const requestId = randomUUID();
+  const startedAt = performance.now();
+
   try {
     const session = await getServerSession(authOptions);
     if (!session?.user?.id) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const {
-      weekStartDate,
-      dietaryPreferences = [],
-      calorieTarget,
-      mealsPerDay = 3,
-      servings = 2,
-      allergies: allergiesOverride,
-      dislikedIngredients: dislikesOverride,
-    } = await req.json();
-
-    if (!weekStartDate) {
+    const rawBody = await req.json();
+    const mealTypes = normalizeMealTypes(rawBody.mealTypes, rawBody.mealsPerDay);
+    const requestResult = requestSchema.safeParse({ ...rawBody, mealTypes });
+    if (!requestResult.success) {
       return NextResponse.json(
-        { error: 'Week start date is required' },
-        { status: 400 }
+        { error: 'Invalid meal plan settings', details: requestResult.error.flatten().fieldErrors },
+        { status: 400 },
       );
     }
 
-    // Per-plan override wins; otherwise fall back to the profile's saved preferences
+    const {
+      weekStartDate,
+      dietaryPreferences,
+      calorieTarget,
+      servings,
+      allergies: allergiesOverride,
+      dislikedIngredients: dislikesOverride,
+    } = requestResult.data;
+
+    const profileStartedAt = performance.now();
     const profile = await prisma.user.findUnique({
       where: { id: session.user.id },
       select: {
@@ -44,15 +212,11 @@ export async function POST(req: Request) {
       },
     });
 
-    // Quote the trial this account would actually get, not a blanket 7 days.
-    const partnerTrial = profile
-      ? await resolvePartnerTrial(profile)
-      : null;
+    const partnerTrial = profile ? await resolvePartnerTrial(profile) : null;
     const upgradeTrialCopy = partnerTrial?.offer
       ? `your ${partnerTrial.offer.label} invite includes ${partnerTrial.trialDays} days free`
       : `your first ${partnerTrial?.trialDays ?? DEFAULT_TRIAL_DAYS} days are free`;
 
-    // Meal planning is a Premium feature ('pro' = grandfathered legacy tier)
     const tier = profile?.subscriptionTier ?? 'free';
     if (tier !== 'premium' && tier !== 'pro') {
       return NextResponse.json(
@@ -60,223 +224,146 @@ export async function POST(req: Request) {
           error: 'Premium feature',
           message: `AI weekly meal plans are a Premium feature. Upgrade for $9.99/mo — ${upgradeTrialCopy}.`,
         },
-        { status: 403 }
+        { status: 403 },
       );
     }
 
-    // Trial cap: each plan is 21 recipes, so limit trials to 2 plans.
-    // Partner offers marked fullPremium are exempt — the point of a community
-    // month is that they use the product as a paying subscriber would.
     const TRIAL_MEAL_PLAN_LIMIT = 2;
     if (profile?.subscriptionStatus === 'trialing' && !partnerTrial?.fullPremium) {
-      const planCount = await prisma.mealPlan.count({
-        where: { userId: session.user.id },
-      });
+      const planCount = await prisma.mealPlan.count({ where: { userId: session.user.id } });
       if (planCount >= TRIAL_MEAL_PLAN_LIMIT) {
         return NextResponse.json(
           {
             error: 'Trial limit reached',
             message: partnerTrial?.offer
-              // No card behind a partner trial, so it never converts on its own.
               ? `Your ${partnerTrial.offer.label} free month includes ${TRIAL_MEAL_PLAN_LIMIT} meal plans. Subscribe to Premium for unlimited plans.`
               : `Your free trial includes ${TRIAL_MEAL_PLAN_LIMIT} meal plans. Unlimited plans unlock when your trial converts to Premium.`,
           },
-          { status: 403 }
+          { status: 403 },
         );
       }
     }
-    const allergies: string[] = Array.isArray(allergiesOverride)
-      ? allergiesOverride.filter((a: unknown) => typeof a === 'string' && a.trim())
+
+    const allergies = allergiesOverride.length > 0
+      ? allergiesOverride
       : profile?.allergies ?? [];
-    const dislikedIngredients: string[] = Array.isArray(dislikesOverride)
-      ? dislikesOverride.filter((d: unknown) => typeof d === 'string' && d.trim())
+    const dislikedIngredients = dislikesOverride.length > 0
+      ? dislikesOverride
       : profile?.dislikedIngredients ?? [];
+    const profileMs = Math.round(performance.now() - profileStartedAt);
 
-    // Build AI prompt for meal plan generation
-    const dietaryInfo = dietaryPreferences.length > 0
-      ? `Dietary preferences: ${dietaryPreferences.join(', ')}`
-      : 'No specific dietary restrictions';
-
-    const calorieInfo = calorieTarget
-      ? `Target daily calories: ${calorieTarget}`
-      : 'No specific calorie target';
-
-    const allergyInfo = allergies.length > 0
-      ? `CRITICAL — FOOD ALLERGIES: allergic to ${allergies.join(', ')}. NEVER include these ingredients or anything derived from them, in any form, in any meal.`
-      : '';
-    const dislikeInfo = dislikedIngredients.length > 0
-      ? `DISLIKED INGREDIENTS: dislikes ${dislikedIngredients.join(', ')}. Avoid them unless truly essential; prefer substitutes.`
-      : '';
-
-    const prompt = `You are a professional meal planning nutritionist. Create a balanced weekly meal plan with the following requirements:
-
-- Week starting: ${new Date(weekStartDate).toLocaleDateString()}
-- ${dietaryInfo}
-- ${calorieInfo}
-- ${mealsPerDay} meals per day (breakfast, lunch, dinner${mealsPerDay > 3 ? ', and snacks' : ''})
-- ${servings} servings per recipe${allergyInfo ? `\n- ${allergyInfo}` : ''}${dislikeInfo ? `\n- ${dislikeInfo}` : ''}
-
-For each day (Monday through Sunday), suggest ${mealsPerDay} recipes that:
-1. Are balanced and nutritious
-2. Use varied ingredients throughout the week
-3. Are practical and achievable for home cooking
-4. Match the dietary preferences
-
-Return your response as a JSON array with this structure:
-[
-  {
-    "day": "monday",
-    "breakfast": {
-      "title": "Recipe name",
-      "ingredients": ["ingredient 1", "ingredient 2"],
-      "instructions": "Step-by-step instructions",
-      "prepTime": "15 min",
-      "cookTime": "20 min",
-      "servings": "${servings}",
-      "dietaryTags": ["vegetarian"],
-      "estimatedCalories": 400
-    },
-    "lunch": { ... },
-    "dinner": { ... }
-  },
-  ...
-]
-
-Ensure the JSON is valid and properly formatted.`;
-
-    // Call LLM API
-    const response = await fetch(AI_CHAT_URL, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${AI_API_KEY}`,
-      },
-      body: JSON.stringify({
-        model: MODEL_SMART,
-        messages: [
-          {
-            role: 'system',
-            content: 'You are a professional meal planning nutritionist. Return only valid JSON without any markdown formatting or code blocks.',
-          },
-          {
-            role: 'user',
-            content: prompt,
-          },
-        ],
-        temperature: 0.7,
-        // 21 full recipes ≈ 8-10k output tokens, and gemini-2.5-flash thinking
-        // tokens also count against this budget — 8000 truncated mid-JSON.
-        max_tokens: 24000,
-      }),
-    });
-
-    if (!response.ok) {
-      throw new Error('Failed to generate meal plan');
-    }
-
-    const data = await response.json();
-    const content = data.choices[0]?.message?.content || '';
-    if (data.choices[0]?.finish_reason === 'length') {
-      console.error('Meal plan response truncated at max_tokens; content length:', content.length);
-    }
-
-    // Parse the AI response
-    let weekPlan;
+    const aiStartedAt = performance.now();
+    let generated: { plan: ValidatedDayPlan[]; attempts: number };
     try {
-      // Strip markdown code fences — including an unterminated opening fence
-      // (a truncated response never closes it, which broke the old regex)
-      let jsonStr = content.trim();
-      const fenceMatch = jsonStr.match(/```(?:json)?\s*([\s\S]*?)```/);
-      jsonStr = fenceMatch ? fenceMatch[1] : jsonStr.replace(/^```(?:json)?\s*/, '');
-      // Extract the JSON array to guard against surrounding prose
-      const start = jsonStr.indexOf('[');
-      const end = jsonStr.lastIndexOf(']');
-      if (start !== -1 && end > start) {
-        jsonStr = jsonStr.slice(start, end + 1);
-      }
-      weekPlan = JSON.parse(jsonStr.trim());
-    } catch (parseError) {
-      console.error('Failed to parse AI response:', content);
-      throw new Error('Failed to parse meal plan from AI response');
-    }
+      generated = await generateValidatedPlan({
+        weekStartDate,
+        dietaryPreferences,
+        calorieTarget,
+        mealTypes,
+        servings,
+        allergies,
+        dislikedIngredients,
+      });
+    } catch (error) {
+      if (!(error instanceof MealPlanSafetyError)) throw error;
 
-    // Create meal plan in database
-    const mealPlan = await prisma.mealPlan.create({
-      data: {
-        userId: session.user.id,
-        name: `Meal Plan - Week of ${new Date(weekStartDate).toLocaleDateString()}`,
-        weekStartDate: new Date(weekStartDate),
-        description: `AI-generated meal plan. ${dietaryInfo}. ${calorieInfo}.`,
-      },
-    });
-
-    // Create recipes and add them to the meal plan
-    const mealPlanRecipes = [];
-    const mealTypes = ['breakfast', 'lunch', 'dinner', 'snack'];
-
-    for (const dayPlan of weekPlan) {
-      const day = dayPlan.day.toLowerCase();
-
-      for (const mealType of mealTypes) {
-        const meal = dayPlan[mealType];
-        if (!meal) continue;
-
-        // Create the recipe
-        const recipe = await prisma.recipe.create({
-          data: {
-            userId: session.user.id,
-            title: meal.title,
-            originalIngredients: meal.ingredients.join('\n'),
-            freshIngredients: meal.ingredients.join('\n'),
-            instructions: meal.instructions,
-            prepTime: meal.prepTime || '',
-            cookTime: meal.cookTime || '',
-            servings: meal.servings || String(servings),
-            dietaryTags: meal.dietaryTags || dietaryPreferences,
-            calories: meal.estimatedCalories || null,
-          },
-        });
-
-        // Add to meal plan
-        const mealPlanRecipe = await prisma.mealPlanRecipe.create({
-          data: {
-            mealPlanId: mealPlan.id,
-            recipeId: recipe.id,
-            day,
-            mealType,
-            servings,
-          },
-          include: {
-            recipe: true,
-          },
-        });
-
-        mealPlanRecipes.push(mealPlanRecipe);
-      }
-    }
-
-    // Fetch the complete meal plan with all recipes
-    const completeMealPlan = await prisma.mealPlan.findUnique({
-      where: { id: mealPlan.id },
-      include: {
-        mealPlanRecipes: {
-          include: {
-            recipe: true,
-          },
-          orderBy: [
-            { day: 'asc' },
-            { order: 'asc' },
-          ],
+      console.warn('[meal-plan] rejected before save', {
+        requestId,
+        reason: error instanceof Error ? error.message : 'Unknown validation error',
+        elapsedMs: Math.round(performance.now() - startedAt),
+      });
+      return NextResponse.json(
+        {
+          error: 'Meal plan failed safety validation',
+          message: 'We could not produce a plan that safely matched every meal, serving, and allergy setting. Nothing was saved. Please try again.',
         },
-      },
+        { status: 422 },
+      );
+    }
+    const aiMs = Math.round(performance.now() - aiStartedAt);
+
+    const preparedMeals = generated.plan.flatMap((dayPlan) =>
+      mealTypes.map((mealType) => ({
+        day: dayPlan.day,
+        mealType,
+        meal: dayPlan.meals[mealType]!,
+        recipeId: randomUUID(),
+        relationId: randomUUID(),
+      })),
+    );
+
+    const databaseStartedAt = performance.now();
+    const completeMealPlan = await prisma.$transaction(async (tx) => {
+      const mealPlan = await tx.mealPlan.create({
+        data: {
+          userId: session.user.id,
+          name: `Meal Plan - Week of ${new Date(weekStartDate).toLocaleDateString()}`,
+          weekStartDate: new Date(weekStartDate),
+          description: `AI-generated meal plan. ${dietaryPreferences.length > 0 ? `Dietary preferences: ${dietaryPreferences.join(', ')}` : 'No specific dietary restrictions'}. ${calorieTarget ? `Target daily calories: ${calorieTarget}` : 'No specific calorie target'}.`,
+        },
+      });
+
+      await tx.recipe.createMany({
+        data: preparedMeals.map(({ meal, recipeId }) => ({
+          id: recipeId,
+          userId: session.user.id,
+          title: meal.title,
+          originalIngredients: meal.ingredients.join('\n'),
+          freshIngredients: meal.ingredients.join('\n'),
+          instructions: meal.instructions,
+          prepTime: meal.prepTime,
+          cookTime: meal.cookTime,
+          servings: String(servings),
+          dietaryTags: meal.dietaryTags.length > 0 ? meal.dietaryTags : dietaryPreferences,
+          calories: meal.estimatedCalories,
+        })),
+      });
+
+      await tx.mealPlanRecipe.createMany({
+        data: preparedMeals.map(({ day, mealType, recipeId, relationId }) => ({
+          id: relationId,
+          mealPlanId: mealPlan.id,
+          recipeId,
+          day,
+          mealType,
+          servings,
+          order: MEAL_TYPES.indexOf(mealType),
+        })),
+      });
+
+      return tx.mealPlan.findUnique({
+        where: { id: mealPlan.id },
+        include: {
+          mealPlanRecipes: {
+            include: { recipe: true },
+            orderBy: [{ day: 'asc' }, { order: 'asc' }],
+          },
+        },
+      });
+    });
+    const databaseMs = Math.round(performance.now() - databaseStartedAt);
+    const totalMs = Math.round(performance.now() - startedAt);
+
+    console.info('[meal-plan] completed', {
+      requestId,
+      mealCount: preparedMeals.length,
+      model: MODEL_FAST,
+      attempts: generated.attempts,
+      timingsMs: { profile: profileMs, ai: aiMs, database: databaseMs, total: totalMs },
     });
 
-    return NextResponse.json(completeMealPlan, { status: 201 });
+    return NextResponse.json(completeMealPlan, {
+      status: 201,
+      headers: {
+        'Server-Timing': `profile;dur=${profileMs}, ai;dur=${aiMs}, database;dur=${databaseMs}, total;dur=${totalMs}`,
+      },
+    });
   } catch (error) {
-    console.error('Error generating meal plan:', error);
-    return NextResponse.json(
-      { error: 'Failed to generate meal plan' },
-      { status: 500 }
-    );
+    console.error('[meal-plan] failed', {
+      requestId,
+      elapsedMs: Math.round(performance.now() - startedAt),
+      error: error instanceof Error ? error.message : 'Unknown error',
+    });
+    return NextResponse.json({ error: 'Failed to generate meal plan' }, { status: 500 });
   }
 }
