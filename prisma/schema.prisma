@@ -2,14 +2,14 @@
 // learn more about it in the docs: https://pris.ly/d/prisma-schema
 
 generator client {
-    provider = "prisma-client-js"
-    binaryTargets = ["native", "rhel-openssl-3.0.x"]
+  provider      = "prisma-client-js"
+  binaryTargets = ["native", "rhel-openssl-3.0.x"]
 }
 
 datasource db {
-    provider  = "postgresql"
-    url       = env("DATABASE_URL")
-    directUrl = env("DIRECT_URL")
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
 }
 
 model Account {
@@ -47,15 +47,15 @@ model User {
   password      String?
   image         String?
   createdAt     DateTime  @default(now())
-  
+
   // Subscription fields
-  subscriptionTier   String   @default("free") // "free", "premium", "pro"
-  subscriptionStatus String   @default("active") // "active", "canceled", "past_due"
-  stripeCustomerId   String?  @unique
-  stripeSubscriptionId String? @unique
-  currentPeriodEnd   DateTime?
-  generationCount    Int      @default(0)
-  lastGenerationReset DateTime @default(now())
+  subscriptionTier     String    @default("free") // "free", "premium", "pro"
+  subscriptionStatus   String    @default("active") // "active", "canceled", "past_due"
+  stripeCustomerId     String?   @unique
+  stripeSubscriptionId String?   @unique
+  currentPeriodEnd     DateTime?
+  generationCount      Int       @default(0)
+  lastGenerationReset  DateTime  @default(now())
 
   // First-touch acquisition channel from ?src= links (e.g. "card", "fb");
   // null = organic/unknown
@@ -64,23 +64,44 @@ model User {
   // Durable one-use guard for public no-card offers. This is intentionally
   // separate from signupSource so acquisition attribution can never reset a
   // redeemed trial.
-  partnerOfferRedeemedCode String?
-  partnerOfferRedeemedAt DateTime?
-  partnerOfferCheckoutSessionId String? @unique
+  partnerOfferRedeemedCode      String?
+  partnerOfferRedeemedAt        DateTime?
+  partnerOfferCheckoutSessionId String?   @unique
 
   // Food preferences — applied to all AI generation (recipes + meal plans)
   allergies           String[] @default([])
   dislikedIngredients String[] @default([])
 
-  accounts      Account[]
-  sessions      Session[]
-  recipes       Recipe[]
-  folders       Folder[]
-  collections   Collection[]
-  mealPlans     MealPlan[]
-  shoppingLists ShoppingList[]
-  pantryInventory PantryInventory?
+  accounts                Account[]
+  sessions                Session[]
+  recipes                 Recipe[]
+  folders                 Folder[]
+  collections             Collection[]
+  mealPlans               MealPlan[]
+  shoppingLists           ShoppingList[]
+  pantryInventory         PantryInventory?
   generationCancellations GenerationCancellation[]
+  mobileRefreshTokens     MobileRefreshToken[]
+}
+
+// Native clients receive short-lived access JWTs. Only a SHA-256 hash of each
+// rotating refresh token is stored, so a database read cannot reveal a usable
+// device credential.
+model MobileRefreshToken {
+  id         String    @id @default(cuid())
+  userId     String
+  tokenHash  String    @unique
+  deviceName String?
+  platform   String?
+  expiresAt  DateTime
+  revokedAt  DateTime?
+  lastUsedAt DateTime?
+  createdAt  DateTime  @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, revokedAt])
+  @@index([expiresAt])
 }
 
 // Short-lived, authoritative cancellation markers shared by every serverless
@@ -146,59 +167,59 @@ model Recipe {
   servings            String?
   rating              Int?     @default(0)
   notes               String?  @db.Text
-  
+
   // Sharing fields
-  isPublic            Boolean  @default(false)
-  shareToken          String?  @unique
-  viewCount           Int      @default(0)
-  
+  isPublic   Boolean @default(false)
+  shareToken String? @unique
+  viewCount  Int     @default(0)
+
   // Wine pairing
-  winePairing         String?  @db.Text // JSON string
-  
+  winePairing String? @db.Text // JSON string
+
   // Nutrition (per serving)
-  calories            Int?
-  protein             Float?   // grams
-  carbs               Float?   // grams
-  fat                 Float?   // grams
-  fiber               Float?   // grams
-  sodium              Int?     // mg
+  calories Int?
+  protein  Float? // grams
+  carbs    Float? // grams
+  fat      Float? // grams
+  fiber    Float? // grams
+  sodium   Int? // mg
 
   // Cost savings (per serving, USD)
   estimatedCostPerServing Float? // homemade cost
   storeBoughtCost         Float? // store-bought equivalent cost
-  
-  createdAt           DateTime @default(now())
-  updatedAt           DateTime @updatedAt
-  
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
   user   User    @relation(fields: [userId], references: [id], onDelete: Cascade)
   folder Folder? @relation(fields: [folderId], references: [id], onDelete: SetNull)
-  
+
+  collectionRecipes CollectionRecipe[]
+  mealPlanRecipes   MealPlanRecipe[]
+
   @@index([userId])
   @@index([folderId])
   @@index([shareToken])
   @@index([isPublic])
-  
-  collectionRecipes CollectionRecipe[]
-  mealPlanRecipes   MealPlanRecipe[]
 }
 
 model Collection {
-  id          String   @id @default(cuid())
+  id          String  @id @default(cuid())
   userId      String
   name        String
-  description String?  @db.Text
-  
+  description String? @db.Text
+
   // Sharing fields
-  isPublic    Boolean  @default(false)
-  shareToken  String?  @unique
-  viewCount   Int      @default(0)
-  
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-  
+  isPublic   Boolean @default(false)
+  shareToken String? @unique
+  viewCount  Int     @default(0)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
   user              User               @relation(fields: [userId], references: [id], onDelete: Cascade)
   collectionRecipes CollectionRecipe[]
-  
+
   @@index([userId])
   @@index([shareToken])
   @@index([isPublic])
@@ -210,10 +231,10 @@ model CollectionRecipe {
   recipeId     String
   order        Int      @default(0)
   addedAt      DateTime @default(now())
-  
+
   collection Collection @relation(fields: [collectionId], references: [id], onDelete: Cascade)
   recipe     Recipe     @relation(fields: [recipeId], references: [id], onDelete: Cascade)
-  
+
   @@unique([collectionId, recipeId])
   @@index([collectionId])
   @@index([recipeId])
@@ -228,10 +249,10 @@ model MealPlan {
   description   String?  @db.Text
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
-  
+
   user            User             @relation(fields: [userId], references: [id], onDelete: Cascade)
   mealPlanRecipes MealPlanRecipe[]
-  
+
   @@index([userId])
   @@index([weekStartDate])
 }
@@ -240,16 +261,16 @@ model MealPlanRecipe {
   id         String   @id @default(cuid())
   mealPlanId String
   recipeId   String
-  day        String   // "monday", "tuesday", etc.
-  mealType   String   // "breakfast", "lunch", "dinner", "snack"
+  day        String // "monday", "tuesday", etc.
+  mealType   String // "breakfast", "lunch", "dinner", "snack"
   servings   Int      @default(1) // Number of servings for this meal
   order      Int      @default(0)
   notes      String?  @db.Text
   addedAt    DateTime @default(now())
-  
+
   mealPlan MealPlan @relation(fields: [mealPlanId], references: [id], onDelete: Cascade)
   recipe   Recipe   @relation(fields: [recipeId], references: [id], onDelete: Cascade)
-  
+
   @@index([mealPlanId])
   @@index([recipeId])
   @@index([day])
@@ -263,10 +284,10 @@ model ShoppingList {
   notes     String?  @db.Text
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
-  
+
   user  User               @relation(fields: [userId], references: [id], onDelete: Cascade)
   items ShoppingListItem[]
-  
+
   @@index([userId])
 }
 
@@ -282,9 +303,9 @@ model ShoppingListItem {
   recipeTitle    String? // Store recipe title for reference
   notes          String? @db.Text
   order          Int     @default(0)
-  
+
   shoppingList ShoppingList @relation(fields: [shoppingListId], references: [id], onDelete: Cascade)
-  
+
   @@index([shoppingListId])
   @@index([category])
   @@index([checked])
