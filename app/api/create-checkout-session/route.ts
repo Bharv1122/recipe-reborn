@@ -26,6 +26,15 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    const allowedPriceIds = [
+      process.env.STRIPE_PREMIUM_PRICE_ID,
+      process.env.STRIPE_YEARLY_PRICE_ID,
+      process.env.STRIPE_PRO_PRICE_ID,
+    ].filter(Boolean);
+    if (!allowedPriceIds.includes(priceId)) {
+      return NextResponse.json({ error: 'Invalid plan' }, { status: 400 });
+    }
+
     // Get user from database
     const user = await prisma.user.findUnique({
       where: { id: session.user.id },
@@ -62,6 +71,25 @@ export async function POST(request: NextRequest) {
     const offerSlug = offer?.slug ?? null;
     const trialSettings = buildTrialCheckoutSettings(Boolean(offerSlug), trialDays);
 
+    if (offer?.singleUse && user.partnerOfferRedeemedCode) {
+      if (
+        user.partnerOfferRedeemedCode === offer.slug &&
+        user.partnerOfferCheckoutSessionId &&
+        !user.stripeSubscriptionId
+      ) {
+        const priorSession = await stripe.checkout.sessions.retrieve(
+          user.partnerOfferCheckoutSessionId,
+        );
+        if (priorSession.status === 'open' && priorSession.url) {
+          return NextResponse.json({ sessionId: priorSession.id, url: priorSession.url });
+        }
+      }
+      return NextResponse.json(
+        { error: 'This account has already used the 3DAYFREE trial.' },
+        { status: 409 },
+      );
+    }
+
     // Get origin from request headers for dynamic URL construction
     const origin = request.headers.get('origin') || 'http://localhost:3000';
 
@@ -77,7 +105,7 @@ export async function POST(request: NextRequest) {
       ],
       success_url: `${origin}/success?session_id={CHECKOUT_SESSION_ID}`,
       cancel_url: `${origin}/pricing`,
-      // Code holders are promised a free month with no card. The trial has $0
+      // Code holders are promised a no-card trial. The trial has $0
       // due today, so 'if_required' collects nothing; everyone else still
       // enters a payment method upfront as before.
       ...trialSettings,
@@ -90,6 +118,28 @@ export async function POST(request: NextRequest) {
         ...(offerSlug ? { partnerOffer: offerSlug } : {}),
       },
     });
+
+    if (offer?.singleUse) {
+      const claimed = await prisma.user.updateMany({
+        where: {
+          id: user.id,
+          partnerOfferRedeemedCode: null,
+        },
+        data: {
+          partnerOfferRedeemedCode: offer.slug,
+          partnerOfferRedeemedAt: new Date(),
+          partnerOfferCheckoutSessionId: checkoutSession.id,
+        },
+      });
+
+      if (claimed.count !== 1) {
+        await stripe.checkout.sessions.expire(checkoutSession.id).catch(() => undefined);
+        return NextResponse.json(
+          { error: 'This account has already used the 3DAYFREE trial.' },
+          { status: 409 },
+        );
+      }
+    }
 
     return NextResponse.json({ sessionId: checkoutSession.id, url: checkoutSession.url });
   } catch (error) {

@@ -46,6 +46,8 @@ export interface PartnerOffer {
    * shown them the banner promising it. See resolvePartnerTrial().
    */
   maxRedemptions: number;
+  /** Public offers may be redeemed only once by an account. */
+  singleUse?: boolean;
   /**
    * A comp rather than a trial: redeeming grants Premium permanently and never
    * involves Stripe at all.
@@ -60,6 +62,16 @@ export interface PartnerOffer {
 }
 
 export const PARTNER_OFFERS: PartnerOffer[] = [
+  {
+    slug: '3dayfree',
+    label: '3DAYFREE',
+    trialDays: 3,
+    trialRecipeLimit: 100,
+    fullPremium: true,
+    expiresAt: '2026-12-31',
+    maxRedemptions: 1000,
+    singleUse: true,
+  },
   {
     // The community calls itself the Finnsters, so that is the typed code.
     // Matching is case-insensitive.

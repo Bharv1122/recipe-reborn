@@ -61,6 +61,13 @@ model User {
   // null = organic/unknown
   signupSource String?
 
+  // Durable one-use guard for public no-card offers. This is intentionally
+  // separate from signupSource so acquisition attribution can never reset a
+  // redeemed trial.
+  partnerOfferRedeemedCode String?
+  partnerOfferRedeemedAt DateTime?
+  partnerOfferCheckoutSessionId String? @unique
+
   // Food preferences — applied to all AI generation (recipes + meal plans)
   allergies           String[] @default([])
   dislikedIngredients String[] @default([])

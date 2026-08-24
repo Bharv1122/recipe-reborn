@@ -15,9 +15,9 @@ export default function SuccessPage() {
 
           {/* Header */}
           <div className="mb-6">
-            <h1 className="text-3xl font-bold text-gray-900 mb-2">Payment Successful!</h1>
+            <h1 className="text-3xl font-bold text-gray-900 mb-2">Premium Access Ready!</h1>
             <p className="text-gray-600">
-              Thank you for subscribing to RecipeReborn Premium. Your account has been upgraded.
+              Your RecipeReborn Premium trial or subscription is active.
             </p>
           </div>
 
@@ -42,7 +42,7 @@ export default function SuccessPage() {
               </li>
               <li className="flex items-start">
                 <span className="text-emerald-600 mr-2">✓</span>
-                <span>Check your email for the receipt</span>
+                <span>Manage your plan anytime from your account</span>
               </li>
             </ul>
           </div>

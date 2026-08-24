@@ -22,6 +22,19 @@ assert.equal(ordinaryCampaign.signupSource, 'facebook');
 
 assert.equal(findPartnerOffer('  FINNSTERS  ')?.slug, 'finnsters');
 
+const publicOffer = findPartnerOffer('  3DAYFREE  ');
+assert.equal(publicOffer?.slug, '3dayfree');
+assert.equal(publicOffer?.trialDays, 3);
+assert.equal(publicOffer?.fullPremium, true);
+assert.equal(publicOffer?.singleUse, true);
+const publicCheckout = buildTrialCheckoutSettings(true, publicOffer!.trialDays);
+assert.equal(publicCheckout.payment_method_collection, 'if_required');
+assert.equal(publicCheckout.subscription_data.trial_period_days, 3);
+assert.equal(
+  publicCheckout.subscription_data.trial_settings.end_behavior.missing_payment_method,
+  'cancel',
+);
+
 const finnstersCheckout = buildTrialCheckoutSettings(true, typed.typedOffer!.trialDays);
 assert.equal(finnstersCheckout.payment_method_collection, 'if_required');
 assert.equal(finnstersCheckout.subscription_data.trial_period_days, 30);
@@ -37,4 +50,4 @@ assert.equal(
   'create_invoice',
 );
 
-console.log('Partner-code verification passed. Finnsters is code-only and grants 30 days.');
+console.log('Partner-code verification passed. Finnsters remains 30 days; 3DAYFREE grants 3 no-card days.');
