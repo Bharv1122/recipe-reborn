@@ -6,10 +6,8 @@ import { InvalidBarcodeError, lookupBarcode } from '@/lib/barcode-lookup';
 export const dynamic = 'force-dynamic';
 
 // GET /api/barcode/[code] - Look up a packaged product by barcode via OpenFoodFacts
-export async function GET(
-  req: NextRequest,
-  { params }: { params: { code: string } }
-) {
+export async function GET(req: NextRequest, props: { params: Promise<{ code: string }> }) {
+  const params = await props.params;
   try {
     const session = await getServerSession(authOptions);
 

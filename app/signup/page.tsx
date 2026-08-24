@@ -3,11 +3,12 @@ import Link from 'next/link';
 import Image from 'next/image';
 import { Sparkles } from 'lucide-react';
 
-export default function SignupPage({
-  searchParams,
-}: {
-  searchParams?: { unlock?: string };
-}) {
+export default async function SignupPage(
+  props: {
+    searchParams?: Promise<{ unlock?: string }>;
+  }
+) {
+  const searchParams = await props.searchParams;
   const fromUnlock = Boolean(searchParams?.unlock);
 
   return (

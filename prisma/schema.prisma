@@ -82,6 +82,7 @@ model User {
   pantryInventory         PantryInventory?
   generationCancellations GenerationCancellation[]
   mobileRefreshTokens     MobileRefreshToken[]
+  mobilePushTokens        MobilePushToken[]
 }
 
 // Native clients receive short-lived access JWTs. Only a SHA-256 hash of each
@@ -102,6 +103,22 @@ model MobileRefreshToken {
 
   @@index([userId, revokedAt])
   @@index([expiresAt])
+}
+
+// Registration only; delivery credentials and sending are configured later.
+// Tokens remain server-only and can be removed by the signed-in device.
+model MobilePushToken {
+  id         String   @id @default(cuid())
+  userId     String
+  token      String   @unique
+  platform   String
+  deviceName String?
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
 }
 
 // Short-lived, authoritative cancellation markers shared by every serverless

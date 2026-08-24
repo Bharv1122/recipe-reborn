@@ -1,21 +1,20 @@
-import { getServerSession } from 'next-auth';
 import { NextResponse } from 'next/server';
-import { authOptions } from '@/lib/auth-options';
 import { prisma } from '@/lib/db';
 import {
   normalizePantryItems,
   pantryInventoryItemsSchema,
   pantryInventorySaveSchema,
 } from '@/lib/pantry-inventory';
+import { getRequestUserId } from '@/lib/request-auth';
 
 export const dynamic = 'force-dynamic';
 
-export async function GET() {
-  const session = await getServerSession(authOptions);
-  if (!session?.user?.id) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+export async function GET(request: Request) {
+  const userId = await getRequestUserId(request);
+  if (!userId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
   const inventory = await prisma.pantryInventory.findUnique({
-    where: { userId: session.user.id },
+    where: { userId },
     select: { items: true, reviewedAt: true, updatedAt: true },
   });
 
@@ -31,8 +30,8 @@ export async function GET() {
 
 export async function PUT(request: Request) {
   try {
-    const session = await getServerSession(authOptions);
-    if (!session?.user?.id) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    const userId = await getRequestUserId(request);
+    if (!userId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
     const parsed = pantryInventorySaveSchema.safeParse(await request.json());
     if (!parsed.success) {
@@ -49,8 +48,8 @@ export async function PUT(request: Request) {
 
     const reviewedAt = new Date();
     const inventory = await prisma.pantryInventory.upsert({
-      where: { userId: session.user.id },
-      create: { userId: session.user.id, items, reviewedAt },
+      where: { userId },
+      create: { userId, items, reviewedAt },
       update: { items, reviewedAt },
       select: { items: true, reviewedAt: true, updatedAt: true },
     });

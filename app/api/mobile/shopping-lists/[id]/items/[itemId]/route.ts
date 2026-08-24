@@ -3,7 +3,11 @@ import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
 import { MobileAuthError, requireMobileUserId } from '@/lib/mobile-auth';
 
-export async function PATCH(request: Request, { params }: { params: { id: string; itemId: string } }) {
+export async function PATCH(
+  request: Request,
+  props: { params: Promise<{ id: string; itemId: string }> }
+) {
+  const params = await props.params;
   try {
     const userId = requireMobileUserId(request);
     const parsed = z.object({ checked: z.boolean() }).safeParse(await request.json().catch(() => null));

@@ -1,11 +1,10 @@
-import { getServerSession } from 'next-auth';
 import { NextResponse } from 'next/server';
 import { z } from 'zod';
-import { authOptions } from '@/lib/auth-options';
 import { AI_API_KEY, AI_CHAT_URL, MODEL_SMART } from '@/lib/ai';
 import { extractJsonPayload } from '@/lib/ai-json';
 import { normalizePantryItems, pantryInventoryItemSchema } from '@/lib/pantry-inventory';
 import { rateLimit } from '@/lib/rate-limit';
+import { getRequestUserId } from '@/lib/request-auth';
 
 export const dynamic = 'force-dynamic';
 
@@ -23,10 +22,10 @@ const extractionSchema = z.object({
 
 export async function POST(request: Request) {
   try {
-    const session = await getServerSession(authOptions);
-    if (!session?.user?.id) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    const userId = await getRequestUserId(request);
+    if (!userId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
-    const limited = await rateLimit(`pantry-photo:${session.user.id}`, 6, 60);
+    const limited = await rateLimit(`pantry-photo:${userId}`, 6, 60);
     if (!limited.success) {
       return NextResponse.json(
         { error: 'Too many photo scans. Please wait a minute and try again.' },

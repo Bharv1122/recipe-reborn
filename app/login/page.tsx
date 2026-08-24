@@ -2,11 +2,12 @@ import { LoginForm } from './_components/login-form';
 import Link from 'next/link';
 import Image from 'next/image';
 
-export default function LoginPage({
-  searchParams,
-}: {
-  searchParams?: { callbackUrl?: string; error?: string };
-}) {
+export default async function LoginPage(
+  props: {
+    searchParams?: Promise<{ callbackUrl?: string; error?: string }>;
+  }
+) {
+  const searchParams = await props.searchParams;
   return (
     <div className="min-h-screen flex items-center justify-center py-12 px-4 sm:px-6 lg:px-8">
       <div className="max-w-md w-full space-y-8">

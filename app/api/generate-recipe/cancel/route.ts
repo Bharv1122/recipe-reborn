@@ -1,17 +1,16 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
 import { z } from 'zod';
-import { authOptions } from '@/lib/auth-options';
 import { markGenerationCanceled } from '@/lib/generation-cancellation';
 import { logServerError } from '@/lib/server-error-log';
+import { getRequestUserId } from '@/lib/request-auth';
 
 export const dynamic = 'force-dynamic';
 
 const cancelSchema = z.object({ generationId: z.string().uuid() });
 
 export async function POST(request: NextRequest) {
-  const session = await getServerSession(authOptions);
-  if (!session?.user?.id) {
+  const userId = await getRequestUserId(request);
+  if (!userId) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
@@ -21,7 +20,7 @@ export async function POST(request: NextRequest) {
   }
 
   try {
-    await markGenerationCanceled(session.user.id, parsed.data.generationId);
+    await markGenerationCanceled(userId, parsed.data.generationId);
     return new NextResponse(null, { status: 204 });
   } catch (error) {
     logServerError('generation_cancel_marker_failed', error);

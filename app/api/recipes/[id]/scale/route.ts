@@ -5,10 +5,8 @@ import { prisma } from '@/lib/db';
 import { AI_CHAT_URL, AI_API_KEY, MODEL_FAST } from '@/lib/ai';
 
 // POST /api/recipes/[id]/scale - Scale a recipe
-export async function POST(
-  req: Request,
-  { params }: { params: { id: string } }
-) {
+export async function POST(req: Request, props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
   try {
     const session = await getServerSession(authOptions);
     if (!session?.user?.id) {

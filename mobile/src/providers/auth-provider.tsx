@@ -3,7 +3,7 @@ import { Platform } from 'react-native';
 import * as Device from 'expo-device';
 import { useSQLiteContext } from 'expo-sqlite';
 import { apiRequest, publicRequest } from '@/services/api';
-import { clearTokens, readTokens, saveTokens } from '@/services/auth-storage';
+import { clearRegisteredPushToken, clearTokens, readRegisteredPushToken, readTokens, saveTokens } from '@/services/auth-storage';
 import type { MobileUser, TokenPair } from '@/types';
 import { clearShoppingCache } from '@/services/shopping-cache';
 
@@ -65,6 +65,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const signOut = useCallback(async () => {
     const tokens = await readTokens();
+    const pushToken = await readRegisteredPushToken();
+    if (pushToken) {
+      await apiRequest('/api/mobile/push-tokens', { method: 'DELETE', body: JSON.stringify({ token: pushToken }) }).catch(() => undefined);
+      await clearRegisteredPushToken();
+    }
     await clearTokens();
     await clearShoppingCache(db);
     setUser(null);

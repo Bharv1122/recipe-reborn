@@ -17,9 +17,21 @@ export default function HomeScreen() {
         </View>
       </View>
       <Card>
+        <Text style={styles.cardTitle}>Generate and save recipes</Text>
+        <Text style={styles.body}>{"Create from a label or your reviewed pantry. Your account's Premium, allergy, and safety rules are applied by the server."}</Text>
+        <Button label="Generate recipe" onPress={() => router.push('/generate')} />
+        <Button label="Browse saved recipes" secondary onPress={() => router.push('/recipes')} />
+      </Card>
+      <Card>
         <Text style={styles.cardTitle}>Scan a packaged food</Text>
-        <Text style={styles.body}>Read a barcode now. Label and pantry-photo capture are ready for the reviewed-inventory workflow.</Text>
+        <Text style={styles.body}>Read a barcode, photograph a label, or build a reviewed fridge-and-pantry inventory.</Text>
         <Button label="Open camera" onPress={() => router.push('/(tabs)/scan')} />
+        <Button label="Review pantry inventory" secondary onPress={() => router.push('/pantry-review')} />
+      </Card>
+      <Card>
+        <Text style={styles.cardTitle}>Plan the week</Text>
+        <Button label="Collections" secondary onPress={() => router.push('/collections')} />
+        <Button label="Meal plans" secondary onPress={() => router.push('/meal-plans')} />
       </Card>
       <Card>
         <Text style={styles.cardTitle}>Shopping list, even offline</Text>

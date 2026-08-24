@@ -31,6 +31,7 @@ export default function SignInScreen() {
             <Field accessibilityLabel="Password" autoCapitalize="none" autoComplete="current-password" secureTextEntry placeholder="Password" value={password} onChangeText={setPassword} />
             <InlineError message={error} />
             <Button label="Sign in" onPress={submit} loading={busy} disabled={!email || !password} />
+            <Link href="/forgot-password" style={styles.link}>Forgot password?</Link>
             <Link href="/(auth)/sign-up" style={styles.link}>Create an account</Link>
           </Card>
         </ScrollView>

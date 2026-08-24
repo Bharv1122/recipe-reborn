@@ -31,3 +31,35 @@ export interface ShoppingList {
   updatedAt: string;
   items: ShoppingItem[];
 }
+
+export interface RecipeSummary {
+  id: string;
+  title: string;
+  dietaryTags: string[];
+  prepTime: string | null;
+  cookTime: string | null;
+  servings: string | null;
+  rating: number | null;
+  calories: number | null;
+  createdAt: string;
+}
+
+export interface Recipe extends RecipeSummary {
+  originalIngredients: string;
+  freshIngredients: string;
+  instructions: string;
+  notes: string | null;
+  estimatedCostPerServing?: number | null;
+  storeBoughtCost?: number | null;
+}
+
+export interface GeneratedRecipe {
+  title: string;
+  freshIngredients: string[];
+  instructions: string[];
+  prepTime: string;
+  cookTime: string;
+  servings: string;
+  estimatedCostPerServing?: number;
+  storeBoughtCost?: number;
+}

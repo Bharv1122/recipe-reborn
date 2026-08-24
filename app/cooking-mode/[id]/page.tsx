@@ -15,11 +15,12 @@ function parseJsonArray(value: string | null | undefined): string[] {
   }
 }
 
-export default async function CookingModePage({
-  params,
-}: {
-  params: { id: string };
-}) {
+export default async function CookingModePage(
+  props: {
+    params: Promise<{ id: string }>;
+  }
+) {
+  const params = await props.params;
   const { session, invalidSession } = await getVerifiedServerSession();
 
   if (!session?.user?.id) {

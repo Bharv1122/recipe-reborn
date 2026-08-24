@@ -9,10 +9,11 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
   orientation: 'portrait',
   scheme: 'recipereborn',
   userInterfaceStyle: 'light',
-  icon: './assets/images/recipe-reborn-logo.png',
+  icon: './assets/images/icon.png',
   ios: {
     supportsTablet: true,
     bundleIdentifier: process.env.EXPO_IOS_BUNDLE_IDENTIFIER || 'com.recipereborn.app',
+    associatedDomains: ['applinks:recipereborn.com'],
     infoPlist: {
       NSCameraUsageDescription: 'Scan food labels and barcodes, or photograph your pantry for recipe suggestions.',
       NSPhotoLibraryUsageDescription: 'Choose food-label or pantry photos to analyze in Recipe Reborn.',
@@ -21,10 +22,17 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
   android: {
     package: process.env.EXPO_ANDROID_PACKAGE || 'com.recipereborn.app',
     adaptiveIcon: {
-      foregroundImage: './assets/images/recipe-reborn-logo.png',
+      foregroundImage: './assets/images/android-icon-foreground.png',
       backgroundColor: '#FFF8EC',
+      monochromeImage: './assets/images/android-icon-monochrome.png',
     },
     permissions: ['CAMERA', 'POST_NOTIFICATIONS'],
+    intentFilters: [{
+      action: 'VIEW',
+      autoVerify: true,
+      data: [{ scheme: 'https', host: 'recipereborn.com', pathPrefix: '/reset-password' }],
+      category: ['BROWSABLE', 'DEFAULT'],
+    }],
   },
   plugins: [
     'expo-router',

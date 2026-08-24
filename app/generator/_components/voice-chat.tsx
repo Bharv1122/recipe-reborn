@@ -364,7 +364,7 @@ export function VoiceChat({ onIngredientExtracted }: VoiceChatProps) {
         if (result?.done) break;
 
         partialRead += decoder.decode(result?.value, { stream: true });
-        let lines = partialRead?.split('\n') ?? [];
+        const lines = partialRead?.split('\n') ?? [];
         partialRead = lines?.pop() ?? '';
 
         for (const line of lines) {

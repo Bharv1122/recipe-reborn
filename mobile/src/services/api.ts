@@ -50,21 +50,27 @@ export async function publicRequest<T>(path: string, init: RequestInit = {}): Pr
   return parseResponse<T>(response);
 }
 
-export async function apiRequest<T>(path: string, init: RequestInit = {}, retry = true): Promise<T> {
+export async function apiResponse(path: string, init: RequestInit = {}, retry = true): Promise<Response> {
   const tokens = await readTokens();
   if (!tokens) throw new ApiError('Please sign in again.', 401);
+  const isFormData = typeof FormData !== 'undefined' && init.body instanceof FormData;
   const response = await fetch(`${baseUrl}${path}`, {
     ...init,
     headers: {
-      'Content-Type': 'application/json',
+      ...(isFormData ? {} : { 'Content-Type': 'application/json' }),
       Authorization: `Bearer ${tokens.accessToken}`,
       ...init.headers,
     },
   });
   if (response.status === 401 && retry) {
     const refreshed = await refreshSession();
-    if (refreshed) return apiRequest<T>(path, init, false);
+    if (refreshed) return apiResponse(path, init, false);
   }
+  return response;
+}
+
+export async function apiRequest<T>(path: string, init: RequestInit = {}, retry = true): Promise<T> {
+  const response = await apiResponse(path, init, retry);
   return parseResponse<T>(response);
 }
 

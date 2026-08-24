@@ -8,8 +8,9 @@ export const dynamic = 'force-dynamic';
 // DELETE /api/collections/[id]/recipes/[recipeId] - Remove recipe from collection
 export async function DELETE(
   req: NextRequest,
-  { params }: { params: { id: string; recipeId: string } }
+  props: { params: Promise<{ id: string; recipeId: string }> }
 ) {
+  const params = await props.params;
   try {
     const session = await getServerSession(authOptions);
 

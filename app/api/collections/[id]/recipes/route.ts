@@ -6,10 +6,8 @@ import { prisma } from '@/lib/db';
 export const dynamic = 'force-dynamic';
 
 // POST /api/collections/[id]/recipes - Add recipe to collection
-export async function POST(
-  req: NextRequest,
-  { params }: { params: { id: string } }
-) {
+export async function POST(req: NextRequest, props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
   try {
     const session = await getServerSession(authOptions);
 

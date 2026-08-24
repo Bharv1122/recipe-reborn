@@ -7,10 +7,8 @@ import crypto from 'crypto';
 export const dynamic = 'force-dynamic';
 
 // POST /api/recipes/share/[id] - Generate or toggle share link for a recipe
-export async function POST(
-  req: NextRequest,
-  { params }: { params: { id: string } }
-) {
+export async function POST(req: NextRequest, props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
   try {
     const session = await getServerSession(authOptions);
     

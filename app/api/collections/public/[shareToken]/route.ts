@@ -5,10 +5,8 @@ import { rateLimit, getClientIp } from '@/lib/rate-limit';
 export const dynamic = 'force-dynamic';
 
 // GET /api/collections/public/[shareToken] - Get public collection by share token
-export async function GET(
-  req: NextRequest,
-  { params }: { params: { shareToken: string } }
-) {
+export async function GET(req: NextRequest, props: { params: Promise<{ shareToken: string }> }) {
+  const params = await props.params;
   try {
     const ip = getClientIp(req);
     const { success } = await rateLimit(`collections-public:${ip}`, 30, 60);

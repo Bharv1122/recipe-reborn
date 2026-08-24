@@ -5,7 +5,8 @@ import { rateLimit } from '@/lib/rate-limit';
 
 export const dynamic = 'force-dynamic';
 
-export async function GET(request: Request, { params }: { params: { code: string } }) {
+export async function GET(request: Request, props: { params: Promise<{ code: string }> }) {
+  const params = await props.params;
   try {
     const userId = requireMobileUserId(request);
     const limited = await rateLimit(`mobile-barcode:${userId}`, 30, 60);

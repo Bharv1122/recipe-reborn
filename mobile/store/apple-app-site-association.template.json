@@ -1,0 +1,10 @@
+{
+  "applinks": {
+    "details": [
+      {
+        "appIDs": ["APPLE_TEAM_ID.com.recipereborn.app"],
+        "components": [{ "/": "/reset-password", "?": { "token": "*" } }]
+      }
+    ]
+  }
+}

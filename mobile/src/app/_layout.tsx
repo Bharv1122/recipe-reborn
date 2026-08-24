@@ -16,7 +16,8 @@ function SessionRouter() {
   useEffect(() => {
     if (loading) return;
     const inAuth = segments[0] === '(auth)';
-    if (!user && !inAuth) router.replace('/(auth)/sign-in');
+    const publicReset = segments[0] === 'forgot-password' || segments[0] === 'reset-password';
+    if (!user && !inAuth && !publicReset) router.replace('/(auth)/sign-in');
     if (user && inAuth) router.replace('/(tabs)');
   }, [user, loading, segments, router]);
 

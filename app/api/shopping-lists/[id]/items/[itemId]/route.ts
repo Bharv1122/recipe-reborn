@@ -4,10 +4,8 @@ import { authOptions } from '@/lib/auth-options';
 import { prisma } from '@/lib/db';
 
 // PATCH /api/shopping-lists/[id]/items/[itemId] - Update a shopping list item
-export async function PATCH(
-  req: Request,
-  { params }: { params: { id: string; itemId: string } }
-) {
+export async function PATCH(req: Request, props: { params: Promise<{ id: string; itemId: string }> }) {
+  const params = await props.params;
   try {
     const session = await getServerSession(authOptions);
     if (!session?.user?.id) {
@@ -71,10 +69,8 @@ export async function PATCH(
 }
 
 // DELETE /api/shopping-lists/[id]/items/[itemId] - Delete a shopping list item
-export async function DELETE(
-  req: Request,
-  { params }: { params: { id: string; itemId: string } }
-) {
+export async function DELETE(req: Request, props: { params: Promise<{ id: string; itemId: string }> }) {
+  const params = await props.params;
   try {
     const session = await getServerSession(authOptions);
     if (!session?.user?.id) {

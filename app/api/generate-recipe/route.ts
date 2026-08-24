@@ -1,6 +1,4 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/auth-options';
 import { prisma } from '@/lib/db';
 import { AI_CHAT_URL, AI_API_KEY, MODEL_SMART } from '@/lib/ai';
 import { rateLimit } from '@/lib/rate-limit';
@@ -8,6 +6,7 @@ import { resolvePartnerTrial } from '@/lib/partner-offer-server';
 import { z } from 'zod';
 import { logServerError } from '@/lib/server-error-log';
 import { clearGenerationCancellation, wasGenerationCanceled } from '@/lib/generation-cancellation';
+import { getRequestUserId } from '@/lib/request-auth';
 
 export const dynamic = 'force-dynamic';
 export const maxDuration = 60;
@@ -43,13 +42,12 @@ const TIER_LIMITS = {
 
 export async function POST(request: NextRequest) {
   try {
-    const session = await getServerSession(authOptions);
-
-    if (!session?.user?.id) {
+    const userId = await getRequestUserId(request);
+    if (!userId) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const { success } = await rateLimit(`generate-recipe:${session.user.id}`, 10, 60);
+    const { success } = await rateLimit(`generate-recipe:${userId}`, 10, 60);
     if (!success) {
       return NextResponse.json(
         { error: 'Too many requests. Please slow down and try again in a minute.' },
@@ -78,7 +76,7 @@ export async function POST(request: NextRequest) {
 
     // Get user with subscription info
     const user = await prisma.user.findUnique({
-      where: { id: session.user.id },
+      where: { id: userId },
       select: {
         id: true,
         subscriptionTier: true,
@@ -410,7 +408,7 @@ Respond with raw JSON only. Do not include code blocks, markdown, or any other f
             if (result?.done) break;
 
             partialRead += decoder.decode(result?.value, { stream: true });
-            let lines = partialRead?.split('\n') ?? [];
+            const lines = partialRead?.split('\n') ?? [];
             partialRead = lines?.pop() ?? '';
 
             for (const line of lines) {

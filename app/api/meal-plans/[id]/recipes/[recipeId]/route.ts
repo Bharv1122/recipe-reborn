@@ -4,10 +4,8 @@ import { authOptions } from '@/lib/auth-options';
 import { prisma } from '@/lib/db';
 
 // DELETE /api/meal-plans/[id]/recipes/[recipeId] - Remove a recipe from a meal plan
-export async function DELETE(
-  req: Request,
-  { params }: { params: { id: string; recipeId: string } }
-) {
+export async function DELETE(req: Request, props: { params: Promise<{ id: string; recipeId: string }> }) {
+  const params = await props.params;
   try {
     const session = await getServerSession(authOptions);
     if (!session?.user?.id) {
@@ -53,10 +51,8 @@ export async function DELETE(
 }
 
 // PATCH /api/meal-plans/[id]/recipes/[recipeId] - Update a meal plan recipe
-export async function PATCH(
-  req: Request,
-  { params }: { params: { id: string; recipeId: string } }
-) {
+export async function PATCH(req: Request, props: { params: Promise<{ id: string; recipeId: string }> }) {
+  const params = await props.params;
   try {
     const session = await getServerSession(authOptions);
     if (!session?.user?.id) {

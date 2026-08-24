@@ -748,7 +748,7 @@ export function RecipeGenerator({ savedRecipeCount = 0, recentIngredients = [], 
         if (result?.done) break;
 
         partialRead += decoder.decode(result?.value, { stream: true });
-        let lines = partialRead?.split('\n') ?? [];
+        const lines = partialRead?.split('\n') ?? [];
         partialRead = lines?.pop() ?? '';
 
         for (const line of lines) {

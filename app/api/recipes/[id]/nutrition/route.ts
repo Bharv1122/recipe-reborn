@@ -197,10 +197,8 @@ Be as accurate as possible based on standard nutritional data for these ingredie
 }
 
 // POST /api/recipes/[id]/nutrition - Get or generate nutrition information for a recipe
-export async function POST(
-  req: Request,
-  { params }: { params: { id: string } }
-) {
+export async function POST(req: Request, props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
   try {
     const session = await getServerSession(authOptions);
     if (!session?.user?.id) {

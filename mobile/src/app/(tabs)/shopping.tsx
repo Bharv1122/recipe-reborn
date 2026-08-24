@@ -4,8 +4,9 @@ import { useFocusEffect } from 'expo-router';
 import * as Network from 'expo-network';
 import { useSQLiteContext } from 'expo-sqlite';
 import { fetchAndCacheShoppingLists, flushShoppingToggleQueue, queueShoppingToggle, readCachedShoppingLists } from '@/services/shopping-cache';
+import { apiRequest } from '@/services/api';
 import type { ShoppingList } from '@/types';
-import { Card, InlineError, Screen } from '@/components/ui';
+import { Button, Card, Field, InlineError, Screen } from '@/components/ui';
 import { colors } from '@/theme';
 
 export default function ShoppingScreen() {
@@ -14,6 +15,9 @@ export default function ShoppingScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [offline, setOffline] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [newListName, setNewListName] = useState('');
+  const [newItem, setNewItem] = useState('');
+  const [saving, setSaving] = useState(false);
 
   const refresh = useCallback(async () => {
     setRefreshing(true); setError(null);
@@ -46,11 +50,44 @@ export default function ShoppingScreen() {
     } catch { setOffline(true); }
   };
 
+  const createList = async () => {
+    if (!newListName.trim()) return;
+    setSaving(true); setError(null);
+    try {
+      await apiRequest('/api/mobile/shopping-lists', { method: 'POST', body: JSON.stringify({ name: newListName.trim() }) });
+      setNewListName('');
+      await refresh();
+    } catch (value) { setError(value instanceof Error ? value.message : 'Could not create the list.'); }
+    finally { setSaving(false); }
+  };
+
+  const addItem = async () => {
+    const list = lists[0];
+    if (!list || !newItem.trim()) return;
+    setSaving(true); setError(null);
+    try {
+      await apiRequest(`/api/mobile/shopping-lists/${list.id}/items`, { method: 'POST', body: JSON.stringify({ ingredient: newItem.trim() }) });
+      setNewItem('');
+      await refresh();
+    } catch (value) { setError(value instanceof Error ? value.message : 'Could not add the item.'); }
+    finally { setSaving(false); }
+  };
+
   return <Screen>
     <ScrollView contentContainerStyle={styles.content} refreshControl={<RefreshControl refreshing={refreshing} onRefresh={refresh} tintColor={colors.green} />}>
       {offline ? <Text style={styles.offline}>Offline — changes will sync automatically next time this screen opens online.</Text> : null}
       <InlineError message={error} />
-      {!lists.length && !refreshing ? <Card><Text style={styles.title}>No shopping lists yet</Text><Text style={styles.body}>Create a list on Recipe Reborn. Native list creation is the next shopping milestone.</Text></Card> : null}
+      <Card>
+        <Text style={styles.title}>{lists.length ? 'Add to newest list' : 'Create a shopping list'}</Text>
+        {lists.length ? <>
+          <Text style={styles.body}>Adding to: {lists[0].name}. New items require a connection; check-offs work offline.</Text>
+          <Field value={newItem} onChangeText={setNewItem} placeholder="Ingredient" editable={!offline && !saving} />
+          <Button label="Add item" onPress={addItem} loading={saving} disabled={offline || !newItem.trim()} />
+        </> : <>
+          <Field value={newListName} onChangeText={setNewListName} placeholder="List name" editable={!offline && !saving} />
+          <Button label="Create list" onPress={createList} loading={saving} disabled={offline || !newListName.trim()} />
+        </>}
+      </Card>
       {lists.map((list) => <Card key={list.id}>
         <Text style={styles.title}>{list.name}</Text>
         {!list.items.length ? <Text style={styles.body}>This list is empty.</Text> : null}

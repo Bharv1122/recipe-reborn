@@ -1,7 +1,7 @@
 import { useCallback, useRef, useState } from 'react';
 import { Image, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { CameraView, useCameraPermissions, type BarcodeScanningResult } from 'expo-camera';
-import { useFocusEffect } from 'expo-router';
+import { useFocusEffect, useRouter } from 'expo-router';
 import { apiRequest } from '@/services/api';
 import { makePendingFoodPhoto, type CapturePurpose } from '@/services/camera-inventory';
 import { Button, Card, InlineError, Screen } from '@/components/ui';
@@ -11,6 +11,7 @@ type Mode = 'barcode' | CapturePurpose;
 type Product = { found: boolean; name: string; ingredients_text: string };
 
 export default function ScanScreen() {
+  const router = useRouter();
   const camera = useRef<CameraView>(null);
   const [permission, requestPermission] = useCameraPermissions();
   const [focused, setFocused] = useState(false);
@@ -76,8 +77,11 @@ export default function ScanScreen() {
       {mode !== 'barcode' && !photoUri ? <Button label={`Take ${mode} photo`} onPress={capture} loading={busy} /> : null}
       {photoUri ? <Card>
         <Image source={{ uri: photoUri }} style={styles.preview} />
-        <Text style={styles.title}>Photo kept on this device</Text>
-        <Text style={styles.body}>The upload boundary is ready. Server extraction and the required review/correction screen come next; nothing is saved to inventory automatically.</Text>
+        <Text style={styles.title}>Review before anything is saved</Text>
+        <Text style={styles.body}>Recipe Reborn will extract a draft list. You can correct every item before confirming the inventory.</Text>
+        <Button label={mode === 'label' ? 'Enter label ingredients' : 'Extract and review items'} onPress={() => mode === 'label'
+          ? router.push('/generate')
+          : router.push({ pathname: '/pantry-review', params: { uri: photoUri, location: mode } })} />
         <Button label="Retake" secondary onPress={() => setPhotoUri(null)} />
       </Card> : null}
 
