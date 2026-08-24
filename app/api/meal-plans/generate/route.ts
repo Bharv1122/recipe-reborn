@@ -236,7 +236,7 @@ export async function POST(req: Request) {
           {
             error: 'Trial limit reached',
             message: partnerTrial?.offer
-              ? `Your ${partnerTrial.offer.label} trial includes ${TRIAL_MEAL_PLAN_LIMIT} meal plans. Subscribe to Premium for unlimited plans.`
+              ? `Your ${partnerTrial.offer.label} free month includes ${TRIAL_MEAL_PLAN_LIMIT} meal plans. Subscribe to Premium for unlimited plans.`
               : `Your free trial includes ${TRIAL_MEAL_PLAN_LIMIT} meal plans. Unlimited plans unlock when your trial converts to Premium.`,
           },
           { status: 403 },

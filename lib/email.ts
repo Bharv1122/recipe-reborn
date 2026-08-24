@@ -113,10 +113,10 @@ export function trialEndingEmail(args: {
       ? `You've turned ${recipesCreated} packaged product${recipesCreated === 1 ? '' : 's'} into something fresh so far.`
       : `You haven't generated a recipe yet — there's still time, and it takes about twenty seconds.`;
 
-  const subject = `Your ${offerLabel} free trial ends ${dayPhrase}`;
+  const subject = `Your ${offerLabel} free month ends ${dayPhrase}`;
 
   const text = [
-    `Your ${offerLabel} free trial ends ${dayPhrase}.`,
+    `Your ${offerLabel} free month ends ${dayPhrase}.`,
     '',
     madeLine,
     '',
@@ -135,7 +135,7 @@ export function trialEndingEmail(args: {
   <body style="margin:0;padding:24px;background:#f6f7f6;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;color:#1f2937;">
     <div style="max-width:520px;margin:0 auto;background:#ffffff;border-radius:12px;padding:32px;">
       <h1 style="margin:0 0 16px;font-size:22px;color:#065f46;">
-        Your ${offerLabel} free trial ends ${dayPhrase}
+        Your ${offerLabel} free month ends ${dayPhrase}
       </h1>
       <p style="margin:0 0 16px;line-height:1.6;">${madeLine}</p>
       <p style="margin:0 0 16px;line-height:1.6;">

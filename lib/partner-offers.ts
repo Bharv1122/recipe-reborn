@@ -61,17 +61,6 @@ export interface PartnerOffer {
 
 export const PARTNER_OFFERS: PartnerOffer[] = [
   {
-    slug: 'alexan30',
-    label: 'ALEXAN30',
-    trialDays: 3,
-    trialRecipeLimit: 100,
-    fullPremium: true,
-    // Keep the public campaign bounded while still leaving ample room for
-    // the initial rollout. This is independent of the Finnsters allocation.
-    expiresAt: '2026-12-31',
-    maxRedemptions: 250,
-  },
-  {
     // The community calls itself the Finnsters, so that is the typed code.
     // Matching is case-insensitive.
     slug: 'finnsters',

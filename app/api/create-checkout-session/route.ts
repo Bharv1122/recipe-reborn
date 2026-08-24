@@ -77,7 +77,7 @@ export async function POST(request: NextRequest) {
       ],
       success_url: `${origin}/success?session_id={CHECKOUT_SESSION_ID}`,
       cancel_url: `${origin}/pricing`,
-      // Code holders are promised a no-card trial. The trial has $0
+      // Code holders are promised a free month with no card. The trial has $0
       // due today, so 'if_required' collects nothing; everyone else still
       // enters a payment method upfront as before.
       ...trialSettings,

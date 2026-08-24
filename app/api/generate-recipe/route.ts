@@ -140,7 +140,7 @@ export async function POST(request: NextRequest) {
             ? partnerOffer
               // This trial has no card behind it, so it will never "convert" on
               // its own — point them at subscribing instead of implying it.
-              ? `Your ${partnerOffer.label} trial includes ${trialLimit} recipes, and you've used them all. Subscribe to Premium for 100 a month.`
+              ? `Your ${partnerOffer.label} free month includes ${trialLimit} recipes, and you've used them all. Subscribe to Premium for 100 a month.`
               : `Your free trial includes ${trialLimit} recipes. Your full 100 per month unlocks when your trial converts to Premium.`
             : user.subscriptionTier === 'free'
               ? 'You have reached your free tier limit of 3 recipes per month. Upgrade to Premium for 100 recipes per month.'
