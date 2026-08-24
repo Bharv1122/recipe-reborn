@@ -45,6 +45,8 @@ export type MealPlanValidationCode =
 export interface MealPlanValidationError {
   code: MealPlanValidationCode;
   message: string;
+  day?: DayName;
+  mealType?: MealType;
 }
 
 export type MealPlanValidationResult =
@@ -234,6 +236,8 @@ export function validateMealPlan(
         errors.push({
           code: 'unexpected_meal',
           message: `${day} contains unrequested meal type ${mealType}.`,
+          day,
+          mealType,
         });
         continue;
       }
@@ -241,6 +245,8 @@ export function validateMealPlan(
         errors.push({
           code: 'missing_meal',
           message: `${day} is missing requested meal type ${mealType}.`,
+          day,
+          mealType,
         });
         continue;
       }
@@ -251,6 +257,8 @@ export function validateMealPlan(
         errors.push({
           code: 'invalid_meal',
           message: `${day} ${mealType} is incomplete or malformed.`,
+          day,
+          mealType,
         });
         continue;
       }
@@ -260,6 +268,8 @@ export function validateMealPlan(
         errors.push({
           code: 'serving_mismatch',
           message: `${day} ${mealType} has ${String(parsed.data.servings)} servings instead of ${options.servings}.`,
+          day,
+          mealType,
         });
         continue;
       }
@@ -287,6 +297,8 @@ export function validateMealPlan(
         errors.push({
           code: 'allergen_detected',
           message: `${day} ${mealType} contains a blocked allergen term.`,
+          day,
+          mealType,
         });
         continue;
       }

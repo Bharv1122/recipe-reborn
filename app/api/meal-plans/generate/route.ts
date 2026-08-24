@@ -4,7 +4,7 @@ import { NextResponse } from 'next/server';
 import { z } from 'zod';
 import { authOptions } from '@/lib/auth-options';
 import { prisma } from '@/lib/db';
-import { AI_CHAT_URL, AI_API_KEY, MODEL_FAST } from '@/lib/ai';
+import { AI_CHAT_URL, AI_API_KEY, MODEL_FAST, MODEL_SMART } from '@/lib/ai';
 import { DEFAULT_TRIAL_DAYS } from '@/lib/partner-offers';
 import { resolvePartnerTrial } from '@/lib/partner-offer-server';
 import {
@@ -13,6 +13,8 @@ import {
   normalizeMealTypes,
   parseMealPlanContent,
   validateMealPlan,
+  type DayName,
+  type MealPlanValidationError,
   type MealType,
   type ValidatedDayPlan,
 } from '@/lib/meal-plan-validation';
@@ -98,7 +100,11 @@ Return only a valid JSON array with exactly seven objects, Monday through Sunday
 Repeat that exact structure for all seven days. Do not include markdown or prose.`;
 }
 
-async function requestMealPlan(prompt: string, maxTokens: number): Promise<string> {
+async function requestMealPlan(
+  prompt: string,
+  maxTokens: number,
+  model = MODEL_FAST,
+): Promise<string> {
   const response = await fetch(AI_CHAT_URL, {
     method: 'POST',
     headers: {
@@ -106,7 +112,7 @@ async function requestMealPlan(prompt: string, maxTokens: number): Promise<strin
       Authorization: `Bearer ${AI_API_KEY}`,
     },
     body: JSON.stringify({
-      model: MODEL_FAST,
+      model,
       messages: [
         {
           role: 'system',
@@ -133,6 +139,115 @@ async function requestMealPlan(prompt: string, maxTokens: number): Promise<strin
   }
 
   return content;
+}
+
+function parseMealObject(content: string): unknown {
+  let jsonText = content.trim();
+  const fenceMatch = jsonText.match(/```(?:json)?\s*([\s\S]*?)```/);
+  jsonText = fenceMatch ? fenceMatch[1] : jsonText.replace(/^```(?:json)?\s*/, '');
+  const start = jsonText.indexOf('{');
+  const end = jsonText.lastIndexOf('}');
+  if (start !== -1 && end > start) jsonText = jsonText.slice(start, end + 1);
+  const parsed = JSON.parse(jsonText.trim());
+  return parsed && typeof parsed === 'object' && 'meal' in parsed ? parsed.meal : parsed;
+}
+
+async function requestReplacementMeal(
+  options: GeneratePlanOptions,
+  day: DayName,
+  mealType: MealType,
+  model: string,
+): Promise<unknown> {
+  const allergies = options.allergies.length > 0
+    ? `Blocked food allergies: ${options.allergies.join(', ')}. Never use them, their derivatives, sauces, stocks, or seasonings. Do not mention a blocked allergen even in a free-from label.`
+    : 'No food allergies were supplied.';
+  const dislikes = options.dislikedIngredients.length > 0
+    ? `Avoid these disliked ingredients: ${options.dislikedIngredients.join(', ')}.`
+    : '';
+  const prompt = `Replace one rejected meal-plan entry with a safe home-cooking recipe.
+
+Day: ${day}
+Meal type: ${mealType}
+Exact servings: ${options.servings}
+${allergies}
+${dislikes}
+
+Return only one JSON object in this exact shape:
+{
+  "title": "Recipe name",
+  "ingredients": ["measured ingredient 1", "measured ingredient 2"],
+  "instructions": "Concise complete instructions",
+  "prepTime": "10 min",
+  "cookTime": "20 min",
+  "servings": ${options.servings},
+  "dietaryTags": ["tag"],
+  "estimatedCalories": 450
+}`;
+
+  const response = await fetch(AI_CHAT_URL, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${AI_API_KEY}`,
+    },
+    body: JSON.stringify({
+      model,
+      messages: [
+        { role: 'system', content: 'Return one valid JSON meal object that obeys every allergy and serving constraint.' },
+        { role: 'user', content: prompt },
+      ],
+      temperature: 0.2,
+      max_tokens: 1800,
+      response_format: { type: 'json_object' },
+    }),
+  });
+
+  if (!response.ok) throw new Error(`Meal repair request failed with status ${response.status}`);
+  const data = await response.json();
+  const content = data.choices?.[0]?.message?.content;
+  if (typeof content !== 'string' || content.trim() === '') {
+    throw new Error('Meal repair model returned no content');
+  }
+  return parseMealObject(content);
+}
+
+async function repairInvalidMeals(
+  value: unknown,
+  errors: MealPlanValidationError[],
+  options: GeneratePlanOptions,
+  model: string,
+): Promise<unknown | null> {
+  if (!Array.isArray(value)) return null;
+  const repairableCodes = new Set(['missing_meal', 'unexpected_meal', 'invalid_meal', 'serving_mismatch', 'allergen_detected']);
+  if (errors.some((error) => !repairableCodes.has(error.code) || !error.day || !error.mealType)) {
+    return null;
+  }
+
+  const repaired = structuredClone(value) as Array<Record<string, unknown>>;
+  for (const error of errors) {
+    if (error.code !== 'unexpected_meal') continue;
+    const day = repaired.find((entry) => String(entry?.day).trim().toLowerCase() === error.day);
+    if (day) delete day[error.mealType!];
+  }
+
+  const slots = Array.from(new Map(
+    errors
+      .filter((error) => error.code !== 'unexpected_meal')
+      .map((error) => [`${error.day}:${error.mealType}`, { day: error.day!, mealType: error.mealType! }])
+  ).values());
+  const replacements = await Promise.all(
+    slots.map(async (slot) => ({
+      ...slot,
+      meal: await requestReplacementMeal(options, slot.day, slot.mealType, model),
+    }))
+  );
+  for (const replacement of replacements) {
+    const day = repaired.find((entry) => String(entry?.day).trim().toLowerCase() === replacement.day);
+    if (!day) return null;
+    day[replacement.mealType] = replacement.meal;
+  }
+
+  return repaired;
 }
 
 async function generateValidatedPlan(
@@ -163,7 +278,37 @@ async function generateValidatedPlan(
     });
     if (validation.success) return { plan: validation.plan, attempts: attempt };
 
-    retryReasons = validation.errors.map((error) => error.message);
+    let repaired = await repairInvalidMeals(parsed, validation.errors, options, MODEL_FAST);
+    if (repaired) {
+      const repairedValidation = validateMealPlan(repaired, {
+        mealTypes: options.mealTypes,
+        servings: options.servings,
+        allergies: options.allergies,
+      });
+      if (repairedValidation.success) {
+        return { plan: repairedValidation.plan, attempts: attempt + 1 };
+      }
+
+      repaired = await repairInvalidMeals(repaired, repairedValidation.errors, options, MODEL_SMART);
+      if (repaired) {
+        const finalValidation = validateMealPlan(repaired, {
+          mealTypes: options.mealTypes,
+          servings: options.servings,
+          allergies: options.allergies,
+        });
+        if (finalValidation.success) {
+          return { plan: finalValidation.plan, attempts: attempt + 2 };
+        }
+        retryReasons = finalValidation.errors.map((error) => error.message);
+        continue;
+      }
+    }
+
+    retryReasons = validation.errors.map((error) =>
+      error.code === 'allergen_detected'
+        ? `${error.message} Exclude every requested allergy: ${options.allergies.join(', ')}.`
+        : error.message
+    );
   }
 
   throw new MealPlanSafetyError();

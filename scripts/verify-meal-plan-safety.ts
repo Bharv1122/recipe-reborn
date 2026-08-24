@@ -81,5 +81,8 @@ const allergyResult = validateMealPlan(unsafe, {
 });
 assert.equal(allergyResult.success, false);
 assert.ok(!allergyResult.success && allergyResult.errors.some((error) => error.code === 'allergen_detected'));
+assert.ok(!allergyResult.success && allergyResult.errors.some((error) =>
+  error.code === 'allergen_detected' && error.day === 'wednesday' && error.mealType === 'dinner'
+));
 
 console.log('Meal-plan safety verification passed.');
