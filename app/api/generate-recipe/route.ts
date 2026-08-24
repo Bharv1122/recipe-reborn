@@ -437,6 +437,11 @@ Respond with raw JSON only. Do not include code blocks, markdown, or any other f
                     if (!charged) {
                       throw new Error('Recipe generation limit reached before completion');
                     }
+                    // Close the narrow race where cancellation lands after the
+                    // pre-charge check but before the completed event is sent.
+                    if (await wasGenerationCanceled(user.id, generationId.data)) {
+                      throw new DOMException('Recipe generation canceled', 'AbortError');
+                    }
                     const finalData = JSON.stringify({
                       status: 'completed',
                       result: finalResult,

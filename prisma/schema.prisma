@@ -80,6 +80,22 @@ model User {
   mealPlans     MealPlan[]
   shoppingLists ShoppingList[]
   pantryInventory PantryInventory?
+  generationCancellations GenerationCancellation[]
+}
+
+// Short-lived, authoritative cancellation markers shared by every serverless
+// instance. An in-memory fallback cannot safely coordinate separate functions.
+model GenerationCancellation {
+  id           String   @id @default(cuid())
+  userId       String
+  generationId String
+  expiresAt    DateTime
+  createdAt    DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, generationId])
+  @@index([expiresAt])
 }
 
 model VerificationToken {
