@@ -16,13 +16,13 @@ Checked August 24, 2026. This document deliberately stops before account creatio
 
 The iOS identifier remains provisional until confirmed in Apple Developer. The native Android app intentionally uses a new package and a new Play draft. The existing `com.recipereborn.app.twa` web-wrapper listing must remain untouched.
 
-The connected Play Console was verified on August 24, 2026: it is an existing Personal developer account with verified contact details and one old RecipeReborn TWA app in closed testing. That old app uses `com.recipereborn.app.twa`, has one installed-audience user, has never reached production, and is not the native release path. Expo SDK 57 targets SDK 36 by default for the native app.
+The connected Play Console was verified on August 24, 2026: it is an existing Personal developer account with verified contact details. A new native `com.recipereborn.app` record now exists as a draft with zero installed users. It is registered for Android developer verification with three verified certificate fingerprints. The old `com.recipereborn.app.twa` fallback remains untouched in closed testing and has never reached production. Expo SDK 57 targets SDK 36 by default for the native app.
 
 ## Not present or not confirmable locally
 
 - An authenticated Expo/EAS session or linked EAS project ID
 - Apple Developer Program membership, Team ID, App Store Connect app record, or iOS signing credentials
-- A native Android signing key for `com.recipereborn.app`
+- EAS signing credentials and the final Play App Signing/upload-key handoff for the native release artifact
 - Apple `apple-app-site-association` Team ID
 - EAS preview/development signing-certificate SHA-256 values, which can be added to `assetlinks.json` after EAS creates those credentials
 
@@ -92,9 +92,10 @@ Do not run `eas submit` until the owner explicitly approves submission and all r
 ## Values needed to finish verified links
 
 - Apple: Team ID plus bundle identifier for `/.well-known/apple-app-site-association`
-- Android: add `com.recipereborn.app` and the SHA-256 fingerprints for the EAS signing certificate and eventual Play App Signing certificate after those credentials exist.
+- Android Play/verification keys: configured at `/.well-known/assetlinks.json` for `com.recipereborn.app` using all three fingerprints shown as verified in Play Console on August 24, 2026.
+- Android EAS preview/development builds: add their SHA-256 fingerprints later if those builds use certificates not already listed.
 
-Until the Apple and new-native Android association files can be generated with real signing identities, password reset can still use the custom `recipereborn://` scheme, but verified HTTPS app links are not release-ready.
+Android's website-side association is configured. It still requires live HTTPS verification and a signed-device test. Until Apple's association file is generated, iOS password reset can use the custom `recipereborn://` scheme, but verified iOS Universal Links are not release-ready.
 
 ## Pre-submission verification
 
