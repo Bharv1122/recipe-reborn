@@ -4,7 +4,8 @@ Checked August 24, 2026. This document deliberately stops before account creatio
 
 ## Confirmed in the project
 
-- Expo app slug: `recipe-reborn`
+- Expo owner/project: `@reciperebornmobile/recipereborn`
+- EAS project ID: `56cc462a-d0a6-4cc7-8ca8-907bcb76f2fd`
 - URL scheme: `recipereborn`
 - Provisional iOS bundle identifier: `com.recipereborn.app`
 - Native Android package: `com.recipereborn.app`
@@ -54,27 +55,37 @@ Run these commands from `C:\Users\bethh\Documents\recipe-reborn\mobile`.
    npx eas-cli@latest build --platform android --profile preview
    ```
 
-4. For live-reload development on Android, build the installed development client once, then start Metro:
+   This build uploads the project to EAS and may create persistent remote signing credentials. Obtain action-time approval before starting it.
+
+4. Create a Play-ready AAB for the private/internal Google Play track without submitting it:
+
+   ```powershell
+   npx eas-cli@latest build --platform android --profile play-internal
+   ```
+
+   The `play-internal` profile is store-distribution only; it has no auto-submit setting. Obtain action-time approval before EAS uploads source or creates signing credentials, and stop again before uploading the resulting AAB to Play Console.
+
+5. For live-reload development on Android, build the installed development client once, then start Metro:
 
    ```powershell
    npx eas-cli@latest build --platform android --profile development
    npx expo start --dev-client
    ```
 
-5. For a physical iPhone build, first complete Apple Developer Program enrollment, confirm the Team ID, and register the test device. EAS can then create an ad hoc profile with owner approval:
+6. For a physical iPhone build, first complete Apple Developer Program enrollment, confirm the Team ID, and register the test device. EAS can then create an ad hoc profile with owner approval:
 
    ```powershell
    npx eas-cli@latest device:create
    npx eas-cli@latest build --platform ios --profile preview
    ```
 
-6. A local iOS simulator build is available on a Mac without registering a physical device:
+7. A local iOS simulator build is available on a Mac without registering a physical device:
 
    ```powershell
    npx eas-cli@latest build --platform ios --profile development-simulator
    ```
 
-7. After device QA, policy decisions, privacy-form reconciliation, and signing are complete, create store artifacts. This command builds but does not submit:
+8. After device QA, policy decisions, privacy-form reconciliation, and signing are complete, create store artifacts. This command builds but does not submit:
 
    ```powershell
    npx eas-cli@latest build --platform all --profile production

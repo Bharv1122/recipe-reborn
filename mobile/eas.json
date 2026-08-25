@@ -11,6 +11,11 @@
       "distribution": "internal",
       "android": { "buildType": "apk" }
     },
+    "play-internal": {
+      "distribution": "store",
+      "environment": "production",
+      "android": { "buildType": "app-bundle" }
+    },
     "production": { "autoIncrement": true }
   }
 }

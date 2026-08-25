@@ -3,7 +3,8 @@ import type { ExpoConfig, ConfigContext } from 'expo/config';
 export default ({ config }: ConfigContext): ExpoConfig => ({
   ...config,
   name: 'Recipe Reborn',
-  slug: 'recipe-reborn',
+  slug: 'recipereborn',
+  owner: 'reciperebornmobile',
   platforms: ['ios', 'android'],
   version: '1.0.0',
   orientation: 'portrait',
@@ -64,8 +65,8 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
   experiments: { typedRoutes: true },
   extra: {
     apiBaseUrl: process.env.EXPO_PUBLIC_API_BASE_URL || 'https://recipereborn.com',
-    eas: process.env.EXPO_PUBLIC_EAS_PROJECT_ID
-      ? { projectId: process.env.EXPO_PUBLIC_EAS_PROJECT_ID }
-      : undefined,
+    eas: {
+      projectId: process.env.EXPO_PUBLIC_EAS_PROJECT_ID || '56cc462a-d0a6-4cc7-8ca8-907bcb76f2fd',
+    },
   },
 });
