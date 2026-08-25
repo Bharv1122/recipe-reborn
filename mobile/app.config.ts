@@ -10,7 +10,7 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
   orientation: 'portrait',
   scheme: 'recipereborn',
   userInterfaceStyle: 'light',
-  icon: './assets/images/icon.png',
+  icon: './assets/images/recipe-reborn-icon.png',
   ios: {
     supportsTablet: true,
     bundleIdentifier: process.env.EXPO_IOS_BUNDLE_IDENTIFIER || 'com.recipereborn.app',
@@ -24,9 +24,9 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
     package: process.env.EXPO_ANDROID_PACKAGE || 'com.recipereborn.app',
     versionCode: 1,
     adaptiveIcon: {
-      foregroundImage: './assets/images/android-icon-foreground.png',
-      backgroundColor: '#FFF8EC',
-      monochromeImage: './assets/images/android-icon-monochrome.png',
+      foregroundImage: './assets/images/recipe-reborn-android-foreground.png',
+      backgroundColor: '#064E3B',
+      monochromeImage: './assets/images/recipe-reborn-android-monochrome.png',
     },
     permissions: ['CAMERA', 'POST_NOTIFICATIONS'],
     intentFilters: [{

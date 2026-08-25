@@ -1,26 +1,24 @@
 import { NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth/next';
-import { authOptions } from '@/lib/auth-options';
 import { AI_CHAT_URL, AI_API_KEY, MODEL_SMART } from '@/lib/ai';
 import { rateLimit } from '@/lib/rate-limit';
 import { extractJsonPayload } from '@/lib/ai-json';
 import { originalNutritionFromLabelScan } from '@/lib/nutrition-facts';
+import { getRequestUserId } from '@/lib/request-auth';
 
 const MAX_IMAGE_BYTES = 8 * 1024 * 1024;
 const ALLOWED_IMAGE_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'image/heic', 'image/heif'];
 
 export async function POST(req: Request) {
   try {
-    // Check authentication
-    const session = await getServerSession(authOptions);
-    if (!session?.user?.email) {
+    const userId = await getRequestUserId(req);
+    if (!userId) {
       return NextResponse.json(
         { error: 'You must be logged in to extract recipes from photos' },
         { status: 401 }
       );
     }
 
-    const { success } = await rateLimit(`extract-recipe-from-photo:${session.user.email}`, 10, 60);
+    const { success } = await rateLimit(`extract-recipe-from-photo:${userId}`, 10, 60);
     if (!success) {
       return NextResponse.json(
         { error: 'Too many requests. Please slow down and try again in a minute.' },

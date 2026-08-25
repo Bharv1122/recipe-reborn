@@ -1,9 +1,10 @@
-import { useRef, useState } from 'react';
+import { useCallback, useRef, useState } from 'react';
 import { ScrollView, StyleSheet, Text, View } from 'react-native';
 import * as Crypto from 'expo-crypto';
-import { Stack } from 'expo-router';
+import { Stack, useFocusEffect } from 'expo-router';
 import { Button, Card, Field, InlineError, Screen } from '@/components/ui';
 import { cancelRecipeGeneration, generateRecipe, saveGeneratedRecipe } from '@/services/recipes';
+import { takeScanRecipeHandoff } from '@/services/scan-recipe-handoff';
 import type { GeneratedRecipe } from '@/types';
 import { colors } from '@/theme';
 
@@ -15,9 +16,27 @@ export default function GenerateScreen() {
   const [busy, setBusy] = useState(false);
   const [saved, setSaved] = useState(false);
   const [generatedFrom, setGeneratedFrom] = useState('');
+  const [scanContext, setScanContext] = useState('');
   const [error, setError] = useState<string | null>(null);
   const abortRef = useRef<AbortController | null>(null);
   const generationIdRef = useRef<string | null>(null);
+
+  useFocusEffect(useCallback(() => {
+    const handoff = takeScanRecipeHandoff();
+    if (!handoff) return;
+    setSource(handoff.source);
+    setIngredients(handoff.ingredients);
+    setScanContext(handoff.context);
+    setRecipe(null);
+    setSaved(false);
+    setGeneratedFrom('');
+    setError(null);
+  }, []));
+
+  const chooseSource = (next: 'label' | 'pantry' | 'dish') => {
+    setSource(next);
+    setScanContext('');
+  };
 
   const run = async (random = false) => {
     const input = random ? 'Surprise me with a random recipe' : ingredients.trim();
@@ -63,11 +82,15 @@ export default function GenerateScreen() {
     <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
       <Card>
         <Text style={styles.title}>What would you like to make?</Text>
+        {scanContext ? <View style={styles.reviewNotice}>
+          <Text style={styles.reviewTitle}>Review the scanned ingredients</Text>
+          <Text style={styles.note}>{scanContext}. Correct anything the scan missed or misread before tapping Generate recipe.</Text>
+        </View> : null}
         <View style={styles.row}>
-          <Button label="Package label" secondary={source !== 'label'} onPress={() => setSource('label')} />
-          <Button label="Pantry items" secondary={source !== 'pantry'} onPress={() => setSource('pantry')} />
+          <Button label="Package label" secondary={source !== 'label'} onPress={() => chooseSource('label')} />
+          <Button label="Pantry items" secondary={source !== 'pantry'} onPress={() => chooseSource('pantry')} />
         </View>
-        <Button label="Specific dish" secondary={source !== 'dish'} onPress={() => setSource('dish')} />
+        <Button label="Specific dish" secondary={source !== 'dish'} onPress={() => chooseSource('dish')} />
         <Field
           accessibilityLabel="Ingredients"
           multiline
@@ -106,6 +129,8 @@ export default function GenerateScreen() {
 const styles = StyleSheet.create({
   content: { gap: 14, paddingBottom: 30 }, row: { flexDirection: 'row', gap: 8 }, actions: { flexDirection: 'row', gap: 8 }, action: { flex: 1 },
   title: { fontSize: 20, fontWeight: '800', color: colors.ink }, multiline: { minHeight: 130, paddingTop: 14 },
+  reviewNotice: { gap: 5, borderWidth: 1, borderColor: colors.green, backgroundColor: '#F0FDF4', borderRadius: 12, padding: 12 },
+  reviewTitle: { color: colors.greenDark, fontSize: 16, fontWeight: '800' },
   note: { color: colors.muted, lineHeight: 19 }, recipeTitle: { color: colors.greenDark, fontSize: 24, fontWeight: '800' },
   meta: { color: colors.muted }, heading: { color: colors.ink, fontSize: 17, fontWeight: '800', marginTop: 6 }, body: { color: colors.ink, lineHeight: 22 },
 });
