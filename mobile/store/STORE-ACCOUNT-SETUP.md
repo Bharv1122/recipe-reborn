@@ -25,7 +25,7 @@ The connected Play Console was verified on August 24, 2026: it is an existing Pe
 - Apple Developer Program membership, Team ID, App Store Connect app record, or iOS signing credentials
 - EAS signing credentials and the final Play App Signing/upload-key handoff for the native release artifact
 - Apple `apple-app-site-association` Team ID
-- EAS preview/development signing-certificate SHA-256 values, which can be added to `assetlinks.json` after EAS creates those credentials
+- Development-client signing-certificate SHA-256 values, which can be added to `assetlinks.json` after those builds create their credentials. The current EAS preview certificate is already included.
 
 No signing keys, service-account files, App Store Connect API keys, Google service files, or credential JSON files are committed to the repository. Keep all such secrets out of Git.
 
@@ -104,7 +104,7 @@ Do not run `eas submit` until the owner explicitly approves submission and all r
 
 - Apple: Team ID plus bundle identifier for `/.well-known/apple-app-site-association`
 - Android Play/verification keys: configured at `/.well-known/assetlinks.json` for `com.recipereborn.app` using all three fingerprints shown as verified in Play Console on August 24, 2026.
-- Android EAS preview/development builds: add their SHA-256 fingerprints later if those builds use certificates not already listed.
+- Android EAS preview builds: the current Expo preview keystore fingerprint is also configured. Add future development-build fingerprints only if those builds use a different certificate.
 
 Android's website-side association is configured. It still requires live HTTPS verification and a signed-device test. Until Apple's association file is generated, iOS password reset can use the custom `recipereborn://` scheme, but verified iOS Universal Links are not release-ready.
 
