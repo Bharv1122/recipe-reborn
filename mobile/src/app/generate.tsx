@@ -10,25 +10,27 @@ import { colors } from '@/theme';
 export default function GenerateScreen() {
   const [ingredients, setIngredients] = useState('');
   const [dietaryRestriction, setDietaryRestriction] = useState('');
-  const [source, setSource] = useState<'label' | 'pantry'>('label');
+  const [source, setSource] = useState<'label' | 'pantry' | 'dish'>('label');
   const [recipe, setRecipe] = useState<GeneratedRecipe | null>(null);
   const [busy, setBusy] = useState(false);
   const [saved, setSaved] = useState(false);
+  const [generatedFrom, setGeneratedFrom] = useState('');
   const [error, setError] = useState<string | null>(null);
   const abortRef = useRef<AbortController | null>(null);
   const generationIdRef = useRef<string | null>(null);
 
-  const run = async () => {
-    const input = ingredients.trim();
+  const run = async (random = false) => {
+    const input = random ? 'Surprise me with a random recipe' : ingredients.trim();
     if (!input) return;
     const controller = new AbortController();
     const generationId = Crypto.randomUUID();
     abortRef.current = controller;
     generationIdRef.current = generationId;
+    setGeneratedFrom(input);
     setBusy(true); setError(null); setRecipe(null); setSaved(false);
     try {
       const result = await generateRecipe(input, {
-        source, dietaryRestriction: dietaryRestriction.trim() || undefined,
+        source: random ? 'random' : source, dietaryRestriction: dietaryRestriction.trim() || undefined,
         signal: controller.signal, generationId,
       });
       setRecipe(result.recipe);
@@ -52,7 +54,7 @@ export default function GenerateScreen() {
   const save = async () => {
     if (!recipe) return;
     setError(null);
-    try { await saveGeneratedRecipe(ingredients.trim(), recipe); setSaved(true); }
+    try { await saveGeneratedRecipe(generatedFrom || ingredients.trim(), recipe); setSaved(true); }
     catch (value) { setError(value instanceof Error ? value.message : 'Could not save recipe.'); }
   };
 
@@ -60,24 +62,32 @@ export default function GenerateScreen() {
     <Stack.Screen options={{ headerShown: true, title: 'Create a recipe', headerTintColor: colors.green }} />
     <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
       <Card>
-        <Text style={styles.title}>What are we transforming?</Text>
+        <Text style={styles.title}>What would you like to make?</Text>
         <View style={styles.row}>
           <Button label="Package label" secondary={source !== 'label'} onPress={() => setSource('label')} />
           <Button label="Pantry items" secondary={source !== 'pantry'} onPress={() => setSource('pantry')} />
         </View>
+        <Button label="Specific dish" secondary={source !== 'dish'} onPress={() => setSource('dish')} />
         <Field
           accessibilityLabel="Ingredients"
           multiline
           numberOfLines={6}
           textAlignVertical="top"
-          placeholder={source === 'label' ? 'Paste the packaged ingredient list' : 'List what you have in the fridge or pantry'}
+          placeholder={source === 'label'
+            ? 'Paste the packaged ingredient list'
+            : source === 'pantry'
+              ? 'List what you have in the fridge or pantry'
+              : 'Type the recipe you want, such as chicken enchiladas'}
           value={ingredients}
           onChangeText={setIngredients}
           style={styles.multiline}
         />
         <Field accessibilityLabel="Dietary restriction" placeholder="Dietary request (optional)" value={dietaryRestriction} onChangeText={setDietaryRestriction} />
         <Text style={styles.note}>Your saved allergies and disliked ingredients are applied by the server. The app cannot override them.</Text>
-        {busy ? <Button label="Cancel generation" secondary onPress={cancel} /> : <Button label="Generate recipe" onPress={run} disabled={!ingredients.trim()} />}
+        {busy ? <Button label="Cancel generation" secondary onPress={cancel} /> : <View style={styles.actions}>
+          <View style={styles.action}><Button label="Generate recipe" onPress={() => run(false)} disabled={!ingredients.trim()} /></View>
+          <View style={styles.action}><Button label="Random" secondary onPress={() => run(true)} /></View>
+        </View>}
       </Card>
       <InlineError message={error} />
       {recipe ? <Card>
@@ -94,7 +104,7 @@ export default function GenerateScreen() {
 }
 
 const styles = StyleSheet.create({
-  content: { gap: 14, paddingBottom: 30 }, row: { flexDirection: 'row', gap: 8 },
+  content: { gap: 14, paddingBottom: 30 }, row: { flexDirection: 'row', gap: 8 }, actions: { flexDirection: 'row', gap: 8 }, action: { flex: 1 },
   title: { fontSize: 20, fontWeight: '800', color: colors.ink }, multiline: { minHeight: 130, paddingTop: 14 },
   note: { color: colors.muted, lineHeight: 19 }, recipeTitle: { color: colors.greenDark, fontSize: 24, fontWeight: '800' },
   meta: { color: colors.muted }, heading: { color: colors.ink, fontSize: 17, fontWeight: '800', marginTop: 6 }, body: { color: colors.ink, lineHeight: 22 },

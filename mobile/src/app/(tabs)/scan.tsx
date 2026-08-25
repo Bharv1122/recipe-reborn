@@ -18,11 +18,14 @@ export default function ScanScreen() {
   const [mode, setMode] = useState<Mode>('barcode');
   const [scanned, setScanned] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [requestingPermission, setRequestingPermission] = useState(false);
+  const [cameraReady, setCameraReady] = useState(false);
   const [product, setProduct] = useState<Product | null>(null);
   const [photoUri, setPhotoUri] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   useFocusEffect(useCallback(() => {
+    setCameraReady(false);
     setFocused(true);
     return () => setFocused(false);
   }, []));
@@ -44,11 +47,30 @@ export default function ScanScreen() {
     finally { setBusy(false); }
   };
 
-  if (!permission?.granted) {
+  const allowCamera = async () => {
+    setRequestingPermission(true); setError(null);
+    try {
+      const result = await requestPermission();
+      if (!result.granted) {
+        setError(result.canAskAgain
+          ? 'Camera access was not granted. Tap Allow camera to try again.'
+          : 'Camera access is blocked. Enable it for Recipe Reborn in Android Settings.');
+      }
+    } catch {
+      setError('Android could not open the camera permission request.');
+    } finally { setRequestingPermission(false); }
+  };
+
+  if (!permission) {
+    return <Screen><Card><Text style={styles.title}>Checking camera access…</Text></Card></Screen>;
+  }
+
+  if (!permission.granted) {
     return <Screen><Card>
       <Text style={styles.title}>Camera access is off</Text>
       <Text style={styles.body}>Recipe Reborn uses the camera only when you choose to scan a barcode, label, refrigerator, or pantry.</Text>
-      <Button label="Allow camera" onPress={requestPermission} />
+      <Button label="Allow camera" onPress={allowCamera} loading={requestingPermission} />
+      <InlineError message={error} />
     </Card></Screen>;
   }
 
@@ -68,13 +90,15 @@ export default function ScanScreen() {
           style={styles.camera}
           facing="back"
           active={focused}
+          onCameraReady={() => setCameraReady(true)}
+          onMountError={(event) => setError(event.message || 'The camera preview could not start.')}
           barcodeScannerSettings={{ barcodeTypes: ['ean13', 'ean8', 'upc_a', 'upc_e'] }}
           onBarcodeScanned={mode === 'barcode' && !scanned ? scanBarcode : undefined}
         />
         <Text style={styles.guide}>{mode === 'barcode' ? 'Center the barcode in the frame' : `Photograph the ${mode}`}</Text>
       </View> : null}
 
-      {mode !== 'barcode' && !photoUri ? <Button label={`Take ${mode} photo`} onPress={capture} loading={busy} /> : null}
+      {mode !== 'barcode' && !photoUri ? <Button label={cameraReady ? `Take ${mode} photo` : 'Starting camera…'} onPress={capture} loading={busy} disabled={!cameraReady} /> : null}
       {photoUri ? <Card>
         <Image source={{ uri: photoUri }} style={styles.preview} />
         <Text style={styles.title}>Review before anything is saved</Text>
@@ -82,7 +106,7 @@ export default function ScanScreen() {
         <Button label={mode === 'label' ? 'Enter label ingredients' : 'Extract and review items'} onPress={() => mode === 'label'
           ? router.push('/generate')
           : router.push({ pathname: '/pantry-review', params: { uri: photoUri, location: mode } })} />
-        <Button label="Retake" secondary onPress={() => setPhotoUri(null)} />
+        <Button label="Retake" secondary onPress={() => { setCameraReady(false); setPhotoUri(null); }} />
       </Card> : null}
 
       <InlineError message={error} />

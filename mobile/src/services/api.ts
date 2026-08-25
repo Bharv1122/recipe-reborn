@@ -14,7 +14,7 @@ export class ApiError extends Error {
 
 async function parseResponse<T>(response: Response): Promise<T> {
   const body = await response.json().catch(() => ({}));
-  if (!response.ok) throw new ApiError(body.error || 'Something went wrong.', response.status);
+  if (!response.ok) throw new ApiError(body.message || body.error || 'Something went wrong.', response.status);
   return body as T;
 }
 

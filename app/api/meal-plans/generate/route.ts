@@ -1,9 +1,8 @@
 import { randomUUID } from 'node:crypto';
-import { getServerSession } from 'next-auth';
 import { NextResponse } from 'next/server';
 import { z } from 'zod';
-import { authOptions } from '@/lib/auth-options';
 import { prisma } from '@/lib/db';
+import { getRequestUserId } from '@/lib/request-auth';
 import { AI_CHAT_URL, AI_API_KEY, MODEL_FAST, MODEL_SMART } from '@/lib/ai';
 import { DEFAULT_TRIAL_DAYS } from '@/lib/partner-offers';
 import { resolvePartnerTrial } from '@/lib/partner-offer-server';
@@ -320,8 +319,8 @@ export async function POST(req: Request) {
   const startedAt = performance.now();
 
   try {
-    const session = await getServerSession(authOptions);
-    if (!session?.user?.id) {
+    const userId = await getRequestUserId(req);
+    if (!userId) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
@@ -346,7 +345,7 @@ export async function POST(req: Request) {
 
     const profileStartedAt = performance.now();
     const profile = await prisma.user.findUnique({
-      where: { id: session.user.id },
+      where: { id: userId },
       select: {
         allergies: true,
         dislikedIngredients: true,
@@ -375,7 +374,7 @@ export async function POST(req: Request) {
 
     const TRIAL_MEAL_PLAN_LIMIT = 2;
     if (profile?.subscriptionStatus === 'trialing' && !partnerTrial?.fullPremium) {
-      const planCount = await prisma.mealPlan.count({ where: { userId: session.user.id } });
+      const planCount = await prisma.mealPlan.count({ where: { userId } });
       if (planCount >= TRIAL_MEAL_PLAN_LIMIT) {
         return NextResponse.json(
           {
@@ -441,7 +440,7 @@ export async function POST(req: Request) {
     const completeMealPlan = await prisma.$transaction(async (tx) => {
       const mealPlan = await tx.mealPlan.create({
         data: {
-          userId: session.user.id,
+          userId,
           name: `Meal Plan - Week of ${new Date(weekStartDate).toLocaleDateString()}`,
           weekStartDate: new Date(weekStartDate),
           description: `AI-generated meal plan. ${dietaryPreferences.length > 0 ? `Dietary preferences: ${dietaryPreferences.join(', ')}` : 'No specific dietary restrictions'}. ${calorieTarget ? `Target daily calories: ${calorieTarget}` : 'No specific calorie target'}.`,
@@ -451,7 +450,7 @@ export async function POST(req: Request) {
       await tx.recipe.createMany({
         data: preparedMeals.map(({ meal, recipeId }) => ({
           id: recipeId,
-          userId: session.user.id,
+          userId,
           title: meal.title,
           originalIngredients: meal.ingredients.join('\n'),
           freshIngredients: meal.ingredients.join('\n'),

@@ -11,6 +11,7 @@
     "verify:partner-code": "tsx scripts/verify-partner-code.ts",
     "verify:mobile-foundation": "tsx scripts/verify-mobile-foundation.ts",
     "verify:mobile-production": "tsx scripts/verify-mobile-production.ts",
+    "verify:native-repair": "tsx scripts/verify-native-repair.ts",
     "postinstall": "prisma generate"
   },
   "prisma": {

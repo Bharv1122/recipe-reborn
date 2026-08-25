@@ -56,7 +56,7 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
       'expo-image-picker',
       {
         photosPermission: 'Choose food-label or pantry photos to analyze in Recipe Reborn.',
-        cameraPermission: false,
+        cameraPermission: 'Scan food labels and barcodes, or photograph your pantry for recipe suggestions.',
         microphonePermission: false,
       },
     ],

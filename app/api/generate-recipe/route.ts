@@ -224,6 +224,46 @@ Provide a JSON response with this exact structure:
 }
 
 Respond with raw JSON only. Do not include code blocks, markdown, or any other formatting.`;
+    } else if (source === 'dish') {
+      prompt = `You are a professional chef. Create a complete home-cooking recipe for the exact dish the user requested.
+
+Requested dish: ${ingredients}
+${dietaryRestriction ? `Additional dietary request: ${dietaryRestriction}` : ''}
+
+Keep the dish recognizable while making every ingredient and instruction practical and specific. Include measured ingredient quantities and clear step-by-step instructions.
+
+Provide a JSON response with this exact structure:
+{
+  "title": "Recipe name",
+  "freshIngredients": ["ingredient 1 with quantity", "ingredient 2 with quantity"],
+  "instructions": ["Step 1 description", "Step 2 description"],
+  "prepTime": "15 minutes",
+  "cookTime": "30 minutes",
+  "servings": "4",
+  "estimatedCostPerServing": 2.50,
+  "storeBoughtCost": 6.75
+}
+
+Respond with raw JSON only. Do not include code blocks, markdown, or any other formatting.`;
+    } else if (source === 'random') {
+      prompt = `You are a professional chef. Surprise the user with one random, practical, delicious home-cooking recipe.
+${dietaryRestriction ? `Additional dietary request: ${dietaryRestriction}` : ''}
+
+Choose a specific dish, include measured ingredient quantities, and provide clear step-by-step instructions. Do not ask a follow-up question.
+
+Provide a JSON response with this exact structure:
+{
+  "title": "Recipe name",
+  "freshIngredients": ["ingredient 1 with quantity", "ingredient 2 with quantity"],
+  "instructions": ["Step 1 description", "Step 2 description"],
+  "prepTime": "15 minutes",
+  "cookTime": "30 minutes",
+  "servings": "4",
+  "estimatedCostPerServing": 2.50,
+  "storeBoughtCost": 6.75
+}
+
+Respond with raw JSON only. Do not include code blocks, markdown, or any other formatting.`;
     } else if (dietaryRestriction) {
       prompt = `Transform the following recipe to be ${dietaryRestriction} compliant. Ensure ALL ingredients and instructions align with ${dietaryRestriction} dietary restrictions.
 

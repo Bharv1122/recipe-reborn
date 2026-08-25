@@ -18,7 +18,7 @@ export async function saveGeneratedRecipe(originalIngredients: string, recipe: G
 
 export async function generateRecipe(
   ingredients: string,
-  options: { source: 'label' | 'pantry'; dietaryRestriction?: string; signal?: AbortSignal; generationId: string },
+  options: { source: 'label' | 'pantry' | 'dish' | 'random'; dietaryRestriction?: string; signal?: AbortSignal; generationId: string },
 ): Promise<{ generationId: string; recipe: GeneratedRecipe }> {
   const generationId = options.generationId;
   const response = await apiResponse('/api/generate-recipe', {
