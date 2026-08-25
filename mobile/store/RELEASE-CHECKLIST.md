@@ -2,10 +2,11 @@
 
 ## Owner actions required
 
-- Confirm ownership of `com.recipereborn.app` for iOS and Android.
-- Enroll in Apple Developer and Google Play Console; create the Expo/EAS project without changing the production website.
+- Confirm ownership of provisional iOS identifier `com.recipereborn.app`.
+- Use native Android package `com.recipereborn.app` in a fresh Play draft. Leave the existing `com.recipereborn.app.twa` TWA listing untouched.
+- Enroll in Apple Developer and create the Expo/EAS project without changing the production website. The existing Google Play account is already active.
 - Add the EAS project ID and platform signing credentials.
-- Supply Apple Team ID and Android signing certificate SHA-256 for universal-link association files.
+- Supply Apple Team ID for Universal Links. Add EAS and Play App Signing SHA-256 fingerprints for the new native package after those credentials exist.
 - Decide the store-compliant in-app subscription purchase approach. Do not expose a Stripe purchase button in the store build without policy review.
 
 ## Signed-device verification

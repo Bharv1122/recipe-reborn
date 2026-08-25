@@ -5,7 +5,7 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
   name: 'Recipe Reborn',
   slug: 'recipe-reborn',
   platforms: ['ios', 'android'],
-  version: '0.1.0',
+  version: '1.0.0',
   orientation: 'portrait',
   scheme: 'recipereborn',
   userInterfaceStyle: 'light',
@@ -21,6 +21,7 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
   },
   android: {
     package: process.env.EXPO_ANDROID_PACKAGE || 'com.recipereborn.app',
+    versionCode: 1,
     adaptiveIcon: {
       foregroundImage: './assets/images/android-icon-foreground.png',
       backgroundColor: '#FFF8EC',

@@ -1,0 +1,110 @@
+# Recipe Reborn store account and device-beta setup
+
+Checked August 24, 2026. This document deliberately stops before account creation, paid enrollment, legal agreements, signing-key creation, app-record creation, or submission.
+
+## Confirmed in the project
+
+- Expo app slug: `recipe-reborn`
+- URL scheme: `recipereborn`
+- Provisional iOS bundle identifier: `com.recipereborn.app`
+- Native Android package: `com.recipereborn.app`
+- Android version code: `1`
+- Production API and universal-link host: `https://recipereborn.com`
+- Camera, photo library, barcode, notifications, secure storage, SQLite, and deep-link configuration
+- Development-client, internal-preview, iOS-simulator, and production EAS build profiles
+- Store listing, privacy/data-use, reviewer, accessibility, and release-checklist drafts in this directory
+
+The iOS identifier remains provisional until confirmed in Apple Developer. The native Android app intentionally uses a new package and a new Play draft. The existing `com.recipereborn.app.twa` web-wrapper listing must remain untouched.
+
+The connected Play Console was verified on August 24, 2026: it is an existing Personal developer account with verified contact details and one old RecipeReborn TWA app in closed testing. That old app uses `com.recipereborn.app.twa`, has one installed-audience user, has never reached production, and is not the native release path. Expo SDK 57 targets SDK 36 by default for the native app.
+
+## Not present or not confirmable locally
+
+- An authenticated Expo/EAS session or linked EAS project ID
+- Apple Developer Program membership, Team ID, App Store Connect app record, or iOS signing credentials
+- A native Android signing key for `com.recipereborn.app`
+- Apple `apple-app-site-association` Team ID
+- EAS preview/development signing-certificate SHA-256 values, which can be added to `assetlinks.json` after EAS creates those credentials
+
+No signing keys, service-account files, App Store Connect API keys, Google service files, or credential JSON files are committed to the repository. Keep all such secrets out of Git.
+
+## Shortest safe owner sequence
+
+Run these commands from `C:\Users\bethh\Documents\recipe-reborn\mobile`.
+
+1. Create or sign in to a free Expo account, then authenticate this computer:
+
+   ```powershell
+   npx eas-cli@latest login
+   npx eas-cli@latest whoami
+   ```
+
+2. Link a new or existing EAS project only after confirming the Expo account/organization that should own Recipe Reborn:
+
+   ```powershell
+   npx eas-cli@latest init
+   npx eas-cli@latest project:info
+   ```
+
+   Keep the public EAS project ID that `eas init` adds. It is an identifier, not a secret. Do not put passwords, tokens, signing keys, `.p8` files, or service-account JSON in `.env` or Git.
+
+3. Make the first Android physical-device preview. This produces an installable APK and does not submit to Google Play:
+
+   ```powershell
+   npx eas-cli@latest build --platform android --profile preview
+   ```
+
+4. For live-reload development on Android, build the installed development client once, then start Metro:
+
+   ```powershell
+   npx eas-cli@latest build --platform android --profile development
+   npx expo start --dev-client
+   ```
+
+5. For a physical iPhone build, first complete Apple Developer Program enrollment, confirm the Team ID, and register the test device. EAS can then create an ad hoc profile with owner approval:
+
+   ```powershell
+   npx eas-cli@latest device:create
+   npx eas-cli@latest build --platform ios --profile preview
+   ```
+
+6. A local iOS simulator build is available on a Mac without registering a physical device:
+
+   ```powershell
+   npx eas-cli@latest build --platform ios --profile development-simulator
+   ```
+
+7. After device QA, policy decisions, privacy-form reconciliation, and signing are complete, create store artifacts. This command builds but does not submit:
+
+   ```powershell
+   npx eas-cli@latest build --platform all --profile production
+   ```
+
+Do not run `eas submit` until the owner explicitly approves submission and all release gates pass.
+
+## Store-account decisions the owner must make
+
+- Apple individual versus organization enrollment. Organization enrollment requires the legal entity details and D-U-N-S information. An individual account displays the legal personal name as the seller.
+- The existing Google Play account is Personal. Have counsel confirm whether it should remain individually owned or later be transferred to a properly formed business; do not create a duplicate developer account.
+- Confirm `com.recipereborn.app` for iOS before creating the Apple app record. Android also uses `com.recipereborn.app` in a new native Play draft; leave the old `.twa` app untouched.
+- Choose the store-compliant Premium purchase path before submission. Existing web Stripe billing must not be exposed as an in-app purchase shortcut without a current policy review.
+
+## Values needed to finish verified links
+
+- Apple: Team ID plus bundle identifier for `/.well-known/apple-app-site-association`
+- Android: add `com.recipereborn.app` and the SHA-256 fingerprints for the EAS signing certificate and eventual Play App Signing certificate after those credentials exist.
+
+Until the Apple and new-native Android association files can be generated with real signing identities, password reset can still use the custom `recipereborn://` scheme, but verified HTTPS app links are not release-ready.
+
+## Pre-submission verification
+
+Run:
+
+```powershell
+npm run verify
+npx expo-doctor
+npx expo export --platform android --output-dir dist-android
+npx expo export --platform ios --output-dir dist-ios
+```
+
+Then complete every signed-device check in `RELEASE-CHECKLIST.md` with synthetic data. Never use customer accounts or make a real charge during QA.
