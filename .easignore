@@ -1,0 +1,39 @@
+# Keep private mobile preview uploads limited to the native app source.
+.git/
+.github/
+.claude/
+.codex-video-review/
+.next/
+.next-*/
+demo-production/
+outputs/
+node_modules/
+
+# Recipe Reborn web/server source is deployed separately through Vercel.
+app/
+components/
+docs/
+hooks/
+lib/
+prisma/
+public/
+scripts/
+types/
+
+# Local native caches and dependencies are recreated by EAS.
+mobile/.claude/
+mobile/.expo/
+mobile/.vscode/
+mobile/dist/
+mobile/node_modules/
+mobile/web-build/
+
+# Never upload local environment or credential files.
+.env*
+!.env.example
+*.jks
+*.keystore
+*.p8
+*.p12
+*.pem
+*.key
