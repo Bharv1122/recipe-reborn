@@ -40,7 +40,12 @@ export async function GET() {
 
     const user = await prisma.user.findUnique({
       where: { id: session.user.id },
-      select: { signupSource: true, createdAt: true },
+      select: {
+        signupSource: true,
+        createdAt: true,
+        subscriptionStatus: true,
+        currentPeriodEnd: true,
+      },
     });
 
     // Session JWT with no matching row — a deleted account, or a token issued

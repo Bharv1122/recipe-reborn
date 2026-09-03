@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { findPartnerOffer, resolveSignupAttribution } from '../lib/partner-offers';
+import { findPartnerOffer, partnerTrialEndsAt, resolveSignupAttribution } from '../lib/partner-offers';
 import { buildTrialCheckoutSettings } from '../lib/partner-checkout';
 
 const typed = resolveSignupAttribution('Finnsters', 'fb');
@@ -40,8 +40,13 @@ assert.equal(playTesterOffer?.slug, 'playtest14');
 assert.equal(playTesterOffer?.trialDays, 14);
 assert.equal(playTesterOffer?.trialRecipeLimit, 100);
 assert.equal(playTesterOffer?.fullPremium, true);
+assert.equal(playTesterOffer?.directAccess, true);
 assert.equal(playTesterOffer?.maxRedemptions, 25);
 assert.equal(playTesterOffer?.singleUse, true);
+assert.equal(
+  partnerTrialEndsAt(playTesterOffer!, new Date('2026-09-02T12:00:00.000Z')).toISOString(),
+  '2026-09-16T12:00:00.000Z',
+);
 const playTesterCheckout = buildTrialCheckoutSettings(true, playTesterOffer!.trialDays);
 assert.equal(playTesterCheckout.payment_method_collection, 'if_required');
 assert.equal(playTesterCheckout.subscription_data.trial_period_days, 14);

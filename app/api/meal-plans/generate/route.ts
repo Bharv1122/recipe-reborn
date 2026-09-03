@@ -356,6 +356,7 @@ export async function POST(req: Request) {
         subscriptionStatus: true,
         signupSource: true,
         createdAt: true,
+        currentPeriodEnd: true,
       },
     });
 

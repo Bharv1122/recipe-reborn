@@ -53,10 +53,23 @@ const STANDARD: ResolvedTrial = {
 export async function resolvePartnerTrial(user: {
   signupSource: string | null;
   createdAt: Date;
+  subscriptionStatus?: string;
+  currentPeriodEnd?: Date | null;
 }): Promise<ResolvedTrial> {
   const offer = findPartnerOffer(user.signupSource);
 
   if (!offer || !isOfferLive(offer)) {
+    return STANDARD;
+  }
+
+  if (
+    offer.directAccess
+    && (
+      user.subscriptionStatus !== 'trialing'
+      || !user.currentPeriodEnd
+      || user.currentPeriodEnd.getTime() <= Date.now()
+    )
+  ) {
     return STANDARD;
   }
 

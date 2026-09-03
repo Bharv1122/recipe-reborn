@@ -87,6 +87,7 @@ export async function POST(request: NextRequest) {
         dislikedIngredients: true,
         signupSource: true,
         createdAt: true,
+        currentPeriodEnd: true,
       },
     });
 

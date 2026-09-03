@@ -31,6 +31,8 @@ export interface PartnerOffer {
    * caps that exist to stop trial-stockpiling are lifted here.
    */
   fullPremium: boolean;
+  /** Grant the time-limited Premium entitlement immediately, without Stripe. */
+  directAccess?: boolean;
   /** After this date the link still works but reverts to the standard trial. */
   expiresAt: string;
   /**
@@ -81,6 +83,7 @@ export const PARTNER_OFFERS: PartnerOffer[] = [
     trialDays: 14,
     trialRecipeLimit: 100,
     fullPremium: true,
+    directAccess: true,
     expiresAt: '2026-10-31',
     maxRedemptions: 25,
     singleUse: true,
@@ -113,6 +116,10 @@ export const PARTNER_OFFERS: PartnerOffer[] = [
     maxRedemptions: 1,
   },
 ];
+
+export function partnerTrialEndsAt(offer: PartnerOffer, now = new Date()): Date {
+  return new Date(now.getTime() + offer.trialDays * 86_400_000);
+}
 
 /**
  * The single normalization rule for attribution values.

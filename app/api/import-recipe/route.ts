@@ -58,6 +58,7 @@ export async function POST(req: NextRequest) {
         lastGenerationReset: true,
         signupSource: true,
         createdAt: true,
+        currentPeriodEnd: true,
       },
     });
 

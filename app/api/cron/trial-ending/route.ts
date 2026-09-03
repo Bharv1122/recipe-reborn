@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
 import { sendEmail, trialEndingEmail, appUrl, isEmailConfigured } from '@/lib/email';
-import { findPartnerOffer } from '@/lib/partner-offers';
+import { findPartnerOffer, PARTNER_OFFERS } from '@/lib/partner-offers';
 import { SUPPORT_EMAIL } from '@/lib/support';
 
 export const dynamic = 'force-dynamic';
@@ -45,6 +45,24 @@ export async function GET(request: NextRequest) {
 
   try {
     const now = Date.now();
+    const directOfferSlugs = PARTNER_OFFERS
+      .filter((offer) => offer.directAccess)
+      .map((offer) => offer.slug);
+    const expired = directOfferSlugs.length
+      ? await prisma.user.updateMany({
+          where: {
+            signupSource: { in: directOfferSlugs },
+            subscriptionTier: 'premium',
+            subscriptionStatus: 'trialing',
+            stripeSubscriptionId: null,
+            currentPeriodEnd: { lt: new Date(now) },
+          },
+          data: {
+            subscriptionTier: 'free',
+            subscriptionStatus: 'canceled',
+          },
+        })
+      : { count: 0 };
     const windowStart = new Date(now + NOTIFY_WINDOW_START_DAYS * 86_400_000);
     const windowEnd = new Date(now + NOTIFY_WINDOW_END_DAYS * 86_400_000);
 
@@ -123,10 +141,10 @@ export async function GET(request: NextRequest) {
     }
 
     console.log(
-      `[trial-nudge] candidates=${candidates.length} sent=${sent} skipped=${skipped} failed=${failed}`
+      `[trial-nudge] expired=${expired.count} candidates=${candidates.length} sent=${sent} skipped=${skipped} failed=${failed}`
     );
 
-    return NextResponse.json({ candidates: candidates.length, sent, skipped, failed });
+    return NextResponse.json({ expired: expired.count, candidates: candidates.length, sent, skipped, failed });
   } catch (error) {
     console.error('[trial-nudge] Run failed:', error);
     return NextResponse.json({ error: 'Run failed' }, { status: 500 });

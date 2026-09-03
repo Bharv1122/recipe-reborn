@@ -3,7 +3,7 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth-options';
 import { prisma } from '@/lib/db';
 import { rateLimit, getClientIp } from '@/lib/rate-limit';
-import { findPartnerOffer, isOfferLive } from '@/lib/partner-offers';
+import { findPartnerOffer, isOfferLive, partnerTrialEndsAt } from '@/lib/partner-offers';
 import { resolvePartnerTrial } from '@/lib/partner-offer-server';
 
 export const dynamic = 'force-dynamic';
@@ -50,7 +50,13 @@ export async function POST(request: NextRequest) {
 
     const user = await prisma.user.findUnique({
       where: { id: session.user.id },
-      select: { id: true, signupSource: true, createdAt: true, subscriptionTier: true },
+      select: {
+        id: true,
+        signupSource: true,
+        createdAt: true,
+        subscriptionTier: true,
+        partnerOfferRedeemedCode: true,
+      },
     });
 
     if (!user) {
@@ -64,6 +70,52 @@ export async function POST(request: NextRequest) {
         { error: 'Your account is already on Premium.' },
         { status: 400 }
       );
+    }
+
+    if (offer.directAccess) {
+      if (user.partnerOfferRedeemedCode) {
+        return NextResponse.json(
+          { error: 'This account has already used a community offer.' },
+          { status: 409 }
+        );
+      }
+
+      const taken = await prisma.user.count({
+        where: {
+          signupSource: { equals: offer.slug, mode: 'insensitive' },
+          id: { not: user.id },
+        },
+      });
+      if (taken >= offer.maxRedemptions) {
+        return NextResponse.json(
+          { error: `The ${offer.label} offer has reached its limit.` },
+          { status: 409 }
+        );
+      }
+
+      const redeemedAt = new Date();
+      await prisma.user.update({
+        where: { id: user.id },
+        data: {
+          signupSource: offer.slug,
+          subscriptionTier: 'premium',
+          subscriptionStatus: 'trialing',
+          currentPeriodEnd: partnerTrialEndsAt(offer, redeemedAt),
+          partnerOfferRedeemedCode: offer.slug,
+          partnerOfferRedeemedAt: redeemedAt,
+        },
+      });
+
+      return NextResponse.json({
+        message: `${offer.label} unlocked — full Premium for ${offer.trialDays} days. No card required.`,
+        offer: {
+          slug: offer.slug,
+          label: offer.label,
+          trialDays: offer.trialDays,
+          trialRecipeLimit: offer.trialRecipeLimit,
+          fullPremium: offer.fullPremium,
+        },
+      });
     }
 
     if (user.signupSource !== offer.slug) {
