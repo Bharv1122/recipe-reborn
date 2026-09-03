@@ -83,6 +83,27 @@ model User {
   generationCancellations GenerationCancellation[]
   mobileRefreshTokens     MobileRefreshToken[]
   mobilePushTokens        MobilePushToken[]
+  recipeReports           RecipeReport[]
+}
+
+// Authenticated in-app reports for AI-generated recipes. The recipe snapshot is
+// retained so a report remains reviewable even when the recipe was never saved
+// or the user later deletes the saved recipe. Account deletion cascades here.
+model RecipeReport {
+  id             String   @id @default(cuid())
+  userId         String
+  recipeId       String?
+  source         String
+  reason         String
+  details        String?  @db.Text
+  recipeTitle    String
+  recipeSnapshot Json
+  createdAt      DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, createdAt])
+  @@index([recipeId])
 }
 
 // Native clients receive short-lived access JWTs. Only a SHA-256 hash of each

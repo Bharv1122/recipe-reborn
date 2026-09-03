@@ -47,6 +47,7 @@ export default function PrivacyPage() {
               <li>Ingredient inputs and customization preferences</li>
               <li>Confirmed refrigerator and pantry inventory lists</li>
               <li>Fridge and pantry photos are sent for AI analysis but are not saved by RecipeReborn</li>
+              <li>Recipe reports, including the selected concern, optional note, and reported recipe contents</li>
               <li>Search queries and filter selections</li>
               <li>Login times and session data</li>
             </ul>
@@ -74,6 +75,7 @@ export default function PrivacyPage() {
               <li><strong>Communication:</strong> To send you service-related notifications and updates</li>
               <li><strong>Security:</strong> To monitor and analyze usage to protect against unauthorized access</li>
               <li><strong>Improvement:</strong> To understand how users interact with the Service and make improvements</li>
+              <li><strong>Content Safety:</strong> To review user reports about unsafe, offensive, or inaccurate AI-generated recipes</li>
             </ul>
           </section>
 
