@@ -9,10 +9,29 @@ import {
 const selectedMealTypes: MealType[] = ['breakfast', 'dinner'];
 
 function validPlan() {
-  return DAYS.map((day) => ({
+  const breakfastTitles = [
+    'Banana oatmeal',
+    'Berry yogurt bowl',
+    'Spinach scrambled eggs',
+    'Apple cinnamon quinoa',
+    'Avocado tomato toast',
+    'Peach chia pudding',
+    'Vegetable breakfast hash',
+  ];
+  const dinnerTitles = [
+    'Chicken broccoli rice bowl',
+    'Turkey sweet potato skillet',
+    'Lentil tomato stew',
+    'Ginger tofu vegetable stir-fry',
+    'Baked pork chops with green beans',
+    'Black bean stuffed peppers',
+    'Beef mushroom barley soup',
+  ];
+
+  return DAYS.map((day, index) => ({
     day,
     breakfast: {
-      title: `${day} oatmeal`,
+      title: breakfastTitles[index],
       ingredients: ['1/2 cup rolled oats', '1 cup oat milk', '1 banana'],
       instructions: 'Simmer the oats and oat milk, then top with banana.',
       prepTime: '5 min',
@@ -22,7 +41,7 @@ function validPlan() {
       estimatedCalories: 350,
     },
     dinner: {
-      title: `${day} chicken bowl`,
+      title: dinnerTitles[index],
       ingredients: ['4 oz chicken breast', '1/2 cup brown rice', '1 cup broccoli'],
       instructions: 'Cook the chicken and rice. Steam the broccoli and combine.',
       prepTime: '10 min',
@@ -146,5 +165,42 @@ const ordinaryStaplesResult = validateMealPlan(ordinaryStaples, {
   allergies: [],
 });
 assert.equal(ordinaryStaplesResult.success, true);
+
+const exactDuplicate = validPlan();
+exactDuplicate[2].dinner.title = exactDuplicate[0].dinner.title;
+const exactDuplicateResult = validateMealPlan(exactDuplicate, {
+  mealTypes: selectedMealTypes,
+  servings: 1,
+  allergies: [],
+});
+assert.ok(!exactDuplicateResult.success && exactDuplicateResult.errors.some((error) =>
+  error.code === 'duplicate_meal'
+    && error.day === 'wednesday'
+    && error.mealType === 'dinner'
+));
+
+const minorTitleVariation = validPlan();
+minorTitleVariation[0].dinner.title = 'Lemon herb roasted chicken and asparagus';
+minorTitleVariation[3].dinner.title = 'Roasted lemon-herb chicken with asparagus';
+const minorTitleVariationResult = validateMealPlan(minorTitleVariation, {
+  mealTypes: selectedMealTypes,
+  servings: 1,
+  allergies: [],
+});
+assert.ok(!minorTitleVariationResult.success && minorTitleVariationResult.errors.some((error) =>
+  error.code === 'duplicate_meal'
+    && error.day === 'thursday'
+    && error.mealType === 'dinner'
+));
+
+const distinctMeals = validPlan();
+distinctMeals[0].dinner.title = 'Lemon herb roasted chicken and asparagus';
+distinctMeals[1].dinner.title = 'Ginger chicken rice bowl with broccoli';
+const distinctMealsResult = validateMealPlan(distinctMeals, {
+  mealTypes: selectedMealTypes,
+  servings: 1,
+  allergies: [],
+});
+assert.equal(distinctMealsResult.success, true);
 
 console.log('Meal-plan safety verification passed.');

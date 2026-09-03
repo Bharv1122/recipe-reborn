@@ -41,7 +41,8 @@ export type MealPlanValidationCode =
   | 'invalid_meal'
   | 'serving_mismatch'
   | 'allergen_detected'
-  | 'prepared_shortcut';
+  | 'prepared_shortcut'
+  | 'duplicate_meal';
 
 export interface MealPlanValidationError {
   code: MealPlanValidationCode;
@@ -162,6 +163,40 @@ function containsPreparedShortcut(meal: ValidatedMeal): boolean {
   );
 }
 
+const NON_DISTINCT_TITLE_WORDS = new Set([
+  ...DAYS,
+  'breakfast',
+  'lunch',
+  'dinner',
+  'snack',
+  'recipe',
+  'and',
+  'with',
+  'the',
+]);
+
+function distinctiveTitleTokens(title: string): string[] {
+  return normalizeText(title)
+    .split(' ')
+    .filter((token) => token.length > 1 && !NON_DISTINCT_TITLE_WORDS.has(token as DayName));
+}
+
+function titlesDescribeSameMeal(first: string, second: string): boolean {
+  const firstTokens = new Set(distinctiveTitleTokens(first));
+  const secondTokens = new Set(distinctiveTitleTokens(second));
+  if (firstTokens.size === 0 || secondTokens.size === 0) return false;
+
+  const firstKey = Array.from(firstTokens).sort().join(' ');
+  const secondKey = Array.from(secondTokens).sort().join(' ');
+  if (firstKey === secondKey) return true;
+
+  // Catch minor wording changes such as "lemon herb roasted chicken" versus
+  // "roasted lemon herb chicken" without collapsing broadly similar dishes.
+  if (Math.min(firstTokens.size, secondTokens.size) < 3) return false;
+  const shared = Array.from(firstTokens).filter((token) => secondTokens.has(token)).length;
+  return shared / Math.max(firstTokens.size, secondTokens.size) >= 0.8;
+}
+
 export function normalizeMealTypes(
   requestedMealTypes: unknown,
   legacyMealsPerDay: unknown,
@@ -221,6 +256,7 @@ export function validateMealPlan(
 
   const seenDays = new Set<string>();
   const validatedByDay = new Map<DayName, ValidatedDayPlan>();
+  const acceptedMealsByType = new Map<MealType, Array<{ day: DayName; title: string }>>();
 
   for (const rawDay of value) {
     if (!rawDay || typeof rawDay !== 'object' || Array.isArray(rawDay)) {
@@ -334,6 +370,23 @@ export function validateMealPlan(
         });
         continue;
       }
+
+      const priorMeal = (acceptedMealsByType.get(mealType) ?? []).find((candidate) =>
+        titlesDescribeSameMeal(candidate.title, meal.title)
+      );
+      if (priorMeal) {
+        errors.push({
+          code: 'duplicate_meal',
+          message: `${day} ${mealType} repeats or closely duplicates ${priorMeal.day} ${mealType} (${priorMeal.title}).`,
+          day,
+          mealType,
+        });
+        continue;
+      }
+
+      const acceptedMeals = acceptedMealsByType.get(mealType) ?? [];
+      acceptedMeals.push({ day, title: meal.title });
+      acceptedMealsByType.set(mealType, acceptedMeals);
 
       meals[mealType] = meal;
     }

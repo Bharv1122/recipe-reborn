@@ -86,6 +86,7 @@ Requirements:
 - ${allergyInfo}
 - ${dislikeInfo}
 - Use varied, achievable home-cooking recipes with measured ingredient quantities
+- Every recipe must be distinct across the week. Never repeat the same dish on multiple days or disguise a repeated dish with a minor title change. Vary the main ingredient, preparation, and accompaniments.
 - Build every dish from basic grocery ingredients. Ordinary staples such as plain bread or tortillas, canned beans or tomatoes, broth, condiments, and plain frozen fruit or vegetables are allowed.
 - Never use a ready-to-eat or pre-cooked entree or prepared meal component, including rotisserie meat, frozen prepared meals or sides, jarred prepared gravy or pasta sauce, boxed mixes, or ready-made dough. Make those components from basic ingredients instead.
 - Keep instructions concise but complete to reduce waiting time
@@ -158,6 +159,7 @@ async function requestReplacementMeal(
   day: DayName,
   mealType: MealType,
   model: string,
+  excludedTitles: string[],
 ): Promise<unknown> {
   const allergies = options.allergies.length > 0
     ? `Blocked food allergies: ${options.allergies.join(', ')}. Never use them, their derivatives, sauces, stocks, or seasonings. Do not mention a blocked allergen even in a free-from label.`
@@ -173,6 +175,7 @@ Exact servings: ${options.servings}
 ${allergies}
 ${dislikes}
 Build the recipe from basic grocery ingredients. Do not use ready-to-eat or pre-cooked entrees or prepared meal components such as rotisserie meat, frozen prepared meals or sides, jarred prepared gravy or pasta sauce, boxed mixes, or ready-made dough. Ordinary staples such as plain bread or tortillas, canned beans or tomatoes, broth, condiments, and plain frozen fruit or vegetables are allowed.
+Create a genuinely different dish from every other meal already in this weekly plan. Do not reuse or lightly rename any of these recipe titles: ${excludedTitles.length > 0 ? excludedTitles.join('; ') : 'none'}.
 
 Return only one JSON object in this exact shape:
 {
@@ -220,7 +223,7 @@ async function repairInvalidMeals(
   model: string,
 ): Promise<unknown | null> {
   if (!Array.isArray(value)) return null;
-  const repairableCodes = new Set(['missing_meal', 'unexpected_meal', 'invalid_meal', 'serving_mismatch', 'allergen_detected', 'prepared_shortcut']);
+  const repairableCodes = new Set(['missing_meal', 'unexpected_meal', 'invalid_meal', 'serving_mismatch', 'allergen_detected', 'prepared_shortcut', 'duplicate_meal']);
   if (errors.some((error) => !repairableCodes.has(error.code) || !error.day || !error.mealType)) {
     return null;
   }
@@ -237,10 +240,30 @@ async function repairInvalidMeals(
       .filter((error) => error.code !== 'unexpected_meal')
       .map((error) => [`${error.day}:${error.mealType}`, { day: error.day!, mealType: error.mealType! }])
   ).values());
+  const titlesBySlot = new Map<string, string>();
+  for (const rawDay of repaired) {
+    const rawDayName = String(rawDay?.day).trim().toLowerCase();
+    for (const candidateType of options.mealTypes) {
+      const candidate = rawDay?.[candidateType];
+      if (!candidate || typeof candidate !== 'object' || Array.isArray(candidate)) continue;
+      const title = (candidate as Record<string, unknown>).title;
+      if (typeof title === 'string' && title.trim()) {
+        titlesBySlot.set(`${rawDayName}:${candidateType}`, title.trim());
+      }
+    }
+  }
   const replacements = await Promise.all(
     slots.map(async (slot) => ({
       ...slot,
-      meal: await requestReplacementMeal(options, slot.day, slot.mealType, model),
+      meal: await requestReplacementMeal(
+        options,
+        slot.day,
+        slot.mealType,
+        model,
+        Array.from(titlesBySlot.entries())
+          .filter(([key]) => key !== `${slot.day}:${slot.mealType}`)
+          .map(([, title]) => title),
+      ),
     }))
   );
   for (const replacement of replacements) {
