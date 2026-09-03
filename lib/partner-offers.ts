@@ -73,6 +73,19 @@ export const PARTNER_OFFERS: PartnerOffer[] = [
     singleUse: true,
   },
   {
+    // Short-lived recruiting offer for the Google Play closed-test cohort.
+    // The buffer above Google's 12-person minimum avoids restarting the
+    // 14-day clock if a few testers drop out, while keeping AI exposure capped.
+    slug: 'playtest14',
+    label: 'PLAYTEST14',
+    trialDays: 14,
+    trialRecipeLimit: 100,
+    fullPremium: true,
+    expiresAt: '2026-10-31',
+    maxRedemptions: 25,
+    singleUse: true,
+  },
+  {
     // The community calls itself the Finnsters, so that is the typed code.
     // Matching is case-insensitive.
     slug: 'finnsters',

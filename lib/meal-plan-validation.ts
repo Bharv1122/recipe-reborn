@@ -40,7 +40,8 @@ export type MealPlanValidationCode =
   | 'unexpected_meal'
   | 'invalid_meal'
   | 'serving_mismatch'
-  | 'allergen_detected';
+  | 'allergen_detected'
+  | 'prepared_shortcut';
 
 export interface MealPlanValidationError {
   code: MealPlanValidationCode;
@@ -95,6 +96,19 @@ const ALLERGEN_EXPANSIONS: Record<string, string[]> = {
   sesame: ['sesame', 'tahini', 'benne'],
 };
 
+// These patterns intentionally target prepared dishes and meal components, not
+// ordinary grocery staples such as bread, tortillas, canned beans or tomatoes,
+// condiments, broth, or plain frozen fruit and vegetables.
+const PREPARED_SHORTCUT_PATTERNS = [
+  /\brotisserie\s+(?:chicken|turkey)\b/i,
+  /\b(?:ready[- ]made|ready[- ]to[- ]eat|pre[- ]?cooked|fully cooked|heat[- ]and[- ]serve|commercially[- ]prepared)\s+(?:chicken|turkey|beef|pork|meatballs?|entrees?|meals?|sides?(?: dishes?)?|mashed potatoes?|rice|pasta|pizza|lasagna|casserole|gravy|sauce|dough|crust)\b/i,
+  /\bfrozen\s+(?:mashed potatoes?|dinners?|meals?|entrees?|meatballs?|pizza|lasagna|casseroles?|mac(?:aroni)?\s+(?:and|&)\s+cheese)\b/i,
+  /\b(?:jarred|prepared|ready[- ]made|store[- ]bought)\s+(?:gravy|(?:pasta|marinara|alfredo|cheese|cream|tomato)\s+sauce|pizza dough|pie crust|cookie dough)\b/i,
+  /\b(?:jar|jars)\s+(?:of\s+)?(?:prepared\s+)?(?:gravy|(?:pasta|marinara|alfredo|cheese|cream|tomato)\s+sauce)\b/i,
+  /\b(?:boxed|packaged)\s+(?:cake|brownie|pancake|waffle|biscuit|cookie|muffin|cornbread|stuffing)\s+mix\b/i,
+  /\b(?:prepared|store[- ]bought|ready[- ]made|commercially[- ]prepared)\s+(?:meals?|entrees?|side dishes?|mashed potatoes?|meatballs?|lasagna|casserole)\b/i,
+];
+
 function normalizeText(value: string): string {
   return value
     .normalize('NFKD')
@@ -138,6 +152,14 @@ function detectAllergen(meal: ValidatedMeal, allergies: string[]): string | null
   }
 
   return null;
+}
+
+function containsPreparedShortcut(meal: ValidatedMeal): boolean {
+  const searchable = [meal.title, ...meal.ingredients, meal.instructions].join(' ');
+  const normalized = normalizeText(searchable);
+  return PREPARED_SHORTCUT_PATTERNS.some((pattern) =>
+    pattern.test(searchable) || pattern.test(normalized)
+  );
 }
 
 export function normalizeMealTypes(
@@ -297,6 +319,16 @@ export function validateMealPlan(
         errors.push({
           code: 'allergen_detected',
           message: `${day} ${mealType} contains a blocked allergen term.`,
+          day,
+          mealType,
+        });
+        continue;
+      }
+
+      if (containsPreparedShortcut(meal)) {
+        errors.push({
+          code: 'prepared_shortcut',
+          message: `${day} ${mealType} uses a commercially prepared meal shortcut instead of basic grocery ingredients.`,
           day,
           mealType,
         });

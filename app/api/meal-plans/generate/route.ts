@@ -86,6 +86,8 @@ Requirements:
 - ${allergyInfo}
 - ${dislikeInfo}
 - Use varied, achievable home-cooking recipes with measured ingredient quantities
+- Build every dish from basic grocery ingredients. Ordinary staples such as plain bread or tortillas, canned beans or tomatoes, broth, condiments, and plain frozen fruit or vegetables are allowed.
+- Never use a ready-to-eat or pre-cooked entree or prepared meal component, including rotisserie meat, frozen prepared meals or sides, jarred prepared gravy or pasta sauce, boxed mixes, or ready-made dough. Make those components from basic ingredients instead.
 - Keep instructions concise but complete to reduce waiting time
 
 Return only a valid JSON array with exactly seven objects, Monday through Sunday. Each day must contain "day" plus exactly these meal keys: ${mealKeys}. Never add breakfast, lunch, dinner, or snack unless it is in that exact list.
@@ -170,6 +172,7 @@ Meal type: ${mealType}
 Exact servings: ${options.servings}
 ${allergies}
 ${dislikes}
+Build the recipe from basic grocery ingredients. Do not use ready-to-eat or pre-cooked entrees or prepared meal components such as rotisserie meat, frozen prepared meals or sides, jarred prepared gravy or pasta sauce, boxed mixes, or ready-made dough. Ordinary staples such as plain bread or tortillas, canned beans or tomatoes, broth, condiments, and plain frozen fruit or vegetables are allowed.
 
 Return only one JSON object in this exact shape:
 {
@@ -192,7 +195,7 @@ Return only one JSON object in this exact shape:
     body: JSON.stringify({
       model,
       messages: [
-        { role: 'system', content: 'Return one valid JSON meal object that obeys every allergy and serving constraint.' },
+        { role: 'system', content: 'Return one valid JSON meal object that obeys every allergy, serving, and from-basic-ingredients constraint.' },
         { role: 'user', content: prompt },
       ],
       temperature: 0.2,
@@ -217,7 +220,7 @@ async function repairInvalidMeals(
   model: string,
 ): Promise<unknown | null> {
   if (!Array.isArray(value)) return null;
-  const repairableCodes = new Set(['missing_meal', 'unexpected_meal', 'invalid_meal', 'serving_mismatch', 'allergen_detected']);
+  const repairableCodes = new Set(['missing_meal', 'unexpected_meal', 'invalid_meal', 'serving_mismatch', 'allergen_detected', 'prepared_shortcut']);
   if (errors.some((error) => !repairableCodes.has(error.code) || !error.day || !error.mealType)) {
     return null;
   }

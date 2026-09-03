@@ -35,6 +35,21 @@ assert.equal(
   'cancel',
 );
 
+const playTesterOffer = findPartnerOffer('  PLAYTEST14  ');
+assert.equal(playTesterOffer?.slug, 'playtest14');
+assert.equal(playTesterOffer?.trialDays, 14);
+assert.equal(playTesterOffer?.trialRecipeLimit, 100);
+assert.equal(playTesterOffer?.fullPremium, true);
+assert.equal(playTesterOffer?.maxRedemptions, 25);
+assert.equal(playTesterOffer?.singleUse, true);
+const playTesterCheckout = buildTrialCheckoutSettings(true, playTesterOffer!.trialDays);
+assert.equal(playTesterCheckout.payment_method_collection, 'if_required');
+assert.equal(playTesterCheckout.subscription_data.trial_period_days, 14);
+assert.equal(
+  playTesterCheckout.subscription_data.trial_settings.end_behavior.missing_payment_method,
+  'cancel',
+);
+
 const finnstersCheckout = buildTrialCheckoutSettings(true, typed.typedOffer!.trialDays);
 assert.equal(finnstersCheckout.payment_method_collection, 'if_required');
 assert.equal(finnstersCheckout.subscription_data.trial_period_days, 30);
@@ -50,4 +65,4 @@ assert.equal(
   'create_invoice',
 );
 
-console.log('Partner-code verification passed. Finnsters remains 30 days; 3DAYFREE grants 3 no-card days.');
+console.log('Partner-code verification passed. Finnsters remains 30 days; 3DAYFREE grants 3 no-card days; PLAYTEST14 grants 14 capped no-card days.');
