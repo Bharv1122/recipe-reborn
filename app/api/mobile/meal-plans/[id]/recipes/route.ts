@@ -21,8 +21,22 @@ export async function POST(request: Request, props: { params: Promise<{ id: stri
       prisma.recipe.findFirst({ where: { id: parsed.data.recipeId, userId }, select: { id: true } }),
     ]);
     if (!plan || !recipe) return NextResponse.json({ error: 'Meal plan or recipe not found.' }, { status: 404 });
-    const entry = await prisma.mealPlanRecipe.create({ data: { mealPlanId: plan.id, ...parsed.data } });
-    return NextResponse.json({ entry }, { status: 201 });
+    const result = await prisma.mealPlanRecipe.createMany({
+      data: { mealPlanId: plan.id, ...parsed.data },
+      skipDuplicates: true,
+    });
+    const entry = await prisma.mealPlanRecipe.findUnique({
+      where: {
+        mealPlanId_recipeId_day_mealType: {
+          mealPlanId: plan.id,
+          recipeId: parsed.data.recipeId,
+          day: parsed.data.day,
+          mealType: parsed.data.mealType,
+        },
+      },
+    });
+    if (!entry) throw new Error('Meal-plan entry was not found after insertion.');
+    return NextResponse.json({ entry, alreadyExists: result.count === 0 }, { status: result.count ? 201 : 200 });
   } catch (error) {
     if (error instanceof MobileAuthError) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     return NextResponse.json({ error: 'Unable to add recipe to meal plan.' }, { status: 500 });

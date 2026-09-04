@@ -313,6 +313,7 @@ model MealPlanRecipe {
   @@index([recipeId])
   @@index([day])
   @@index([mealType])
+  @@unique([mealPlanId, recipeId, day, mealType])
 }
 
 model ShoppingList {
