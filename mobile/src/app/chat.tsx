@@ -31,7 +31,14 @@ export default function ChatScreen() {
   return <Screen>
     <Stack.Screen options={{ headerShown: true, title: 'AI Chef', headerTintColor: colors.green }} />
     <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={styles.flex}>
-      <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
+      <View style={styles.composer}>
+        <Field accessibilityLabel="Message AI Chef" placeholder="Ask a cooking question" value={draft} onChangeText={setDraft} multiline style={styles.input} />
+        <View style={styles.sendButton}>
+          <Button label="Send" onPress={send} loading={busy} disabled={!draft.trim()} />
+        </View>
+      </View>
+      <InlineError message={error} />
+      <ScrollView style={styles.messages} contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
         {!messages.length ? <Card>
           <Text style={styles.title}>Ask your AI Chef</Text>
           <Text style={styles.body}>Get cooking help, substitutions, techniques, and ideas that respect the allergies and dislikes saved in your account.</Text>
@@ -41,17 +48,14 @@ export default function ChatScreen() {
           <Text style={styles.message}>{message.content}</Text>
         </View>)}
       </ScrollView>
-      <InlineError message={error} />
-      <View style={styles.composer}>
-        <Field accessibilityLabel="Message AI Chef" placeholder="Ask a cooking question" value={draft} onChangeText={setDraft} multiline />
-        <Button label="Send" onPress={send} loading={busy} disabled={!draft.trim()} />
-      </View>
     </KeyboardAvoidingView>
   </Screen>;
 }
 
 const styles = StyleSheet.create({
-  flex: { flex: 1 }, content: { gap: 10, paddingBottom: 14 }, composer: { gap: 8, paddingTop: 8 },
+  flex: { flex: 1 }, messages: { flex: 1 }, content: { gap: 10, paddingBottom: 14 },
+  composer: { height: 58, flexShrink: 0, flexDirection: 'row', alignItems: 'center', gap: 8, paddingTop: 8 },
+  input: { flex: 1, minHeight: 50, maxHeight: 50 }, sendButton: { width: 92 },
   title: { color: colors.greenDark, fontSize: 22, fontWeight: '800' }, body: { color: colors.muted, lineHeight: 21 },
   bubble: { maxWidth: '90%', borderRadius: 16, padding: 13, gap: 4 }, userBubble: { alignSelf: 'flex-end', backgroundColor: '#E8F5EC' },
   chefBubble: { alignSelf: 'flex-start', backgroundColor: colors.white, borderWidth: 1, borderColor: colors.line },

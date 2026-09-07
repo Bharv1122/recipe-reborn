@@ -10,15 +10,15 @@ outputs/
 node_modules/
 
 # Recipe Reborn web/server source is deployed separately through Vercel.
-app/
-components/
-docs/
-hooks/
-lib/
-prisma/
-public/
-scripts/
-types/
+/app/
+/components/
+/docs/
+/hooks/
+/lib/
+/prisma/
+/public/
+/scripts/
+/types/
 
 # Local native caches and dependencies are recreated by EAS.
 mobile/.claude/

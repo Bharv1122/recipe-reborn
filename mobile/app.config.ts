@@ -2,7 +2,7 @@ import type { ExpoConfig, ConfigContext } from 'expo/config';
 
 export default ({ config }: ConfigContext): ExpoConfig => ({
   ...config,
-  name: 'Recipe Reborn',
+  name: process.env.EXPO_PUBLIC_APP_NAME || 'Recipe Reborn',
   slug: 'recipereborn',
   owner: 'reciperebornmobile',
   platforms: ['ios', 'android'],
@@ -23,6 +23,7 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
   android: {
     package: process.env.EXPO_ANDROID_PACKAGE || 'com.recipereborn.app',
     versionCode: 8,
+    softwareKeyboardLayoutMode: 'resize',
     adaptiveIcon: {
       foregroundImage: './assets/images/recipe-reborn-android-foreground.png',
       backgroundColor: '#064E3B',

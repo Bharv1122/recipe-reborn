@@ -11,6 +11,14 @@
       "distribution": "internal",
       "android": { "buildType": "apk" }
     },
+    "preview-qa": {
+      "distribution": "internal",
+      "env": {
+        "EXPO_PUBLIC_APP_NAME": "Recipe Reborn QA",
+        "EXPO_ANDROID_PACKAGE": "com.recipereborn.app.qa"
+      },
+      "android": { "buildType": "apk" }
+    },
     "play-internal": {
       "distribution": "store",
       "environment": "production",
