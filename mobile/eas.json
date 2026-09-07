@@ -25,5 +25,13 @@
       "android": { "buildType": "app-bundle" }
     },
     "production": { "autoIncrement": true }
+  },
+  "submit": {
+    "play-alpha": {
+      "android": {
+        "track": "alpha",
+        "releaseStatus": "completed"
+      }
+    }
   }
 }
