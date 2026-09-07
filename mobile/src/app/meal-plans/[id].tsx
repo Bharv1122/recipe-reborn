@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
 import { apiRequest } from '@/services/api';
 import { Button, Card, InlineError, Screen } from '@/components/ui';
@@ -26,6 +26,16 @@ export default function MealPlanDetailScreen() {
       setError(value instanceof Error ? value.message : 'Could not replace this meal.');
     } finally { setReplacingId(null); }
   };
+  const confirmReplaceMeal = (entry: PlanEntry) => {
+    Alert.alert(
+      'Try another recipe?',
+      `Replace ${entry.recipe.title} in this meal plan? The recipe will stay saved in your recipes.`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        { text: 'Replace meal', onPress: () => replaceMeal(entry.id) },
+      ],
+    );
+  };
   return <Screen><Stack.Screen options={{ headerShown: true, title: plan?.name || 'Meal plan', headerTintColor: colors.green }} />
     <ScrollView contentContainerStyle={styles.content}><InlineError message={error} />
       {!plan && !error ? <Card><Text style={styles.body}>Loading your weekly plan…</Text></Card> : null}
@@ -42,7 +52,7 @@ export default function MealPlanDetailScreen() {
               <Text style={styles.title}>{entry.recipe.title}</Text>
               <Text style={styles.body}>{entry.servings} serving{entry.servings === 1 ? '' : 's'}{entry.recipe.calories ? ` · ${entry.recipe.calories} cal/serving` : ''}</Text>
             </Pressable>
-            <Button label="Try another recipe" secondary loading={replacingId === entry.id} disabled={replacingId !== null} onPress={() => replaceMeal(entry.id)} />
+            <Button label="Try another recipe" secondary loading={replacingId === entry.id} disabled={replacingId !== null} onPress={() => confirmReplaceMeal(entry)} />
           </View>)}
         </Card>;
       }) : null}

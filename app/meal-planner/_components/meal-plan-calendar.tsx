@@ -120,6 +120,7 @@ export function MealPlanCalendar({ plan, onUpdate }: MealPlanCalendarProps) {
   };
 
   const handleReplaceMeal = async (entryId: string) => {
+    if (!window.confirm('Replace this meal with another recipe? The current recipe will stay saved in your recipes.')) return;
     try {
       setReplacingId(entryId);
       const response = await fetch(`/api/meal-plans/${plan.id}/recipes/${entryId}/replace`, { method: 'POST' });

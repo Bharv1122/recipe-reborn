@@ -35,6 +35,7 @@ export default function MealPlansScreen() {
   const router = useRouter();
   const { user } = useAuth();
   const [plans, setPlans] = useState<Plan[]>([]);
+  const [view, setView] = useState<'plans' | 'create'>('plans');
   const [name, setName] = useState('');
   const [day, setDay] = useState<typeof days[number]>('monday');
   const [mealType, setMealType] = useState<MealType>('dinner');
@@ -101,7 +102,7 @@ export default function MealPlansScreen() {
     try {
       setError(null);
       await apiRequest('/api/mobile/meal-plans', { method: 'POST', body: JSON.stringify({ name, weekStartDate: nextMondayIso() }) });
-      setName(''); await load();
+      setName(''); await load(); setView('plans');
     } catch (value) { setError(value instanceof Error ? value.message : 'Could not create meal plan.'); }
   };
 
@@ -123,7 +124,14 @@ export default function MealPlansScreen() {
   return <Screen>
     <Stack.Screen options={{ headerShown: true, title: recipeId ? 'Add to meal plan' : 'Meal plans', headerTintColor: colors.green }} />
     <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
-      {!recipeId ? <Card>
+      {!recipeId && view === 'plans' ? <Card>
+        <Text style={styles.sectionTitle}>Your meal plans</Text>
+        <Text style={styles.body}>Open a saved plan, or create a new weekly plan when you are ready.</Text>
+        <Button label="Create a meal plan" onPress={() => { setError(null); setView('create'); }} />
+      </Card> : null}
+      {!recipeId && view === 'create' ? <>
+        <Button label="Back to meal plans" secondary onPress={() => { setError(null); setView('plans'); }} />
+        <Card>
         <Text style={styles.sectionTitle}>Generate a seven-day meal plan</Text>
         <Text style={styles.body}>Choose exactly what you want. Your plan is checked for meal count, servings, and allergens before it is saved.</Text>
         <Text style={styles.label}>Week starting</Text>
@@ -144,15 +152,17 @@ export default function MealPlansScreen() {
         <View style={styles.wrap}>{dietaryOptions.map((value) => <Pressable accessibilityRole="checkbox" accessibilityState={{ checked: selectedDietary.includes(value) }} key={value} onPress={() => toggleDietary(value)} style={[styles.chip, selectedDietary.includes(value) && styles.active]}><Text style={selectedDietary.includes(value) ? styles.activeText : styles.chipText}>{value}</Text></Pressable>)}</View>
         {generating ? <View style={styles.generating}><Text style={styles.generatingTitle}>Creating {selectedMealTypes.length * 7} meals · {elapsedSeconds}s elapsed</Text><Text style={styles.note}>Safety and serving checks run before anything is saved.</Text></View> : null}
         <Button label={generating ? 'Generating weekly plan…' : 'Generate weekly plan'} onPress={generate} loading={generating} disabled={!selectedMealTypes.length} />
-      </Card> : <Card>
+        </Card>
+        <Card><Text style={styles.label}>Or create an empty plan</Text><Field accessibilityLabel="New meal-plan name" placeholder="New meal-plan name" value={name} onChangeText={setName} /><Button label="Create next-week plan" secondary onPress={create} disabled={!name.trim() || generating} /></Card>
+      </> : null}
+      {recipeId ? <Card>
         <Text style={styles.sectionTitle}>Choose day and meal</Text>
         <View accessibilityRole="radiogroup" style={styles.wrap}>{days.map((value) => <Pressable accessibilityLabel={value} accessibilityRole="radio" accessibilityState={{ selected: day === value }} key={value} onPress={() => setDay(value)} style={[styles.chip, day === value && styles.active]}><Text style={day === value ? styles.activeText : styles.chipText}>{value.slice(0, 3)}</Text></Pressable>)}</View>
         <View accessibilityRole="radiogroup" style={styles.wrap}>{mealTypes.map((value) => <Pressable accessibilityRole="radio" accessibilityState={{ selected: mealType === value }} key={value} onPress={() => setMealType(value)} style={[styles.chip, mealType === value && styles.active]}><Text style={mealType === value ? styles.activeText : styles.chipText}>{value}</Text></Pressable>)}</View>
-      </Card>}
-      {!recipeId ? <Card><Text style={styles.label}>Or create an empty plan</Text><Field accessibilityLabel="New meal-plan name" placeholder="New meal-plan name" value={name} onChangeText={setName} /><Button label="Create next-week plan" secondary onPress={create} disabled={!name.trim() || generating} /></Card> : null}
+      </Card> : null}
       <InlineError message={error} />{message ? <Text style={styles.success}>{message}</Text> : null}
-      {plans.map((plan) => <Pressable accessibilityRole="button" accessibilityLabel={plan.name} accessibilityHint={recipeId ? 'Adds this recipe to the meal plan' : 'Opens the meal plan'} accessibilityState={{ busy: addingPlanId === plan.id, disabled: addingPlanId !== null }} disabled={addingPlanId !== null} key={plan.id} onPress={() => choose(plan)}><Card><Text style={styles.sectionTitle}>{plan.name}</Text><Text style={styles.body}>{addingPlanId === plan.id ? 'Adding recipe…' : `${new Date(plan.weekStartDate).toLocaleDateString()} · ${plan.mealPlanRecipes.length} meals`}</Text></Card></Pressable>)}
-      {!plans.length ? <Text style={styles.body}>Create your first meal plan above.</Text> : null}
+      {(recipeId || view === 'plans') ? plans.map((plan) => <Pressable accessibilityRole="button" accessibilityLabel={plan.name} accessibilityHint={recipeId ? 'Adds this recipe to the meal plan' : 'Opens the meal plan'} accessibilityState={{ busy: addingPlanId === plan.id, disabled: addingPlanId !== null }} disabled={addingPlanId !== null} key={plan.id} onPress={() => choose(plan)}><Card><Text style={styles.sectionTitle}>{plan.name}</Text><Text style={styles.body}>{addingPlanId === plan.id ? 'Adding recipe…' : `${new Date(plan.weekStartDate).toLocaleDateString()} · ${plan.mealPlanRecipes.length} meals`}</Text></Card></Pressable>) : null}
+      {(recipeId || view === 'plans') && !plans.length ? <Text style={styles.body}>{recipeId ? 'No meal plans yet.' : 'No saved meal plans yet. Create your first one above.'}</Text> : null}
     </ScrollView>
   </Screen>;
 }
