@@ -2,9 +2,11 @@ import assert from 'node:assert/strict';
 import {
   DAYS,
   normalizeMealTypes,
+  validateMeal,
   validateMealPlan,
   type MealType,
 } from '../lib/meal-plan-validation';
+import { parseStoredRecipeList } from '../lib/recipe-list';
 
 const selectedMealTypes: MealType[] = ['breakfast', 'dinner'];
 
@@ -202,5 +204,17 @@ const distinctMealsResult = validateMealPlan(distinctMeals, {
   allergies: [],
 });
 assert.equal(distinctMealsResult.success, true);
+
+const dislikedIngredient = validateMeal({
+  title: 'Olive Pasta',
+  ingredients: ['8 oz spaghetti', '1/2 cup olives'],
+  instructions: 'Cook and combine.',
+  servings: 2,
+}, { servings: 2, allergies: [], dislikedIngredients: ['olives'] });
+assert.equal(dislikedIngredient.success, false);
+assert.equal(!dislikedIngredient.success && dislikedIngredient.error.code, 'disliked_ingredient');
+
+assert.deepEqual(parseStoredRecipeList('["salt","pepper"]'), ['salt', 'pepper']);
+assert.deepEqual(parseStoredRecipeList('salt\npepper'), ['salt', 'pepper']);
 
 console.log('Meal-plan safety verification passed.');

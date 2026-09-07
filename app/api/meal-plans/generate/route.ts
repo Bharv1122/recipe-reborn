@@ -223,7 +223,7 @@ async function repairInvalidMeals(
   model: string,
 ): Promise<unknown | null> {
   if (!Array.isArray(value)) return null;
-  const repairableCodes = new Set(['missing_meal', 'unexpected_meal', 'invalid_meal', 'serving_mismatch', 'allergen_detected', 'prepared_shortcut', 'duplicate_meal']);
+  const repairableCodes = new Set(['missing_meal', 'unexpected_meal', 'invalid_meal', 'serving_mismatch', 'allergen_detected', 'disliked_ingredient', 'prepared_shortcut', 'duplicate_meal']);
   if (errors.some((error) => !repairableCodes.has(error.code) || !error.day || !error.mealType)) {
     return null;
   }
@@ -300,6 +300,7 @@ async function generateValidatedPlan(
       mealTypes: options.mealTypes,
       servings: options.servings,
       allergies: options.allergies,
+      dislikedIngredients: options.dislikedIngredients,
     });
     if (validation.success) return { plan: validation.plan, attempts: attempt };
 
@@ -309,6 +310,7 @@ async function generateValidatedPlan(
         mealTypes: options.mealTypes,
         servings: options.servings,
         allergies: options.allergies,
+        dislikedIngredients: options.dislikedIngredients,
       });
       if (repairedValidation.success) {
         return { plan: repairedValidation.plan, attempts: attempt + 1 };
@@ -320,6 +322,7 @@ async function generateValidatedPlan(
           mealTypes: options.mealTypes,
           servings: options.servings,
           allergies: options.allergies,
+          dislikedIngredients: options.dislikedIngredients,
         });
         if (finalValidation.success) {
           return { plan: finalValidation.plan, attempts: attempt + 2 };

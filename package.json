@@ -7,6 +7,7 @@
     "start": "next start",
     "lint": "eslint .",
     "verify:meal-plan": "tsx scripts/verify-meal-plan-safety.ts",
+    "verify:ai-features": "tsx scripts/verify-ai-features.ts",
     "verify:pantry-inventory": "tsx scripts/verify-pantry-inventory.ts",
     "verify:partner-code": "tsx scripts/verify-partner-code.ts",
     "verify:mobile-foundation": "tsx scripts/verify-mobile-foundation.ts",

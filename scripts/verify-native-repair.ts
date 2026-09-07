@@ -17,10 +17,12 @@ async function main() {
   assert.equal(takeScanRecipeHandoff(), null, 'A scan handoff must be consumed only once.');
   assert.throws(() => stageScanRecipeHandoff({ source: 'label', origin: 'label-photo', ingredients: '  ', context: 'Label' }));
 
-  const [config, mealScreen, mealRoute, generatorScreen, generatorRoute, shoppingRoute, scanScreen, labelRoute] = await Promise.all([
+  const [config, mealScreen, mealRoute, mealAddRoute, prismaSchema, generatorScreen, generatorRoute, shoppingRoute, scanScreen, labelRoute] = await Promise.all([
     readFile('mobile/app.config.ts', 'utf8'),
     readFile('mobile/src/app/meal-plans/index.tsx', 'utf8'),
     readFile('app/api/meal-plans/generate/route.ts', 'utf8'),
+    readFile('app/api/mobile/meal-plans/[id]/recipes/route.ts', 'utf8'),
+    readFile('prisma/schema.prisma', 'utf8'),
     readFile('mobile/src/app/generate.tsx', 'utf8'),
     readFile('app/api/generate-recipe/route.ts', 'utf8'),
     readFile('app/api/mobile/shopping-lists/[id]/items/route.ts', 'utf8'),
@@ -35,6 +37,13 @@ async function main() {
   }
   assert.match(mealScreen, /api\/meal-plans\/generate/);
   assert.match(mealRoute, /getRequestUserId\(req\)/, 'Meal generation must accept the existing secure native bearer token.');
+  assert.match(mealScreen, /addingRecipe\.current/, 'Meal-plan adds must ignore repeated taps while a request is in flight.');
+  assert.match(mealScreen, /disabled=\{addingPlanId !== null\}/, 'Meal-plan choices must be disabled while an add is in flight.');
+  assert.match(mealScreen, /await load\(\)/, 'A successful add must refresh meal-plan counts.');
+  assert.match(mealScreen, /router\.replace\(\{ pathname: '\/meal-plans\/\[id\]'/, 'A successful add must navigate to the updated plan.');
+  assert.match(mealAddRoute, /skipDuplicates:\s*true/, 'The mobile API must make duplicate adds idempotent.');
+  assert.match(mealAddRoute, /alreadyExists:\s*result\.count === 0/, 'The mobile API must report an idempotent repeat.');
+  assert.match(prismaSchema, /@@unique\(\[mealPlanId, recipeId, day, mealType\]\)/, 'The database schema must prevent duplicate recipe slots.');
   assert.match(generatorScreen, /label="Specific dish"/);
   assert.match(generatorScreen, /label="Random"/);
   assert.match(generatorRoute, /source === 'dish'/);

@@ -117,14 +117,14 @@ export default function ShoppingListsPage() {
     <div className="min-h-screen py-12 px-4">
       <div className="max-w-7xl mx-auto space-y-6">
         {/* Header */}
-        <div className="flex items-center justify-between">
-          <div>
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+          <div className="min-w-0">
             <h1 className="text-4xl font-bold text-white">Shopping Lists</h1>
             <p className="text-emerald-50/90 mt-2">
               Organize your grocery shopping and check off items
             </p>
           </div>
-          <Button onClick={handleCreateList} size="lg">
+          <Button onClick={handleCreateList} size="lg" className="w-full sm:w-auto">
             <Plus className="mr-2 h-5 w-5" />
             New List
           </Button>
@@ -157,7 +157,7 @@ export default function ShoppingListsPage() {
         ) : (
           <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
             {/* Sidebar - Lists */}
-            <div className="lg:col-span-1 space-y-3">
+            <div className="min-w-0 space-y-3 lg:col-span-1">
               <h3 className="font-semibold text-sm text-muted-foreground uppercase tracking-wide">
                 Your Lists
               </h3>
@@ -173,7 +173,7 @@ export default function ShoppingListsPage() {
             </div>
 
             {/* Main Content - List Items */}
-            <div className="lg:col-span-3">
+            <div className="min-w-0 lg:col-span-3">
               {selectedList && (
                 <ShoppingListView
                   list={selectedList}

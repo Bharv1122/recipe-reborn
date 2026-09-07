@@ -20,7 +20,7 @@ export async function POST(request: Request) {
     }
     if (user.stripeSubscriptionId && ['active', 'trialing', 'past_due'].includes(user.subscriptionStatus)) {
       return NextResponse.json(
-        { error: 'Cancel your Stripe subscription from Account first, then return to delete your account.' },
+        { error: 'Cancel your active subscription through the service where it was purchased, then return to delete your account.' },
         { status: 409 },
       );
     }

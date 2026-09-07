@@ -99,8 +99,14 @@ async function main() {
       method: 'POST', headers: auth, body: JSON.stringify({ recipeId, day: 'monday', mealType: 'dinner', servings: 1 }),
     });
     assert.equal(planned.response.status, 201, JSON.stringify(planned.body));
+    const repeatedPlanAdd = await jsonRequest(`/api/mobile/meal-plans/${mealPlanId}/recipes`, {
+      method: 'POST', headers: auth, body: JSON.stringify({ recipeId, day: 'monday', mealType: 'dinner', servings: 1 }),
+    });
+    assert.equal(repeatedPlanAdd.response.status, 200, JSON.stringify(repeatedPlanAdd.body));
+    assert.equal(repeatedPlanAdd.body.alreadyExists, true, 'A repeated plan add was not reported as idempotent.');
     const planDetail = await jsonRequest(`/api/mobile/meal-plans/${mealPlanId}`, { headers: auth });
     assert.equal(planDetail.response.status, 200, JSON.stringify(planDetail.body));
+    assert.equal(planDetail.body.mealPlan.mealPlanRecipes.length, 1, 'A repeated plan add created a duplicate entry.');
     assert.equal(planDetail.body.mealPlan.mealPlanRecipes[0].servings, 1);
 
     const pantrySave = await jsonRequest('/api/pantry-inventory', {

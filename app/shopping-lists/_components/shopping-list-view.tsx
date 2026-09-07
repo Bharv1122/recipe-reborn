@@ -138,14 +138,14 @@ export function ShoppingListView({ list, onUpdate }: ShoppingListViewProps) {
   return (
     <Card>
       <CardHeader>
-        <div className="flex items-center justify-between">
-          <div className="flex-1">
-            <CardTitle className="text-2xl">{list.name}</CardTitle>
+        <div className="flex min-w-0 items-start justify-between gap-4">
+          <div className="min-w-0 flex-1">
+            <CardTitle className="break-words text-2xl [overflow-wrap:anywhere]">{list.name}</CardTitle>
             {list.notes && (
               <p className="text-sm text-muted-foreground mt-1">{list.notes}</p>
             )}
           </div>
-          <div className="text-right">
+          <div className="shrink-0 text-right">
             <div className="text-2xl font-bold text-primary">{progress}%</div>
             <div className="text-xs text-muted-foreground">
               {checkedCount} of {list.items.length}

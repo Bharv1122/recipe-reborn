@@ -68,8 +68,8 @@ export default function PantryReviewScreen() {
       <Card>
         <Text style={styles.title}>1. Add up to four photos</Text>
         <Text style={styles.body}>Choose the location before adding each batch. Photos are analyzed for this request and are not stored by Recipe Reborn.</Text>
-        <View style={styles.row}>{(['fridge', 'pantry', 'unknown'] as Location[]).map((location) => <Pressable key={location} onPress={() => setDefaultLocation(location)} style={[styles.pill, defaultLocation === location && styles.pillActive]}><Text style={defaultLocation === location ? styles.pillActiveText : styles.pillText}>{location}</Text></Pressable>)}</View>
-        <View style={styles.photos}>{photos.map((photo, index) => <Pressable key={`${photo.uri}-${index}`} onPress={() => setPhotos((current) => current.filter((_, photoIndex) => photoIndex !== index))}><Image source={{ uri: photo.uri }} style={styles.photo} /><Text style={styles.remove}>Remove</Text></Pressable>)}</View>
+        <View accessibilityRole="radiogroup" style={styles.row}>{(['fridge', 'pantry', 'unknown'] as Location[]).map((location) => <Pressable accessibilityRole="radio" accessibilityState={{ selected: defaultLocation === location }} key={location} onPress={() => setDefaultLocation(location)} style={[styles.pill, defaultLocation === location && styles.pillActive]}><Text style={defaultLocation === location ? styles.pillActiveText : styles.pillText}>{location}</Text></Pressable>)}</View>
+        <View style={styles.photos}>{photos.map((photo, index) => <Pressable accessibilityRole="button" accessibilityLabel={`Remove ${photo.location} photo ${index + 1}`} key={`${photo.uri}-${index}`} onPress={() => setPhotos((current) => current.filter((_, photoIndex) => photoIndex !== index))}><Image accessible={false} source={{ uri: photo.uri }} style={styles.photo} /><Text style={styles.remove}>Remove</Text></Pressable>)}</View>
         <Button label="Choose photos" secondary onPress={choosePhotos} disabled={photos.length >= 4 || busy} />
         <Button label="Extract draft list" onPress={extract} loading={busy} disabled={!photos.length} />
       </Card>
@@ -79,9 +79,9 @@ export default function PantryReviewScreen() {
         <Text style={styles.body}>AI can miss items or read them incorrectly. Edit, remove, or add items before confirming.</Text>
         {notes.map((note) => <Text key={note} style={styles.note}>Review note: {note}</Text>)}
         {items.map((item, index) => <View key={`${index}-${item.name}`} style={styles.item}>
-          <Field value={item.name} onChangeText={(name) => updateItem(index, { name })} placeholder="Item name" />
-          <Field value={item.quantity || ''} onChangeText={(quantity) => updateItem(index, { quantity })} placeholder="Quantity (optional)" />
-          <View style={styles.row}>{(['fridge', 'pantry', 'unknown'] as Location[]).map((location) => <Pressable key={location} onPress={() => updateItem(index, { location })} style={[styles.pill, item.location === location && styles.pillActive]}><Text style={item.location === location ? styles.pillActiveText : styles.pillText}>{location}</Text></Pressable>)}</View>
+          <Field accessibilityLabel={`Item ${index + 1} name`} value={item.name} onChangeText={(name) => updateItem(index, { name })} placeholder="Item name" />
+          <Field accessibilityLabel={`Item ${index + 1} quantity`} value={item.quantity || ''} onChangeText={(quantity) => updateItem(index, { quantity })} placeholder="Quantity (optional)" />
+          <View accessibilityRole="radiogroup" style={styles.row}>{(['fridge', 'pantry', 'unknown'] as Location[]).map((location) => <Pressable accessibilityLabel={`${location} location for item ${index + 1}`} accessibilityRole="radio" accessibilityState={{ selected: item.location === location }} key={location} onPress={() => updateItem(index, { location })} style={[styles.pill, item.location === location && styles.pillActive]}><Text style={item.location === location ? styles.pillActiveText : styles.pillText}>{location}</Text></Pressable>)}</View>
           {item.confidence ? <Text style={styles.body}>AI confidence: {item.confidence}</Text> : null}
           <Button label="Remove item" secondary onPress={() => removeItem(index)} />
         </View>)}
@@ -94,7 +94,7 @@ export default function PantryReviewScreen() {
 
 const styles = StyleSheet.create({
   content: { gap: 14, paddingBottom: 30 }, title: { fontSize: 20, fontWeight: '800', color: colors.ink }, body: { color: colors.muted, lineHeight: 21 },
-  row: { flexDirection: 'row', flexWrap: 'wrap', gap: 7 }, pill: { borderWidth: 1, borderColor: colors.line, borderRadius: 18, paddingVertical: 7, paddingHorizontal: 12, backgroundColor: colors.white },
+  row: { flexDirection: 'row', flexWrap: 'wrap', gap: 7 }, pill: { minHeight: 44, justifyContent: 'center', borderWidth: 1, borderColor: colors.line, borderRadius: 18, paddingVertical: 7, paddingHorizontal: 12, backgroundColor: colors.white },
   pillActive: { backgroundColor: colors.green, borderColor: colors.green }, pillText: { color: colors.ink, textTransform: 'capitalize' }, pillActiveText: { color: colors.white, textTransform: 'capitalize', fontWeight: '700' },
   photos: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 }, photo: { width: 92, height: 92, borderRadius: 10 }, remove: { color: colors.danger, textAlign: 'center', marginTop: 3 },
   item: { gap: 8, borderTopWidth: 1, borderTopColor: colors.line, paddingTop: 12 }, note: { color: colors.warning, fontWeight: '700' },

@@ -2,6 +2,7 @@ import { z } from 'zod';
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
 import { MobileAuthError, requireMobileUserId } from '@/lib/mobile-auth';
+import { optionalRecipeMetadataSchema } from '@/lib/recipe-metadata-validation';
 
 export const dynamic = 'force-dynamic';
 
@@ -11,9 +12,9 @@ const saveSchema = z.object({
   freshIngredients: z.array(z.string().trim().min(1).max(500)).min(1).max(150),
   instructions: z.array(z.string().trim().min(1).max(3000)).min(1).max(100),
   dietaryTags: z.array(z.string().trim().min(1).max(80)).max(30).default([]),
-  prepTime: z.string().trim().max(80).optional(),
-  cookTime: z.string().trim().max(80).optional(),
-  servings: z.string().trim().max(40).optional(),
+  prepTime: optionalRecipeMetadataSchema,
+  cookTime: optionalRecipeMetadataSchema,
+  servings: optionalRecipeMetadataSchema,
   estimatedCostPerServing: z.number().nonnegative().finite().optional(),
   storeBoughtCost: z.number().nonnegative().finite().optional(),
 });

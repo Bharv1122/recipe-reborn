@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { Stack, useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import { apiRequest } from '@/services/api';
@@ -49,6 +49,8 @@ export default function MealPlansScreen() {
   const [elapsedSeconds, setElapsedSeconds] = useState(0);
   const [error, setError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
+  const [addingPlanId, setAddingPlanId] = useState<string | null>(null);
+  const addingRecipe = useRef(false);
 
   const load = useCallback(async () => {
     try { setPlans((await apiRequest<{ mealPlans: Plan[] }>('/api/mobile/meal-plans')).mealPlans); }
@@ -105,11 +107,17 @@ export default function MealPlansScreen() {
 
   const choose = async (plan: Plan) => {
     if (!recipeId) { router.push({ pathname: '/meal-plans/[id]', params: { id: plan.id } }); return; }
+    if (addingRecipe.current) return;
+    addingRecipe.current = true;
+    setAddingPlanId(plan.id);
     try {
       setError(null);
       await apiRequest(`/api/mobile/meal-plans/${plan.id}/recipes`, { method: 'POST', body: JSON.stringify({ recipeId, day, mealType, servings: 1 }) });
+      await load();
       setMessage(`Added to ${plan.name} on ${day}.`);
+      router.replace({ pathname: '/meal-plans/[id]', params: { id: plan.id } });
     } catch (value) { setError(value instanceof Error ? value.message : 'Could not add recipe.'); }
+    finally { addingRecipe.current = false; setAddingPlanId(null); }
   };
 
   return <Screen>
@@ -121,7 +129,7 @@ export default function MealPlansScreen() {
         <Text style={styles.label}>Week starting</Text>
         <Field accessibilityLabel="Week starting" placeholder="YYYY-MM-DD" value={weekStartDate} onChangeText={setWeekStartDate} autoCapitalize="none" />
         <Text style={styles.label}>Meals each day</Text>
-        <View style={styles.wrap}>{mealTypes.map((value) => <Pressable key={value} onPress={() => toggleMealType(value)} style={[styles.chip, selectedMealTypes.includes(value) && styles.active]}><Text style={selectedMealTypes.includes(value) ? styles.activeText : styles.chipText}>{value}</Text></Pressable>)}</View>
+        <View style={styles.wrap}>{mealTypes.map((value) => <Pressable accessibilityRole="checkbox" accessibilityState={{ checked: selectedMealTypes.includes(value) }} key={value} onPress={() => toggleMealType(value)} style={[styles.chip, selectedMealTypes.includes(value) && styles.active]}><Text style={selectedMealTypes.includes(value) ? styles.activeText : styles.chipText}>{value}</Text></Pressable>)}</View>
         <Text style={styles.note}>Exactly {selectedMealTypes.length * 7} meals will be created for the week.</Text>
         <Text style={styles.label}>Servings per recipe</Text>
         <Field accessibilityLabel="Servings per recipe" value={servings} onChangeText={setServings} keyboardType="number-pad" placeholder="2" />
@@ -133,17 +141,17 @@ export default function MealPlansScreen() {
         <Field accessibilityLabel="Disliked ingredients" value={dislikes} onChangeText={setDislikes} placeholder="Cilantro, olives" multiline />
         <Text style={styles.note}>These start with your Account preferences. Changes here apply only to this plan.</Text>
         <Text style={styles.label}>Dietary preferences</Text>
-        <View style={styles.wrap}>{dietaryOptions.map((value) => <Pressable key={value} onPress={() => toggleDietary(value)} style={[styles.chip, selectedDietary.includes(value) && styles.active]}><Text style={selectedDietary.includes(value) ? styles.activeText : styles.chipText}>{value}</Text></Pressable>)}</View>
+        <View style={styles.wrap}>{dietaryOptions.map((value) => <Pressable accessibilityRole="checkbox" accessibilityState={{ checked: selectedDietary.includes(value) }} key={value} onPress={() => toggleDietary(value)} style={[styles.chip, selectedDietary.includes(value) && styles.active]}><Text style={selectedDietary.includes(value) ? styles.activeText : styles.chipText}>{value}</Text></Pressable>)}</View>
         {generating ? <View style={styles.generating}><Text style={styles.generatingTitle}>Creating {selectedMealTypes.length * 7} meals · {elapsedSeconds}s elapsed</Text><Text style={styles.note}>Safety and serving checks run before anything is saved.</Text></View> : null}
         <Button label={generating ? 'Generating weekly plan…' : 'Generate weekly plan'} onPress={generate} loading={generating} disabled={!selectedMealTypes.length} />
       </Card> : <Card>
         <Text style={styles.sectionTitle}>Choose day and meal</Text>
-        <View style={styles.wrap}>{days.map((value) => <Pressable key={value} onPress={() => setDay(value)} style={[styles.chip, day === value && styles.active]}><Text style={day === value ? styles.activeText : styles.chipText}>{value.slice(0, 3)}</Text></Pressable>)}</View>
-        <View style={styles.wrap}>{mealTypes.map((value) => <Pressable key={value} onPress={() => setMealType(value)} style={[styles.chip, mealType === value && styles.active]}><Text style={mealType === value ? styles.activeText : styles.chipText}>{value}</Text></Pressable>)}</View>
+        <View accessibilityRole="radiogroup" style={styles.wrap}>{days.map((value) => <Pressable accessibilityLabel={value} accessibilityRole="radio" accessibilityState={{ selected: day === value }} key={value} onPress={() => setDay(value)} style={[styles.chip, day === value && styles.active]}><Text style={day === value ? styles.activeText : styles.chipText}>{value.slice(0, 3)}</Text></Pressable>)}</View>
+        <View accessibilityRole="radiogroup" style={styles.wrap}>{mealTypes.map((value) => <Pressable accessibilityRole="radio" accessibilityState={{ selected: mealType === value }} key={value} onPress={() => setMealType(value)} style={[styles.chip, mealType === value && styles.active]}><Text style={mealType === value ? styles.activeText : styles.chipText}>{value}</Text></Pressable>)}</View>
       </Card>}
-      {!recipeId ? <Card><Text style={styles.label}>Or create an empty plan</Text><Field placeholder="New meal-plan name" value={name} onChangeText={setName} /><Button label="Create next-week plan" secondary onPress={create} disabled={!name.trim() || generating} /></Card> : null}
+      {!recipeId ? <Card><Text style={styles.label}>Or create an empty plan</Text><Field accessibilityLabel="New meal-plan name" placeholder="New meal-plan name" value={name} onChangeText={setName} /><Button label="Create next-week plan" secondary onPress={create} disabled={!name.trim() || generating} /></Card> : null}
       <InlineError message={error} />{message ? <Text style={styles.success}>{message}</Text> : null}
-      {plans.map((plan) => <Pressable key={plan.id} onPress={() => choose(plan)}><Card><Text style={styles.sectionTitle}>{plan.name}</Text><Text style={styles.body}>{new Date(plan.weekStartDate).toLocaleDateString()} · {plan.mealPlanRecipes.length} meals</Text></Card></Pressable>)}
+      {plans.map((plan) => <Pressable accessibilityRole="button" accessibilityLabel={plan.name} accessibilityHint={recipeId ? 'Adds this recipe to the meal plan' : 'Opens the meal plan'} accessibilityState={{ busy: addingPlanId === plan.id, disabled: addingPlanId !== null }} disabled={addingPlanId !== null} key={plan.id} onPress={() => choose(plan)}><Card><Text style={styles.sectionTitle}>{plan.name}</Text><Text style={styles.body}>{addingPlanId === plan.id ? 'Adding recipe…' : `${new Date(plan.weekStartDate).toLocaleDateString()} · ${plan.mealPlanRecipes.length} meals`}</Text></Card></Pressable>)}
       {!plans.length ? <Text style={styles.body}>Create your first meal plan above.</Text> : null}
     </ScrollView>
   </Screen>;
@@ -151,6 +159,6 @@ export default function MealPlansScreen() {
 
 const styles = StyleSheet.create({
   content: { gap: 12, paddingBottom: 30 }, sectionTitle: { color: colors.ink, fontSize: 19, fontWeight: '800' }, label: { color: colors.ink, fontSize: 15, fontWeight: '800', marginTop: 3 }, body: { color: colors.muted, lineHeight: 20 }, note: { color: colors.muted, fontSize: 13, lineHeight: 18 }, success: { color: colors.green, fontWeight: '800' },
-  wrap: { flexDirection: 'row', flexWrap: 'wrap', gap: 7 }, chip: { paddingHorizontal: 11, paddingVertical: 9, borderRadius: 18, borderWidth: 1, borderColor: colors.line, backgroundColor: colors.white }, active: { backgroundColor: colors.green, borderColor: colors.green }, chipText: { color: colors.ink, textTransform: 'capitalize' }, activeText: { color: colors.white, fontWeight: '700', textTransform: 'capitalize' },
+  wrap: { flexDirection: 'row', flexWrap: 'wrap', gap: 7 }, chip: { minHeight: 44, justifyContent: 'center', paddingHorizontal: 11, paddingVertical: 9, borderRadius: 18, borderWidth: 1, borderColor: colors.line, backgroundColor: colors.white }, active: { backgroundColor: colors.green, borderColor: colors.green }, chipText: { color: colors.ink, textTransform: 'capitalize' }, activeText: { color: colors.white, fontWeight: '700', textTransform: 'capitalize' },
   generating: { borderWidth: 1, borderColor: '#A7D7BD', backgroundColor: '#EAF8F0', borderRadius: 12, padding: 12, gap: 4 }, generatingTitle: { color: colors.greenDark, fontWeight: '800' },
 });

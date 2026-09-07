@@ -41,6 +41,7 @@ export type MealPlanValidationCode =
   | 'invalid_meal'
   | 'serving_mismatch'
   | 'allergen_detected'
+  | 'disliked_ingredient'
   | 'prepared_shortcut'
   | 'duplicate_meal';
 
@@ -197,6 +198,54 @@ function titlesDescribeSameMeal(first: string, second: string): boolean {
   return shared / Math.max(firstTokens.size, secondTokens.size) >= 0.8;
 }
 
+export type MealValidationResult =
+  | { success: true; meal: ValidatedMeal }
+  | { success: false; error: MealPlanValidationError };
+
+export function validateMeal(
+  value: unknown,
+  options: {
+    servings: number;
+    allergies: string[];
+    dislikedIngredients?: string[];
+    day?: DayName;
+    mealType?: MealType;
+  },
+): MealValidationResult {
+  const parsed = mealSchema.safeParse(value);
+  if (!parsed.success) {
+    return { success: false, error: { code: 'invalid_meal', message: 'The meal is incomplete or malformed.', day: options.day, mealType: options.mealType } };
+  }
+
+  const servingCount = Number(parsed.data.servings);
+  if (!Number.isFinite(servingCount) || servingCount !== options.servings) {
+    return { success: false, error: { code: 'serving_mismatch', message: `The meal has ${String(parsed.data.servings)} servings instead of ${options.servings}.`, day: options.day, mealType: options.mealType } };
+  }
+
+  const calories = parsed.data.estimatedCalories == null ? null : Number(parsed.data.estimatedCalories);
+  const meal: ValidatedMeal = {
+    title: parsed.data.title,
+    ingredients: parsed.data.ingredients,
+    instructions: Array.isArray(parsed.data.instructions) ? parsed.data.instructions.join('\n') : parsed.data.instructions,
+    prepTime: parsed.data.prepTime,
+    cookTime: parsed.data.cookTime,
+    servings: servingCount,
+    dietaryTags: parsed.data.dietaryTags,
+    estimatedCalories: Number.isFinite(calories) && calories! > 0 ? Math.round(calories!) : null,
+  };
+
+  if (detectAllergen(meal, options.allergies)) {
+    return { success: false, error: { code: 'allergen_detected', message: 'The meal contains a blocked allergen term.', day: options.day, mealType: options.mealType } };
+  }
+  if (detectAllergen(meal, options.dislikedIngredients ?? [])) {
+    return { success: false, error: { code: 'disliked_ingredient', message: 'The meal contains a disliked ingredient.', day: options.day, mealType: options.mealType } };
+  }
+  if (containsPreparedShortcut(meal)) {
+    return { success: false, error: { code: 'prepared_shortcut', message: 'The meal relies on a prepared shortcut instead of basic ingredients.', day: options.day, mealType: options.mealType } };
+  }
+  return { success: true, meal };
+}
+
 export function normalizeMealTypes(
   requestedMealTypes: unknown,
   legacyMealsPerDay: unknown,
@@ -237,7 +286,7 @@ export function parseMealPlanContent(content: string): unknown {
 
 export function validateMealPlan(
   value: unknown,
-  options: { mealTypes: MealType[]; servings: number; allergies: string[] },
+  options: { mealTypes: MealType[]; servings: number; allergies: string[]; dislikedIngredients?: string[] },
 ): MealPlanValidationResult {
   if (!Array.isArray(value)) {
     return {
@@ -310,66 +359,12 @@ export function validateMealPlan(
       }
       if (!expected) continue;
 
-      const parsed = mealSchema.safeParse(rawMeal);
-      if (!parsed.success) {
-        errors.push({
-          code: 'invalid_meal',
-          message: `${day} ${mealType} is incomplete or malformed.`,
-          day,
-          mealType,
-        });
+      const validation = validateMeal(rawMeal, { ...options, day, mealType });
+      if (!validation.success) {
+        errors.push(validation.error);
         continue;
       }
-
-      const servingCount = Number(parsed.data.servings);
-      if (!Number.isFinite(servingCount) || servingCount !== options.servings) {
-        errors.push({
-          code: 'serving_mismatch',
-          message: `${day} ${mealType} has ${String(parsed.data.servings)} servings instead of ${options.servings}.`,
-          day,
-          mealType,
-        });
-        continue;
-      }
-
-      const calories = parsed.data.estimatedCalories == null
-        ? null
-        : Number(parsed.data.estimatedCalories);
-      const meal: ValidatedMeal = {
-        title: parsed.data.title,
-        ingredients: parsed.data.ingredients,
-        instructions: Array.isArray(parsed.data.instructions)
-          ? parsed.data.instructions.join('\n')
-          : parsed.data.instructions,
-        prepTime: parsed.data.prepTime,
-        cookTime: parsed.data.cookTime,
-        servings: servingCount,
-        dietaryTags: parsed.data.dietaryTags,
-        estimatedCalories: Number.isFinite(calories) && calories! > 0
-          ? Math.round(calories!)
-          : null,
-      };
-
-      const allergenMatch = detectAllergen(meal, options.allergies);
-      if (allergenMatch) {
-        errors.push({
-          code: 'allergen_detected',
-          message: `${day} ${mealType} contains a blocked allergen term.`,
-          day,
-          mealType,
-        });
-        continue;
-      }
-
-      if (containsPreparedShortcut(meal)) {
-        errors.push({
-          code: 'prepared_shortcut',
-          message: `${day} ${mealType} uses a commercially prepared meal shortcut instead of basic grocery ingredients.`,
-          day,
-          mealType,
-        });
-        continue;
-      }
+      const meal = validation.meal;
 
       const priorMeal = (acceptedMealsByType.get(mealType) ?? []).find((candidate) =>
         titlesDescribeSameMeal(candidate.title, meal.title)

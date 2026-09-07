@@ -26,8 +26,8 @@ export default function SignUpScreen() {
         <Text style={styles.title}>Create your account</Text>
         <Text style={styles.subtitle}>Your Premium, allergy, and community-code rules are enforced by the same Recipe Reborn server as the website.</Text>
         <Card>
-          <Field accessibilityLabel="Email" autoCapitalize="none" keyboardType="email-address" placeholder="Email" value={email} onChangeText={setEmail} />
-          <Field accessibilityLabel="Password" autoCapitalize="none" secureTextEntry placeholder="Password (6+ characters)" value={password} onChangeText={setPassword} />
+          <Field accessibilityLabel="Email" autoCapitalize="none" autoComplete="email" keyboardType="email-address" placeholder="Email" value={email} onChangeText={setEmail} />
+          <Field accessibilityLabel="Password" autoCapitalize="none" autoComplete="new-password" secureTextEntry placeholder="Password (6+ characters)" value={password} onChangeText={setPassword} />
           <Field accessibilityLabel="Community code" autoCapitalize="characters" placeholder="Community code (optional)" value={code} onChangeText={setCode} />
           <InlineError message={error} />
           <Button label="Create account" onPress={submit} loading={busy} disabled={!email || password.length < 6} />
@@ -42,5 +42,5 @@ const styles = StyleSheet.create({
   flex: { flex: 1 }, content: { flexGrow: 1, justifyContent: 'center', gap: 12 },
   title: { fontSize: 28, fontWeight: '800', color: colors.greenDark, textAlign: 'center' },
   subtitle: { color: colors.muted, lineHeight: 21, textAlign: 'center' },
-  link: { color: colors.green, fontWeight: '700', textAlign: 'center', padding: 8 },
+  link: { color: colors.green, fontWeight: '700', textAlign: 'center', padding: 10, minHeight: 44 },
 });

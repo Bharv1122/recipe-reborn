@@ -4,10 +4,10 @@
 
 - Confirm ownership of provisional iOS identifier `com.recipereborn.app`.
 - Use native Android package `com.recipereborn.app` in a fresh Play draft. Leave the existing `com.recipereborn.app.twa` TWA listing untouched.
-- Enroll in Apple Developer and create the Expo/EAS project without changing the production website. The existing Google Play account is already active.
-- Add the EAS project ID and platform signing credentials.
+- Enroll in Apple Developer and verify ownership/access for the configured Expo/EAS project without changing the production website.
+- Confirm the configured EAS project ID, then add iOS signing credentials only with explicit approval.
 - Supply Apple Team ID for Universal Links. Android's three currently verified Play package fingerprints are in the website association file; add any later EAS fingerprint that is not already listed.
-- Decide the store-compliant in-app subscription purchase approach. Do not expose a Stripe purchase button in the store build without policy review.
+- Confirm the signed iPhone build honors existing Premium entitlements but exposes no purchase or billing-management controls.
 
 ## Signed-device verification
 
@@ -18,10 +18,12 @@
 - Collections and meal-plan add/remove flows.
 - Shopping online creation and offline toggle/reconnect sync.
 - Local notification and opt-in push registration/revocation.
-- Subscription status and hosted management return path; no test or live charge from QA.
+- Existing subscription status displays correctly; verify there is no purchase or billing-management control in the iPhone app and make no test or live charge.
 - Account deletion with and without an active subscription guard.
 - VoiceOver/TalkBack, Dynamic Type/font scaling, contrast, small-screen layout, keyboard navigation, and slow/offline error states.
 - Capture screenshots with synthetic data only after all device checks pass.
+- Confirm the signed release remains iPhone-only (`ios.supportsTablet: false`) and capture the required iPhone screenshots.
+- Confirm export compliance for the exact signed binary before setting or answering `ITSAppUsesNonExemptEncryption`.
 
 ## Submission gate
 

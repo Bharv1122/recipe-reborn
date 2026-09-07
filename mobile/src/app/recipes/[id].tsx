@@ -42,6 +42,7 @@ export default function RecipeDetailScreen() {
         {instructions.map((item, index) => <Text key={`${index}-${item}`} style={styles.body}>{index + 1}. {item}</Text>)}
         <Button label="Add to collection" secondary onPress={() => router.push({ pathname: '/collections', params: { recipeId: recipe.id } })} />
         <Button label="Add to meal plan" secondary onPress={() => router.push({ pathname: '/meal-plans', params: { recipeId: recipe.id } })} />
+        <Button label="Ask AI Chef" secondary onPress={() => router.push('/chat')} />
         <Button label="Delete saved recipe" secondary onPress={remove} />
       </Card> : <Text style={styles.meta}>Loading recipe…</Text>}
     </ScrollView>

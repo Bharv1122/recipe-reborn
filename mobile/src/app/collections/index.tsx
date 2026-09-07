@@ -45,12 +45,12 @@ export default function CollectionsScreen() {
     <Stack.Screen options={{ headerShown: true, title: recipeId ? 'Choose collection' : 'Collections', headerTintColor: colors.green }} />
     <ScrollView contentContainerStyle={styles.content}>
       <Card>
-        <Field placeholder="New collection name" value={name} onChangeText={setName} />
+        <Field accessibilityLabel="New collection name" placeholder="New collection name" value={name} onChangeText={setName} />
         <Button label="Create collection" onPress={create} disabled={!name.trim()} />
       </Card>
       <InlineError message={error} />
-      {message ? <Text style={styles.success}>{message}</Text> : null}
-      {collections.map((collection) => <Pressable key={collection.id} onPress={() => choose(collection)}>
+      {message ? <Text accessibilityLiveRegion="polite" style={styles.success}>{message}</Text> : null}
+      {collections.map((collection) => <Pressable accessibilityRole="button" accessibilityLabel={collection.name} accessibilityHint={recipeId ? 'Adds this recipe to the collection' : 'Opens the collection'} key={collection.id} onPress={() => choose(collection)}>
         <Card>
           <Text style={styles.title}>{collection.name}</Text>
           <Text style={styles.body}>{collection._count.collectionRecipes} recipes{collection.description ? ` · ${collection.description}` : ''}</Text>

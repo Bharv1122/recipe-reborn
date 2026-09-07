@@ -4,7 +4,7 @@ import { useState } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { ShoppingCart, Plus, Clock, Utensils } from 'lucide-react';
+import { ShoppingCart, Clock, Utensils, RefreshCw } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { useRouter } from 'next/navigation';
 
@@ -63,6 +63,7 @@ const MEAL_LABELS: Record<string, string> = {
 export function MealPlanCalendar({ plan, onUpdate }: MealPlanCalendarProps) {
   const router = useRouter();
   const [generating, setGenerating] = useState(false);
+  const [replacingId, setReplacingId] = useState<string | null>(null);
   const visibleMealTypes = MEAL_TYPES.filter((mealType) =>
     plan.mealPlanRecipes.some((meal) => meal.mealType === mealType),
   );
@@ -116,6 +117,21 @@ export function MealPlanCalendar({ plan, onUpdate }: MealPlanCalendarProps) {
   const getTotalCalories = (day: string) => {
     const dayMeals = Object.values(mealsByDay[day]).flat();
     return dayMeals.reduce((sum, mpr) => sum + (mpr.recipe.calories || 0), 0);
+  };
+
+  const handleReplaceMeal = async (entryId: string) => {
+    try {
+      setReplacingId(entryId);
+      const response = await fetch(`/api/meal-plans/${plan.id}/recipes/${entryId}/replace`, { method: 'POST' });
+      const body = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(body.message || body.error || 'Could not replace this meal.');
+      toast.success('A new meal is ready');
+      onUpdate();
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Could not replace this meal.');
+    } finally {
+      setReplacingId(null);
+    }
   };
 
   return (
@@ -205,6 +221,17 @@ export function MealPlanCalendar({ plan, onUpdate }: MealPlanCalendarProps) {
                                       ))}
                                     </div>
                                   )}
+                                  <Button
+                                    type="button"
+                                    variant="outline"
+                                    size="sm"
+                                    className="mt-2 h-auto min-h-9 w-full whitespace-normal px-2 py-2 text-xs"
+                                    disabled={replacingId !== null}
+                                    onClick={() => handleReplaceMeal(mpr.id)}
+                                  >
+                                    <RefreshCw className={`mr-1.5 h-3.5 w-3.5 ${replacingId === mpr.id ? 'animate-spin' : ''}`} />
+                                    {replacingId === mpr.id ? 'Finding another meal…' : 'Try another recipe'}
+                                  </Button>
                                 </CardContent>
                               </Card>
                             ))}

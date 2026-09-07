@@ -10,7 +10,7 @@ export default function HomeScreen() {
   return <Screen>
     <ScrollView contentContainerStyle={styles.content}>
       <View style={styles.hero}>
-        <Image source={require('@/assets/images/recipe-reborn-logo.png')} style={styles.logo} />
+        <Image accessible={false} source={require('@/assets/images/recipe-reborn-logo.png')} style={styles.logo} />
         <View style={styles.heroText}>
           <Text style={styles.eyebrow}>WELCOME BACK</Text>
           <Text style={styles.title}>{user?.name || 'What will we make?'}</Text>
@@ -21,6 +21,11 @@ export default function HomeScreen() {
         <Text style={styles.body}>{"Create from a label or your reviewed pantry. Your account's Premium, allergy, and safety rules are applied by the server."}</Text>
         <Button label="Generate recipe" onPress={() => router.push('/generate')} />
         <Button label="Browse saved recipes" secondary onPress={() => router.push('/recipes')} />
+      </Card>
+      <Card>
+        <Text style={styles.cardTitle}>Ask AI Chef</Text>
+        <Text style={styles.body}>Get recipe ideas, substitutions, and cooking help that respects your saved food preferences.</Text>
+        <Button label="Chat with AI Chef" onPress={() => router.push('/chat')} />
       </Card>
       <Card>
         <Text style={styles.cardTitle}>Scan a packaged food</Text>

@@ -18,7 +18,7 @@ export default function CollectionDetailScreen() {
     <ScrollView contentContainerStyle={styles.content}>
       <InlineError message={error} />
       {detail?.description ? <Text style={styles.body}>{detail.description}</Text> : null}
-      {detail?.collectionRecipes.map(({ id: entryId, recipe }) => <Pressable key={entryId} onPress={() => router.push({ pathname: '/recipes/[id]', params: { id: recipe.id } })}>
+      {detail?.collectionRecipes.map(({ id: entryId, recipe }) => <Pressable accessibilityRole="button" accessibilityLabel={recipe.title} accessibilityHint="Opens the saved recipe" key={entryId} onPress={() => router.push({ pathname: '/recipes/[id]', params: { id: recipe.id } })}>
         <Card><Text style={styles.title}>{recipe.title}</Text><Text style={styles.body}>{[recipe.prepTime, recipe.cookTime].filter(Boolean).join(' · ')}</Text></Card>
       </Pressable>)}
       {detail && !detail.collectionRecipes.length ? <Card><Text style={styles.body}>No recipes in this collection yet.</Text></Card> : null}

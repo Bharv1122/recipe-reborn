@@ -19,7 +19,7 @@ Run `npm run verify` for typechecking, linting, and Android/iOS production JS bu
 - Secure login: short-lived bearer access token plus rotating, revocable refresh token. Refresh tokens are stored only in iOS Keychain / Android Keystore and only a SHA-256 hash is stored server-side.
 - Server authority: `/api/mobile/auth/me` returns plan, trial, allergy, and dislike state. The client never grants Premium or computes offer eligibility.
 - Camera: native barcode scan calls the real Open Food Facts-backed server service. Fridge and pantry photos can be combined, extracted, corrected, and only then confirmed into the existing inventory. The server does not store source photos.
-- Core product: recipe generation/cancel/save, saved recipe browsing, collections, meal plans, shopping lists, subscription status/portal, password reset, and account deletion use authenticated server boundaries.
+- Core product: recipe generation/cancel/save, saved recipe browsing, collections, meal plans, shopping lists, read-only subscription status, password reset, and account deletion use authenticated server boundaries. The iPhone app has no purchase or billing-management control.
 - Shopping: SQLite caches full lists. Check/uncheck works offline using a last-write-wins queue and syncs on reconnection. List and item creation require a connection.
 - Notifications: explicit opt-in local reminders work. Push registration is opt-in and refuses to run without a physical device and configured EAS project.
 
@@ -28,5 +28,6 @@ Run `npm run verify` for typechecking, linting, and Android/iOS production JS bu
 - Confirm ownership of provisional bundle IDs `com.recipereborn.app`; create the EAS project and signing credentials.
 - Add the Apple Team ID and Android signing SHA to the hosted universal-link association files, then verify reset links in signed builds.
 - Complete physical-device accessibility, camera, offline, notification, password-reset, and account-deletion QA; capture final store screenshots from approved signed builds.
-- Decide and implement the Apple/Google in-app purchase approach before exposing subscription purchase in store builds. Existing Stripe customers can manage billing through the verified web portal.
+- Repeat the static accessibility audit against the final signed build with VoiceOver and the largest Dynamic Type sizes. Local controls have labels, roles, selected/checked state, and at least 44-point primary tap targets, but static review cannot prove device behavior.
+- Version 1 honors existing Premium entitlements but exposes no purchase or billing-management controls in the iPhone app. Billing remains outside the native app unless a later release adds an approved Apple in-app purchase implementation.
 - Complete Apple privacy nutrition labels and Google Play Data safety answers from `PRIVACY-DATA-INVENTORY.md`; have the final wording reviewed before submission.

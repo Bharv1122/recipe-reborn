@@ -4,6 +4,7 @@ import { AI_CHAT_URL, AI_API_KEY, MODEL_SMART } from '@/lib/ai';
 import { rateLimit } from '@/lib/rate-limit';
 import { resolvePartnerTrial } from '@/lib/partner-offer-server';
 import { z } from 'zod';
+import { requiredRecipeMetadataSchema } from '@/lib/recipe-metadata-validation';
 import { logServerError } from '@/lib/server-error-log';
 import { clearGenerationCancellation, wasGenerationCanceled } from '@/lib/generation-cancellation';
 import { getRequestUserId } from '@/lib/request-auth';
@@ -15,9 +16,9 @@ const recipeResultSchema = z.object({
   title: z.string().trim().min(1),
   freshIngredients: z.array(z.string().trim().min(1)).min(2),
   instructions: z.array(z.string().trim().min(1)).min(2),
-  prepTime: z.string().trim().min(1),
-  cookTime: z.string().trim().min(1),
-  servings: z.string().trim().min(1),
+  prepTime: requiredRecipeMetadataSchema,
+  cookTime: requiredRecipeMetadataSchema,
+  servings: requiredRecipeMetadataSchema,
   estimatedCostPerServing: z.number().nonnegative().optional(),
   storeBoughtCost: z.number().nonnegative().optional(),
 }).passthrough();

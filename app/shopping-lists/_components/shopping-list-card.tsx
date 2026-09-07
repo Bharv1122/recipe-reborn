@@ -41,11 +41,11 @@ export function ShoppingListCard({ list, isSelected, onClick, onDelete }: Shoppi
       onClick={onClick}
     >
       <CardHeader className="pb-3">
-        <div className="flex items-start justify-between">
-          <div className="flex-1">
-            <CardTitle className="text-base line-clamp-1 flex items-center gap-2">
-              <ShoppingCart className="h-4 w-4" />
-              {list.name}
+        <div className="flex min-w-0 items-start justify-between">
+          <div className="min-w-0 flex-1">
+            <CardTitle className="flex min-w-0 items-center gap-2 text-base">
+              <ShoppingCart className="h-4 w-4 shrink-0" />
+              <span className="min-w-0 truncate">{list.name}</span>
             </CardTitle>
             <CardDescription className="text-xs mt-1">
               {new Date(list.createdAt).toLocaleDateString()}

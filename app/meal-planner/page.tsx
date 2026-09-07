@@ -19,7 +19,22 @@ interface MealPlan {
   weekStartDate: string;
   description: string | null;
   createdAt: string;
-  mealPlanRecipes: any[];
+  mealPlanRecipes: Array<{
+    id: string;
+    day: string;
+    mealType: string;
+    servings: number;
+    notes?: string;
+    recipe: {
+      id: string;
+      title: string;
+      prepTime?: string;
+      cookTime?: string;
+      servings?: string;
+      dietaryTags?: string[];
+      calories?: number;
+    };
+  }>;
 }
 
 export default function MealPlannerPage() {
@@ -50,9 +65,10 @@ export default function MealPlannerPage() {
       if (response.ok) {
         const data = await response.json();
         setMealPlans(data);
-        if (data.length > 0 && !selectedPlan) {
-          setSelectedPlan(data[0]);
-        }
+        setSelectedPlan((current) => current
+          ? data.find((plan: MealPlan) => plan.id === current.id) ?? data[0] ?? null
+          : data[0] ?? null
+        );
       } else {
         toast.error('Failed to load meal plans');
       }

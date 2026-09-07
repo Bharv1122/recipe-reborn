@@ -92,10 +92,10 @@ export default function ScanScreen() {
       if (!result.granted) {
         setError(result.canAskAgain
           ? 'Camera access was not granted. Tap Allow camera to try again.'
-          : 'Camera access is blocked. Enable it for Recipe Reborn in Android Settings.');
+          : 'Camera access is blocked. Enable it for Recipe Reborn in your device Settings.');
       }
     } catch {
-      setError('Android could not open the camera permission request.');
+      setError('The camera permission request could not be opened.');
     } finally { setRequestingPermission(false); }
   };
 
@@ -116,7 +116,7 @@ export default function ScanScreen() {
     <ScrollView contentContainerStyle={styles.content}>
       <View style={styles.modes}>
         {(['barcode', 'label', 'fridge', 'pantry'] as Mode[]).map((value) =>
-          <Pressable key={value} onPress={() => { setMode(value); setScanned(false); setPhotoUri(null); setProduct(null); setError(null); }}
+          <Pressable accessibilityRole="radio" accessibilityState={{ selected: mode === value }} key={value} onPress={() => { setMode(value); setScanned(false); setPhotoUri(null); setProduct(null); setError(null); }}
             style={[styles.mode, mode === value && styles.modeActive]}>
             <Text style={[styles.modeText, mode === value && styles.modeTextActive]}>{value}</Text>
           </Pressable>)}
@@ -138,7 +138,7 @@ export default function ScanScreen() {
 
       {mode !== 'barcode' && !photoUri ? <Button label={cameraReady ? `Take ${mode} photo` : 'Starting camera…'} onPress={capture} loading={busy} disabled={!cameraReady} /> : null}
       {photoUri ? <Card>
-        <Image source={{ uri: photoUri }} style={styles.preview} />
+        <Image accessibilityLabel={`Preview of captured ${mode} photo`} source={{ uri: photoUri }} style={styles.preview} />
         <Text style={styles.title}>Review before anything is saved</Text>
         <Text style={styles.body}>{mode === 'label'
           ? 'Recipe Reborn will read the ingredient list, then require you to correct it before you can generate a recipe.'
@@ -165,7 +165,7 @@ export default function ScanScreen() {
 
 const styles = StyleSheet.create({
   content: { gap: 14, paddingBottom: 30 }, modes: { flexDirection: 'row', gap: 6, flexWrap: 'wrap' },
-  mode: { borderWidth: 1, borderColor: colors.line, backgroundColor: colors.white, borderRadius: 18, paddingVertical: 8, paddingHorizontal: 13 },
+  mode: { minHeight: 44, justifyContent: 'center', borderWidth: 1, borderColor: colors.line, backgroundColor: colors.white, borderRadius: 18, paddingVertical: 8, paddingHorizontal: 13 },
   modeActive: { backgroundColor: colors.green, borderColor: colors.green }, modeText: { color: colors.ink, textTransform: 'capitalize', fontWeight: '700' }, modeTextActive: { color: colors.white },
   cameraWrap: { height: 390, borderRadius: 20, overflow: 'hidden', backgroundColor: '#000' }, camera: { flex: 1 },
   guide: { position: 'absolute', bottom: 16, alignSelf: 'center', color: colors.white, backgroundColor: '#000A', paddingVertical: 8, paddingHorizontal: 14, borderRadius: 16 },

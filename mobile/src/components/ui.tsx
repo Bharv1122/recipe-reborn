@@ -17,12 +17,15 @@ export function Field(props: TextInputProps) {
 export function Button({ label, onPress, loading, secondary, disabled }: {
   label: string; onPress(): void; loading?: boolean; secondary?: boolean; disabled?: boolean;
 }) {
+  const unavailable = Boolean(disabled || loading);
   return (
     <Pressable
+      accessibilityLabel={label}
       accessibilityRole="button"
-      disabled={disabled || loading}
+      accessibilityState={{ busy: Boolean(loading), disabled: unavailable }}
+      disabled={unavailable}
       onPress={onPress}
-      style={({ pressed }) => [styles.button, secondary && styles.secondary, pressed && styles.pressed, (disabled || loading) && styles.disabled]}
+      style={({ pressed }) => [styles.button, secondary && styles.secondary, pressed && styles.pressed, unavailable && styles.disabled]}
     >
       {loading ? <ActivityIndicator color={secondary ? colors.green : colors.white} /> :
         <Text style={[styles.buttonText, secondary && styles.secondaryText]}>{label}</Text>}
@@ -31,7 +34,7 @@ export function Button({ label, onPress, loading, secondary, disabled }: {
 }
 
 export function InlineError({ message }: { message: string | null }) {
-  return message ? <Text accessibilityRole="alert" style={styles.error}>{message}</Text> : null;
+  return message ? <Text accessibilityLiveRegion="assertive" accessibilityRole="alert" style={styles.error}>{message}</Text> : null;
 }
 
 const styles = StyleSheet.create({

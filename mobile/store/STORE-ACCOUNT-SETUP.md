@@ -98,7 +98,7 @@ Do not run `eas submit` until the owner explicitly approves submission and all r
 - Apple individual versus organization enrollment. Organization enrollment requires the legal entity details and D-U-N-S information. An individual account displays the legal personal name as the seller.
 - The existing Google Play account is Personal. Have counsel confirm whether it should remain individually owned or later be transferred to a properly formed business; do not create a duplicate developer account.
 - Confirm `com.recipereborn.app` for iOS before creating the Apple app record. Android also uses `com.recipereborn.app` in a new native Play draft; leave the old `.twa` app untouched.
-- Choose the store-compliant Premium purchase path before submission. Existing web Stripe billing must not be exposed as an in-app purchase shortcut without a current policy review.
+- Version 1 honors existing Premium entitlements but exposes no purchase or billing-management controls in the iPhone app. Any later Apple in-app purchase path requires a new policy and implementation review.
 
 ## Values needed to finish verified links
 

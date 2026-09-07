@@ -24,7 +24,7 @@ export default function RecipesScreen() {
     <ScrollView contentContainerStyle={styles.content} refreshControl={<RefreshControl refreshing={loading} onRefresh={load} />}>
       <InlineError message={error} />
       {!loading && !recipes.length ? <Card><Text style={styles.title}>No saved recipes yet</Text><Text style={styles.body}>Generate a recipe and save it to see it here.</Text></Card> : null}
-      {recipes.map((recipe) => <Pressable key={recipe.id} onPress={() => router.push({ pathname: '/recipes/[id]', params: { id: recipe.id } })}>
+      {recipes.map((recipe) => <Pressable accessibilityRole="button" accessibilityLabel={recipe.title} accessibilityHint="Opens the saved recipe" key={recipe.id} onPress={() => router.push({ pathname: '/recipes/[id]', params: { id: recipe.id } })}>
         <Card>
           <Text style={styles.title}>{recipe.title}</Text>
           <Text style={styles.body}>{[recipe.prepTime, recipe.cookTime, recipe.servings && `${recipe.servings} servings`].filter(Boolean).join(' · ') || 'Open recipe'}</Text>

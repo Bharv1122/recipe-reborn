@@ -4,6 +4,7 @@ import { authOptions } from '@/lib/auth-options';
 import { prisma } from '@/lib/db';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
+import { parseStoredRecipeList } from '@/lib/recipe-list';
 
 export const dynamic = 'force-dynamic';
 
@@ -163,7 +164,7 @@ export async function POST(req: NextRequest, props: { params: Promise<{ id: stri
 
       doc.setFontSize(10);
       doc.setFont('helvetica', 'normal');
-      const ingredients = JSON.parse(recipe.freshIngredients);
+      const ingredients = parseStoredRecipeList(recipe.freshIngredients);
       ingredients.forEach((ingredient: string) => {
         if (yPosition > pageHeight - 20) {
           doc.addPage();
@@ -194,7 +195,7 @@ export async function POST(req: NextRequest, props: { params: Promise<{ id: stri
 
       doc.setFontSize(10);
       doc.setFont('helvetica', 'normal');
-      const instructions = JSON.parse(recipe.instructions);
+      const instructions = parseStoredRecipeList(recipe.instructions);
       instructions.forEach((instruction: string, idx: number) => {
         if (yPosition > pageHeight - 20) {
           doc.addPage();

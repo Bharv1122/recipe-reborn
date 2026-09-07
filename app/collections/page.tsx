@@ -183,8 +183,8 @@ export default function CollectionsPage() {
     <div className="min-h-screen py-12 px-4">
       <div className="max-w-6xl mx-auto space-y-6">
         {/* Header */}
-        <div className="flex items-center justify-between">
-          <div>
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+          <div className="min-w-0">
             <h1 className="text-4xl font-bold text-white flex items-center gap-3">
               <BookOpen className="h-10 w-10" />
               My Collections
@@ -195,7 +195,7 @@ export default function CollectionsPage() {
           </div>
           <Dialog open={createDialogOpen} onOpenChange={setCreateDialogOpen}>
             <DialogTrigger asChild>
-              <Button size="lg">
+              <Button size="lg" className="w-full sm:w-auto">
                 <Plus className="mr-2 h-5 w-5" />
                 New Collection
               </Button>
@@ -270,13 +270,13 @@ export default function CollectionsPage() {
                 className="hover:shadow-lg transition-all cursor-pointer group"
               >
                 <CardHeader onClick={() => setSelectedCollection(collection.id)}>
-                  <div className="flex items-start justify-between">
-                    <div className="flex-1">
+                  <div className="flex min-w-0 items-start justify-between">
+                    <div className="min-w-0 flex-1">
                       <CardTitle className="flex items-center gap-2">
-                        <BookOpen className="h-5 w-5" />
-                        {collection.name}
+                        <BookOpen className="h-5 w-5 shrink-0" />
+                        <span className="min-w-0 break-words [overflow-wrap:anywhere]">{collection.name}</span>
                       </CardTitle>
-                      <CardDescription className="mt-2">
+                      <CardDescription className="mt-2 break-words [overflow-wrap:anywhere]">
                         {collection.description || 'No description'}
                       </CardDescription>
                     </div>

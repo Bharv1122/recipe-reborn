@@ -12,6 +12,7 @@ import toast from 'react-hot-toast';
 import { InteractiveIngredient } from '@/app/generator/_components/interactive-ingredient';
 import { VoiceReader } from '@/components/voice-reader';
 import { RecipeChat } from '@/components/recipe-chat';
+import { parseStoredRecipeList } from '@/lib/recipe-list';
 
 interface Recipe {
   id: string;
@@ -69,8 +70,8 @@ interface RecipeDetailModalProps {
 }
 
 export function RecipeDetailModal({ recipe, onClose, onUpdate }: RecipeDetailModalProps) {
-  const instructions = JSON.parse(recipe?.instructions ?? '[]');
-  const [freshIngredients, setFreshIngredients] = useState<string[]>(JSON.parse(recipe?.freshIngredients ?? '[]'));
+  const instructions = parseStoredRecipeList(recipe?.instructions);
+  const [freshIngredients, setFreshIngredients] = useState<string[]>(() => parseStoredRecipeList(recipe?.freshIngredients));
   const [rating, setRating] = useState(recipe?.rating ?? 0);
   const [notes, setNotes] = useState(recipe?.notes ?? '');
   const [isSaving, setIsSaving] = useState(false);

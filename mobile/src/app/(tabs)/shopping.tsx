@@ -80,23 +80,23 @@ export default function ShoppingScreen() {
 
   return <Screen>
     <ScrollView contentContainerStyle={styles.content} refreshControl={<RefreshControl refreshing={refreshing} onRefresh={refresh} tintColor={colors.green} />}>
-      {offline ? <Text style={styles.offline}>Offline — changes will sync automatically next time this screen opens online.</Text> : null}
+      {offline ? <Text accessibilityLiveRegion="polite" style={styles.offline}>Offline — changes will sync automatically next time this screen opens online.</Text> : null}
       <InlineError message={error} />
       <Card>
         <Text style={styles.title}>{lists.length ? 'Add to newest list' : 'Create a shopping list'}</Text>
         {lists.length ? <>
           <Text style={styles.body}>Adding to: {lists[0].name}. Enter one item, or separate several with commas or new lines. New items require a connection; check-offs work offline.</Text>
-          <Field value={newItem} onChangeText={setNewItem} placeholder={'Milk, eggs, bread\nor one item per line'} editable={!offline && !saving} multiline numberOfLines={4} textAlignVertical="top" style={styles.bulkField} />
+          <Field accessibilityLabel="New shopping items" value={newItem} onChangeText={setNewItem} placeholder={'Milk, eggs, bread\nor one item per line'} editable={!offline && !saving} multiline numberOfLines={4} textAlignVertical="top" style={styles.bulkField} />
           <Button label={parseShoppingItems(newItem).length > 1 ? `Add ${parseShoppingItems(newItem).length} items` : 'Add item'} onPress={addItem} loading={saving} disabled={offline || !parseShoppingItems(newItem).length} />
         </> : <>
-          <Field value={newListName} onChangeText={setNewListName} placeholder="List name" editable={!offline && !saving} />
+          <Field accessibilityLabel="New shopping-list name" value={newListName} onChangeText={setNewListName} placeholder="List name" editable={!offline && !saving} />
           <Button label="Create list" onPress={createList} loading={saving} disabled={offline || !newListName.trim()} />
         </>}
       </Card>
       {lists.map((list) => <Card key={list.id}>
         <Text style={styles.title}>{list.name}</Text>
         {!list.items.length ? <Text style={styles.body}>This list is empty.</Text> : null}
-        {list.items.map((item) => <Pressable key={item.id} onPress={() => toggle(list.id, item.id, !item.checked)} style={styles.item} accessibilityRole="checkbox" accessibilityState={{ checked: item.checked }}>
+        {list.items.map((item) => <Pressable accessibilityLabel={[item.quantity, item.unit, item.ingredient].filter(Boolean).join(' ')} key={item.id} onPress={() => toggle(list.id, item.id, !item.checked)} style={styles.item} accessibilityRole="checkbox" accessibilityState={{ checked: item.checked }}>
           <View style={[styles.checkbox, item.checked && styles.checked]}><Text style={styles.check}>{item.checked ? '✓' : ''}</Text></View>
           <Text style={[styles.itemText, item.checked && styles.itemDone]}>{[item.quantity, item.unit, item.ingredient].filter(Boolean).join(' ')}</Text>
         </Pressable>)}

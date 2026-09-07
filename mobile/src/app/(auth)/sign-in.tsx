@@ -23,7 +23,7 @@ export default function SignInScreen() {
     <Screen>
       <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
         <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
-          <Image source={require('@/assets/images/recipe-reborn-logo.png')} style={styles.logo} />
+          <Image accessible={false} source={require('@/assets/images/recipe-reborn-logo.png')} style={styles.logo} />
           <Text style={styles.title}>Recipe Reborn</Text>
           <Text style={styles.subtitle}>Fresh-food recipes from the ingredients already around you.</Text>
           <Card>
@@ -45,5 +45,5 @@ const styles = StyleSheet.create({
   logo: { width: 84, height: 84, alignSelf: 'center', resizeMode: 'contain' },
   title: { fontSize: 32, fontWeight: '800', color: colors.greenDark, textAlign: 'center' },
   subtitle: { color: colors.muted, fontSize: 16, textAlign: 'center', marginBottom: 12 },
-  link: { color: colors.green, fontWeight: '700', textAlign: 'center', padding: 8 },
+  link: { color: colors.green, fontWeight: '700', textAlign: 'center', padding: 10, minHeight: 44 },
 });
