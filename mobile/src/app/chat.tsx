@@ -79,7 +79,7 @@ export default function ChatScreen() {
       <View style={styles.composer}>
         <Field accessibilityLabel="Message AI Chef" placeholder="Ask a cooking question" value={draft} onChangeText={setDraft} multiline style={styles.input} />
         <View style={styles.sendButton}>
-          <Button label="Send" onPress={send} loading={busy} disabled={!draft.trim()} />
+          <Button label="Send" onPress={() => send()} loading={busy} disabled={!draft.trim()} />
         </View>
       </View>
       <InlineError message={error} />

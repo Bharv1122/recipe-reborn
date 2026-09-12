@@ -1,5 +1,6 @@
 import { Text, type ColorValue } from 'react-native';
 import { Tabs } from 'expo-router';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { colors } from '@/theme';
 
 function TabIcon({ symbol, color }: { symbol: string; color: ColorValue }) {
@@ -12,12 +13,13 @@ function ShoppingIcon({ color }: { color: ColorValue }) { return <TabIcon symbol
 function AccountIcon({ color }: { color: ColorValue }) { return <TabIcon symbol="👤" color={color} />; }
 
 export default function TabsLayout() {
+  const insets = useSafeAreaInsets();
   return <Tabs screenOptions={{
     headerStyle: { backgroundColor: colors.greenDark },
     headerTintColor: colors.white,
     tabBarActiveTintColor: colors.green,
     tabBarInactiveTintColor: colors.muted,
-    tabBarStyle: { height: 64, paddingBottom: 8, paddingTop: 5 },
+    tabBarStyle: { height: 64 + insets.bottom, paddingBottom: 8 + insets.bottom, paddingTop: 5 },
   }}>
     <Tabs.Screen name="index" options={{ title: 'Home', headerTitle: 'Recipe Reborn', tabBarIcon: HomeIcon }} />
     <Tabs.Screen name="scan" options={{ title: 'Scan', tabBarIcon: ScanIcon }} />
