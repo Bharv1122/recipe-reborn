@@ -155,7 +155,7 @@ export default function ScanScreen() {
       {product ? <Card>
         <Text style={styles.title}>{product.found ? (product.name || 'Product found') : 'Barcode not found'}</Text>
         <Text style={styles.body}>{product.found ? (product.ingredients_text || 'No ingredient list was supplied by Open Food Facts.') : 'Try the label-photo mode instead.'}</Text>
-        {product.found && product.ingredients_text.trim() ? <Button label="Generate recipe" onPress={generateFromBarcode} /> : null}
+        {product.found && product.ingredients_text.trim() ? <Button label="Review ingredients" onPress={generateFromBarcode} /> : null}
         <Button label="Scan another" secondary onPress={() => { setScanned(false); setProduct(null); }} />
       </Card> : null}
       {busy && mode === 'barcode' ? <Text style={styles.status}>Looking up product…</Text> : null}

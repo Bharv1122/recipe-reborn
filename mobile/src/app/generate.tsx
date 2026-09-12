@@ -26,7 +26,7 @@ export default function GenerateScreen() {
     if (!handoff) return;
     setSource(handoff.source);
     setIngredients(handoff.ingredients);
-    setScanContext(handoff.context);
+    setScanContext(handoff.context || 'Your scanned package');
     setRecipe(null);
     setSaved(false);
     setGeneratedFrom('');
@@ -81,16 +81,19 @@ export default function GenerateScreen() {
     <Stack.Screen options={{ headerShown: true, title: 'Create a recipe', headerTintColor: colors.green }} />
     <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
       <Card>
-        <Text style={styles.title}>What would you like to make?</Text>
+        <Text style={styles.title}>{scanContext ? 'Make a homemade version' : 'What would you like to make?'}</Text>
         {scanContext ? <View style={styles.reviewNotice}>
           <Text style={styles.reviewTitle}>Review the scanned ingredients</Text>
-          <Text style={styles.note}>{scanContext}. Correct anything the scan missed or misread before tapping Generate recipe.</Text>
+          <Text style={styles.note}>{scanContext}</Text>
+          <Text style={styles.note}>Check the ingredients below, then tap Generate recipe.</Text>
         </View> : null}
-        <View style={styles.row}>
-          <Button label="Package label" secondary={source !== 'label'} onPress={() => chooseSource('label')} />
-          <Button label="Pantry items" secondary={source !== 'pantry'} onPress={() => chooseSource('pantry')} />
-        </View>
-        <Button label="Specific dish" secondary={source !== 'dish'} onPress={() => chooseSource('dish')} />
+        {!scanContext ? <>
+          <View style={styles.row}>
+            <Button label="Package label" secondary={source !== 'label'} onPress={() => chooseSource('label')} />
+            <Button label="Pantry items" secondary={source !== 'pantry'} onPress={() => chooseSource('pantry')} />
+          </View>
+          <Button label="Specific dish" secondary={source !== 'dish'} onPress={() => chooseSource('dish')} />
+        </> : null}
         <Field
           accessibilityLabel="Ingredients"
           multiline
@@ -109,7 +112,7 @@ export default function GenerateScreen() {
         <Text style={styles.note}>Your saved allergies and disliked ingredients are applied by the server. The app cannot override them.</Text>
         {busy ? <Button label="Cancel generation" secondary onPress={cancel} /> : <View style={styles.actions}>
           <View style={styles.action}><Button label="Generate recipe" onPress={() => run(false)} disabled={!ingredients.trim()} /></View>
-          <View style={styles.action}><Button label="Random" secondary onPress={() => run(true)} /></View>
+          {!scanContext ? <View style={styles.action}><Button label="Random" secondary onPress={() => run(true)} /></View> : null}
         </View>}
       </Card>
       <InlineError message={error} />
