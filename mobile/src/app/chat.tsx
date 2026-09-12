@@ -7,6 +7,7 @@ import { apiRequest } from '@/services/api';
 import { clearChatHistory, loadChatHistory, saveChatHistory, type StoredChatMessage } from '@/services/chat-history';
 import { useAuth } from '@/providers/auth-provider';
 import { colors } from '@/theme';
+import { VoiceInput } from '@/components/voice-input';
 
 type ChatMessage = StoredChatMessage;
 const starterQuestions = [
@@ -23,6 +24,7 @@ export default function ChatScreen() {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [draft, setDraft] = useState('');
   const [busy, setBusy] = useState(false);
+  const [voiceBusy, setVoiceBusy] = useState(false);
   const [historyReady, setHistoryReady] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -46,7 +48,7 @@ export default function ChatScreen() {
 
   const send = async (suggestion?: string) => {
     const content = (suggestion ?? draft).trim();
-    if (!content || busy) return;
+    if (!content || busy || voiceBusy) return;
     const next = [...messages, { role: 'user' as const, content }];
     setMessages(next); setDraft(''); setBusy(true); setError(null);
     try {
@@ -77,11 +79,12 @@ export default function ChatScreen() {
     <Stack.Screen options={{ headerShown: true, title: 'AI Chef', headerTintColor: colors.green }} />
     <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={styles.flex}>
       <View style={styles.composer}>
-        <Field accessibilityLabel="Message AI Chef" placeholder="Ask a cooking question" value={draft} onChangeText={setDraft} multiline style={styles.input} />
+        <Field accessibilityLabel="Message AI Chef" editable={!voiceBusy} placeholder="Ask a cooking question" value={draft} onChangeText={setDraft} multiline style={styles.input} />
         <View style={styles.sendButton}>
-          <Button label="Send" onPress={() => send()} loading={busy} disabled={!draft.trim()} />
+          <Button label="Send" onPress={() => send()} loading={busy} disabled={!draft.trim() || voiceBusy} />
         </View>
       </View>
+      <VoiceInput key={messages.length} label="Speak to AI Chef" disabled={busy || !historyReady} onBusyChange={setVoiceBusy} onTranscript={(text) => setDraft((current) => [current.trim(), text].filter(Boolean).join('\n'))} />
       <InlineError message={error} />
       <ScrollView ref={scrollRef} style={styles.messages} contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled" onContentSizeChange={() => scrollRef.current?.scrollToEnd({ animated: true })}>
         {!messages.length ? <Card>

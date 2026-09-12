@@ -5,7 +5,7 @@ await esbuild.build({entryPoints:[path.join(out,'app.jsx')],outfile:path.join(ou
  build.onResolve({filter:/^(react|react-dom)(\/.*)?$/},a=>({path:require.resolve(a.path,{paths:[path.join(base,'mobile') ]})}));
  build.onResolve({filter:/^react-native$/},()=>({path:require.resolve('react-native-web',{paths:[path.join(base,'mobile')]})}));
  build.onResolve({filter:/^expo-router$/},()=>({path:path.join(out,'router.jsx')}));
- build.onResolve({filter:/^(expo-camera|expo-file-system|expo-sqlite|expo-network|expo-crypto)$/},()=>({path:path.join(out,'native.jsx')}));
- build.onResolve({filter:/^@\/(services\/(api|recipes|shopping-cache)|providers\/auth-provider)$/},()=>({path:path.join(out,'services.js')}));
+ build.onResolve({filter:/^(expo-camera|expo-file-system|expo-sqlite|expo-network|expo-crypto|expo-audio|expo-image-picker|expo-image-manipulator)$/},()=>({path:path.join(out,'native.jsx')}));
+ build.onResolve({filter:/^@\/(services\/(api|recipes|shopping-cache|chat-history)|providers\/auth-provider)$/},()=>({path:path.join(out,'services.js')}));
  build.onResolve({filter:/^@\//},a=>({path:['','.tsx','.ts','.jsx','.js'].map(ext=>path.join(base,a.path.startsWith('@/assets/')?'mobile':'mobile/src',a.path.slice(2))+ext).find(p=>fs.existsSync(p) && fs.statSync(p).isFile())}));
 }}],resolveExtensions:['.tsx','.ts','.jsx','.js','.json']});

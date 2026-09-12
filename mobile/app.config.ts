@@ -29,7 +29,7 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
       backgroundColor: '#064E3B',
       monochromeImage: './assets/images/recipe-reborn-android-monochrome.png',
     },
-    permissions: ['CAMERA', 'POST_NOTIFICATIONS'],
+    permissions: ['CAMERA', 'POST_NOTIFICATIONS', 'RECORD_AUDIO'],
     intentFilters: [{
       action: 'VIEW',
       autoVerify: true,
@@ -45,6 +45,7 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
     ],
     ['expo-secure-store', { configureAndroidBackup: true }],
     'expo-sqlite',
+    ['expo-audio', { microphonePermission: 'Speak ingredients and cooking questions in Recipe Reborn.', recordAudioAndroid: true, enableBackgroundPlayback: false, enableBackgroundRecording: false }],
     [
       'expo-camera',
       {
@@ -58,7 +59,7 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
       {
         photosPermission: 'Choose food-label or pantry photos to analyze in Recipe Reborn.',
         cameraPermission: 'Scan food labels and barcodes, or photograph your pantry for recipe suggestions.',
-        microphonePermission: false,
+        microphonePermission: 'Speak ingredients and cooking questions in Recipe Reborn.',
       },
     ],
     ['expo-notifications', { color: '#0B6B3A' }],

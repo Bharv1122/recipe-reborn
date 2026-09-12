@@ -1,6 +1,7 @@
-import { getServerSession } from 'next-auth';
 import { NextResponse } from 'next/server';
-import { authOptions } from '@/lib/auth-options';
+import { getRequestUserId } from '@/lib/request-auth';
+import { rateLimit } from '@/lib/rate-limit';
+import { nullableNutritionNumber } from '@/lib/nutrition-facts';
 import { AI_API_KEY, AI_CHAT_URL, MODEL_FAST } from '@/lib/ai';
 import { extractJsonPayload } from '@/lib/ai-json';
 
@@ -23,12 +24,16 @@ function asRecipeText(value: unknown) {
 // without silently saving a recipe to the user's collection first.
 export async function POST(request: Request) {
   try {
-    const session = await getServerSession(authOptions);
-    if (!session?.user?.id) {
+    const userId = await getRequestUserId(request);
+    if (!userId) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const body = await request.json();
+    const limited = await rateLimit(`nutrition-estimate:${userId}`, 10, 60);
+    if (!limited.success) return NextResponse.json({ error: 'Please try nutrition again in a minute.' }, { status: 429 });
+
+    const body = await request.json().catch(() => null);
+    if (!body || typeof body !== 'object') return NextResponse.json({ error: 'A complete recipe is required for nutrition' }, { status: 400 });
     const title = typeof body.title === 'string' ? body.title.trim() : '';
     const freshIngredients = asRecipeText(body.freshIngredients);
     const instructions = asRecipeText(body.instructions);
@@ -36,6 +41,9 @@ export async function POST(request: Request) {
 
     if (!title || !freshIngredients || !instructions) {
       return NextResponse.json({ error: 'A complete recipe is required for nutrition' }, { status: 400 });
+    }
+    if (title.length > 200 || freshIngredients.length > 75000 || instructions.length > 300000 || servings > 1000) {
+      return NextResponse.json({ error: 'Recipe is too large to estimate.' }, { status: 400 });
     }
 
     const response = await fetch(AI_CHAT_URL, {
@@ -61,15 +69,18 @@ export async function POST(request: Request) {
     if (!response.ok) throw new Error(`AI request failed: ${response.status}`);
     const data = await response.json();
     const parsed = JSON.parse(extractJsonPayload(data.choices?.[0]?.message?.content || '')) as Partial<NutritionEstimate>;
-    const number = (value: unknown) => Number.isFinite(Number(value)) ? Number(value) : 0;
+    const rounded = (value: unknown, precision = 1) => {
+      const number = nullableNutritionNumber(value);
+      return number === null ? null : Math.round(number * precision) / precision;
+    };
 
     return NextResponse.json({
-      calories: Math.round(number(parsed.calories)),
-      protein: Math.round(number(parsed.protein) * 10) / 10,
-      carbs: Math.round(number(parsed.carbs) * 10) / 10,
-      fat: Math.round(number(parsed.fat) * 10) / 10,
-      fiber: Math.round(number(parsed.fiber) * 10) / 10,
-      sodium: Math.round(number(parsed.sodium)),
+      calories: rounded(parsed.calories),
+      protein: rounded(parsed.protein, 10),
+      carbs: rounded(parsed.carbs, 10),
+      fat: rounded(parsed.fat, 10),
+      fiber: rounded(parsed.fiber, 10),
+      sodium: rounded(parsed.sodium),
       perServing: true,
       accuracy: 'estimated',
       basisLabel: `Per recipe serving (recipe makes ${servings})`,

@@ -8,9 +8,10 @@ import { makePendingFoodPhoto, type CapturePurpose } from '@/services/camera-inv
 import { stageScanRecipeHandoff } from '@/services/scan-recipe-handoff';
 import { Button, Card, InlineError, Screen } from '@/components/ui';
 import { colors } from '@/theme';
+import type { OriginalNutrition } from '../../../../shared/nutrition-facts';
 
 type Mode = 'barcode' | CapturePurpose;
-type Product = { found: boolean; name: string; ingredients_text: string };
+type Product = { found: boolean; name: string; ingredients_text: string; originalNutrition?: OriginalNutrition | null };
 
 export default function ScanScreen() {
   const router = useRouter();
@@ -45,6 +46,7 @@ export default function ScanScreen() {
     stageScanRecipeHandoff({
       source: 'label',
       origin: 'barcode',
+      originalNutrition: product.originalNutrition,
       ingredients: product.ingredients_text,
       context: product.name ? `Barcode product: ${product.name}` : 'Ingredients loaded from the scanned barcode',
     });
@@ -68,6 +70,7 @@ export default function ScanScreen() {
       stageScanRecipeHandoff({
         source: 'label',
         origin: 'label-photo',
+        originalNutrition: data.originalNutrition ?? null,
         ingredients,
         context: data.title ? String(data.title) : 'Ingredients extracted from your package-label photo',
       });

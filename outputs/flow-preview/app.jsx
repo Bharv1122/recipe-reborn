@@ -9,10 +9,12 @@ import Scan from '../../mobile/src/app/(tabs)/scan';
 import Recipes from '../../mobile/src/app/recipes/index';
 import Recipe from '../../mobile/src/app/recipes/[id]';
 import Shopping from '../../mobile/src/app/(tabs)/shopping';
+import PantryReview from '../../mobile/src/app/pantry-review';
+import Chat from '../../mobile/src/app/chat';
 function Preview(){
  const [history,setHistory]=useState([{path:'/',params:{}}]);const current=history[history.length-1];
  const router=useMemo(()=>({push(to){setHistory(h=>[...h,typeof to==='string'?{path:to,params:{}}:{path:to.pathname,params:to.params||{}}]);},replace(to){setHistory(h=>[...h.slice(0,-1),typeof to==='string'?{path:to,params:{}}:{path:to.pathname,params:to.params||{}}]);},back(){setHistory(h=>h.length>1?h.slice(0,-1):h);}}),[]);
- const routes={'/meal-plans':Plans,'/meal-plans/[id]':Plan,'/':Home,'/(tabs)':Home,'/generate':Generate,'/(tabs)/scan':Scan,'/recipes':Recipes,'/(tabs)/recipes':Recipes,'/recipes/[id]':Recipe,'/(tabs)/shopping':Shopping};const Page=routes[current.path];
+ const routes={'/pantry-review':PantryReview,'/chat':Chat,'/meal-plans':Plans,'/meal-plans/[id]':Plan,'/':Home,'/(tabs)':Home,'/generate':Generate,'/(tabs)/scan':Scan,'/recipes':Recipes,'/(tabs)/recipes':Recipes,'/recipes/[id]':Recipe,'/(tabs)/shopping':Shopping};const Page=routes[current.path];
  return <Navigation.Provider value={{router,params:current.params}}><header><button onClick={()=>router.back()} aria-label="Back">‹</button><strong>Recipe Reborn</strong></header><main><div className="screen" key={current.path+'-'+history.length}>{Page?<Page/>:<p>Outside this preview</p>}</div></main><nav>{[['Home','/'],['Recipes','/(tabs)/recipes'],['Shopping','/(tabs)/shopping']].map(([name,path])=><button key={name} onClick={()=>router.push(path)}>{name}</button>)}</nav><footer>Layout preview · sample data · camera and services simulated</footer></Navigation.Provider>;
 }
 createRoot(document.getElementById('root')).render(<Preview/>);

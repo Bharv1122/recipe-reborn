@@ -20,7 +20,7 @@ export default function HomeScreen() {
         <Button label="Scan a package" onPress={() => router.push('/(tabs)/scan')} />
       </Card>
       <Pressable accessibilityRole="button" accessibilityLabel="Use my ingredients" onPress={() => router.push({ pathname: '/generate', params: { source: 'pantry' } })} style={styles.choice}>
-        <View style={styles.choiceText}><Text style={styles.cardTitle}>Use my ingredients</Text><Text style={styles.body}>Make a meal with what you have.</Text></View><Text accessible={false} style={styles.arrow}>›</Text>
+        <View style={styles.choiceText}><Text style={styles.cardTitle}>Use my ingredients</Text><Text style={styles.body}>Speak, type, or photograph your fridge and pantry.</Text></View><Text accessible={false} style={styles.arrow}>›</Text>
       </Pressable>
       <Pressable accessibilityRole="button" accessibilityLabel="Choose a dish" onPress={() => router.push({ pathname: '/generate', params: { source: 'dish' } })} style={styles.choice}>
         <View style={styles.choiceText}><Text style={styles.cardTitle}>Choose a dish</Text><Text style={styles.body}>Tell us what you want to cook.</Text></View><Text accessible={false} style={styles.arrow}>›</Text>

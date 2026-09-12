@@ -1,5 +1,5 @@
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/auth-options';
+import { getRequestUserId } from '@/lib/request-auth';
+import { rateLimit } from '@/lib/rate-limit';
 import { NextRequest, NextResponse } from 'next/server';
 import { AI_CHAT_URL, AI_API_KEY, MODEL_SMART } from '@/lib/ai';
 
@@ -56,11 +56,12 @@ function detectAudioFormat(bytes: Uint8Array, fallbackMime: string): string {
 
 export async function POST(request: NextRequest) {
   try {
-    const session = await getServerSession(authOptions);
-
-    if (!session?.user) {
+    const userId = await getRequestUserId(request);
+    if (!userId) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
+    const limited = await rateLimit(`voice-transcription:${userId}`, 10, 60);
+    if (!limited.success) return NextResponse.json({ error: 'Please wait a minute before trying voice again.' }, { status: 429 });
 
     if (!AI_API_KEY) {
       console.error('Transcription error: GEMINI_API_KEY is not configured');
@@ -70,7 +71,9 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const formData = await request.formData();
+    let formData: FormData;
+    try { formData = await request.formData(); }
+    catch { return NextResponse.json({ error: 'Upload a voice recording to continue.' }, { status: 400 }); }
     const audioFile = formData.get('audio');
 
     if (!(audioFile instanceof Blob)) {
@@ -139,7 +142,8 @@ export async function POST(request: NextRequest) {
     }
 
     const data = await response.json();
-    const text: string = data?.choices?.[0]?.message?.content?.trim() ?? '';
+    const content = data?.choices?.[0]?.message?.content;
+    const text = typeof content === 'string' ? content.trim() : '';
 
     return NextResponse.json({ text }, { status: 200 });
   } catch (error) {

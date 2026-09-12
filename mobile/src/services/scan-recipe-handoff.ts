@@ -1,8 +1,11 @@
+import type { OriginalNutrition } from '../../../shared/nutrition-facts';
+
 export type ScanRecipeHandoff = {
   source: 'label' | 'pantry';
   origin: 'barcode' | 'label-photo' | 'pantry-photo';
   ingredients: string;
   context: string;
+  originalNutrition?: OriginalNutrition | null;
 };
 
 let pendingHandoff: ScanRecipeHandoff | null = null;

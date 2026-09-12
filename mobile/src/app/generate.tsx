@@ -7,6 +7,9 @@ import { cancelRecipeGeneration, generateRecipe, saveGeneratedRecipe } from '@/s
 import { takeScanRecipeHandoff } from '@/services/scan-recipe-handoff';
 import type { GeneratedRecipe } from '@/types';
 import { colors } from '@/theme';
+import { PackageNutritionReview, RecipeComparison } from '@/components/recipe-comparison';
+import { VoiceInput } from '@/components/voice-input';
+import type { OriginalNutrition } from '../../../shared/nutrition-facts';
 
 type Source = 'label' | 'pantry' | 'dish';
 export default function GenerateScreen() {
@@ -18,9 +21,11 @@ export default function GenerateScreen() {
   const [showPreferences, setShowPreferences] = useState(false);
   const [recipe, setRecipe] = useState<GeneratedRecipe | null>(null);
   const [busy, setBusy] = useState(false);
+  const [voiceBusy, setVoiceBusy] = useState(false);
   const [saving, setSaving] = useState(false);
   const [generatedFrom, setGeneratedFrom] = useState('');
   const [scanContext, setScanContext] = useState('');
+  const [originalNutrition, setOriginalNutrition] = useState<OriginalNutrition | null>(null);
   const [error, setError] = useState<string | null>(null);
   const abortRef = useRef<AbortController | null>(null);
   const generationIdRef = useRef<string | null>(null);
@@ -32,12 +37,13 @@ export default function GenerateScreen() {
     setSource(handoff.source);
     setIngredients(handoff.ingredients);
     setScanContext(handoff.context || 'Your reviewed ingredients');
+    setOriginalNutrition(handoff.originalNutrition ?? null);
     setRecipe(null); setGeneratedFrom(''); setError(null);
   }, []));
 
   const run = async () => {
     const input = ingredients.trim();
-    if (!input || !source || abortRef.current) return;
+    if (!input || !source || abortRef.current || voiceBusy) return;
     const controller = new AbortController();
     const generationId = Crypto.randomUUID();
     abortRef.current = controller; generationIdRef.current = generationId;
@@ -83,6 +89,7 @@ export default function GenerateScreen() {
           <Text style={styles.body}>Save it to keep it in My recipes and add it to a meal plan.</Text>
           <Button label="Save to My recipes" onPress={save} loading={saving} />
         </Card>
+        <RecipeComparison recipe={recipe} originalIngredients={generatedFrom} original={originalNutrition} isPackage={source === 'label'} />
         <Card>
           <Text style={styles.heading}>Ingredients</Text>
           {recipe.freshIngredients.map((item, index) => <Text key={`${index}-${item}`} style={styles.body}>• {item}</Text>)}
@@ -100,12 +107,14 @@ export default function GenerateScreen() {
         <Text style={styles.title}>{title}</Text>
         {scanContext ? <Text style={styles.body}>{scanContext}</Text> : null}
         <Text style={styles.body}>{source === 'label' ? 'Check the ingredient list below. You can correct it before we make a homemade version.' : source === 'pantry' ? 'List a few things in your kitchen, such as eggs, spinach and rice.' : 'Type a dish you love, such as chicken enchiladas.'}</Text>
-        <Field accessibilityLabel={source === 'dish' ? 'Dish name' : 'Ingredients'} multiline textAlignVertical="top" placeholder={source === 'dish' ? 'What would you like to cook?' : 'Enter ingredients here'} value={ingredients} onChangeText={setIngredients} style={styles.multiline} />
+        {source === 'pantry' && !scanContext ? <Button label="Photograph my fridge or pantry" secondary disabled={voiceBusy} onPress={() => router.push('/pantry-review')} /> : null}
+        <Field accessibilityLabel={source === 'dish' ? 'Dish name' : 'Ingredients'} editable={!voiceBusy} multiline textAlignVertical="top" placeholder={source === 'dish' ? 'What would you like to cook?' : 'Enter ingredients here'} value={ingredients} onChangeText={setIngredients} style={styles.multiline} />
+        <VoiceInput label={source === 'dish' ? 'Speak my recipe request' : 'Speak my ingredients'} onBusyChange={setVoiceBusy} onTranscript={(text) => setIngredients((current) => [current.trim(), text].filter(Boolean).join('\n'))} />
+        {source === 'label' && originalNutrition ? <PackageNutritionReview value={originalNutrition} onChange={setOriginalNutrition} /> : null}
         <Text style={styles.note}>Your saved allergies and food preferences apply.</Text>
         <Button label={showPreferences ? 'Hide optional requests' : 'Add a dietary request (optional)'} secondary onPress={() => setShowPreferences(!showPreferences)} />
         {showPreferences ? <Field accessibilityLabel="Dietary request" placeholder="For example, vegetarian" value={dietaryRestriction} onChangeText={setDietaryRestriction} /> : null}
-        <Button label="Make my recipe" onPress={run} disabled={!ingredients.trim()} />
-        {source === 'pantry' && !scanContext ? <Button label="Use a photo of my ingredients" secondary onPress={() => router.push('/pantry-review')} /> : null}
+        <Button label="Make my recipe" onPress={run} disabled={!ingredients.trim() || voiceBusy} />
       </Card>}
     </ScrollView>
   </Screen>;

@@ -1,4 +1,5 @@
 import Constants from 'expo-constants';
+import { fetch as expoFetch } from 'expo/fetch';
 import { clearTokens, readTokens, saveTokens } from '@/services/auth-storage';
 import type { TokenPair } from '@/types';
 
@@ -54,7 +55,8 @@ export async function apiResponse(path: string, init: RequestInit = {}, retry = 
   const tokens = await readTokens();
   if (!tokens) throw new ApiError('Please sign in again.', 401);
   const isFormData = typeof FormData !== 'undefined' && init.body instanceof FormData;
-  const response = await fetch(`${baseUrl}${path}`, {
+  // Expo File objects need Expo's Blob-aware multipart transport.
+  const response = await (isFormData ? expoFetch : fetch)(`${baseUrl}${path}`, {
     ...init,
     headers: {
       ...(isFormData ? {} : { 'Content-Type': 'application/json' }),
