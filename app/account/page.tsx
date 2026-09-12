@@ -236,6 +236,12 @@ export default function AccountPage() {
             </div>
           </CardHeader>
           <CardContent className="space-y-4">
+            {userData.subscriptionStatus === 'past_due' && (
+              <div role="status" className="rounded-lg border border-amber-300 bg-amber-50 p-4 text-amber-950">
+                <p className="font-semibold">Your renewal needs attention</p>
+                <p className="mt-1 text-sm">Your last subscription payment did not go through. Use Update payment method below to review your billing details.</p>
+              </div>
+            )}
             {/* Usage Statistics */}
             <div className="space-y-2">
               <div className="flex items-center justify-between text-sm">
@@ -250,7 +256,7 @@ export default function AccountPage() {
             </div>
 
             {/* Billing Info */}
-            {userData.currentPeriodEnd && (
+            {userData.currentPeriodEnd && userData.subscriptionStatus !== 'past_due' && (
               <div className="flex items-center gap-2 text-sm text-muted-foreground">
                 <Calendar className="h-4 w-4" />
                 <span>
@@ -273,7 +279,7 @@ export default function AccountPage() {
 
             {/* Action Buttons */}
             <div className="flex flex-col sm:flex-row gap-3 pt-4">
-              {userData.subscriptionTier === 'free' ? (
+              {userData.subscriptionTier === 'free' && userData.subscriptionStatus !== 'past_due' ? (
                 <Link href="/pricing" className="flex-1">
                   <Button className="w-full" size="lg">
                     <TrendingUp className="mr-2 h-5 w-5" />
@@ -293,11 +299,11 @@ export default function AccountPage() {
                   ) : (
                     <CreditCard className="mr-2 h-5 w-5" />
                   )}
-                  Manage Subscription
+                  {userData.subscriptionStatus === 'past_due' ? 'Update payment method' : 'Manage Subscription'}
                 </Button>
               )}
               
-              {userData.subscriptionTier === 'premium' && (
+              {userData.subscriptionTier === 'premium' && userData.subscriptionStatus !== 'past_due' && (
                 <Link href="/pricing" className="flex-1">
                   <Button variant="default" className="w-full" size="lg">
                     <Crown className="mr-2 h-5 w-5" />
