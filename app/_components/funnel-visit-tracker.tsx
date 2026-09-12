@@ -2,15 +2,12 @@
 
 import { useEffect } from 'react';
 import { trackFunnelEvent } from '@/lib/funnel-analytics';
+import { recordVisit } from '@/lib/visit-tracking';
 
 export function FunnelVisitTracker() {
   useEffect(() => {
-    const key = 'recipe-reborn:last-visit-at';
-    const now = Date.now();
     try {
-      const previous = Number(localStorage.getItem(key));
-      localStorage.setItem(key, String(now));
-      if (Number.isFinite(previous) && now - previous >= 24 * 60 * 60 * 1000) {
+      if (recordVisit(localStorage)) {
         void trackFunnelEvent('return_visit');
       }
     } catch {
