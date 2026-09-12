@@ -1,5 +1,6 @@
 import { useCallback, useRef, useState } from 'react';
-import { Image, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Image, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { File } from 'expo-file-system';
 import { CameraView, useCameraPermissions, type BarcodeScanningResult } from 'expo-camera';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { apiRequest, apiResponse } from '@/services/api';
@@ -55,7 +56,7 @@ export default function ScanScreen() {
     setBusy(true); setError(null);
     try {
       const form = new FormData();
-      form.append('image', { uri: photoUri, name: 'package-label.jpg', type: 'image/jpeg' } as unknown as Blob);
+      form.append('image', new File(photoUri));
       const response = await apiResponse('/api/extract-recipe-from-photo', { method: 'POST', body: form });
       const data = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(data.error || 'Could not read that package label.');
@@ -114,13 +115,10 @@ export default function ScanScreen() {
 
   return <Screen>
     <ScrollView contentContainerStyle={styles.content}>
-      <View style={styles.modes}>
-        {(['barcode', 'label', 'fridge', 'pantry'] as Mode[]).map((value) =>
-          <Pressable accessibilityRole="radio" accessibilityState={{ selected: mode === value }} key={value} onPress={() => { setMode(value); setScanned(false); setPhotoUri(null); setProduct(null); setError(null); }}
-            style={[styles.mode, mode === value && styles.modeActive]}>
-            <Text style={[styles.modeText, mode === value && styles.modeTextActive]}>{value}</Text>
-          </Pressable>)}
-      </View>
+      {!product && !photoUri ? <>
+        <Text style={styles.title}>{mode === 'barcode' ? 'Point at the barcode' : 'Photograph the ingredient list'}</Text>
+        <Text style={styles.body}>{mode === 'barcode' ? 'Hold the package steady. We will look it up automatically.' : 'Turn the package to its ingredients. Keep the words close, clear and well lit.'}</Text>
+      </> : null}
 
       {focused && !photoUri && !product ? <View style={styles.cameraWrap}>
         <CameraView
@@ -136,15 +134,16 @@ export default function ScanScreen() {
         <Text style={styles.guide}>{mode === 'barcode' ? 'Center the barcode in the frame' : `Photograph the ${mode}`}</Text>
       </View> : null}
 
-      {mode !== 'barcode' && !photoUri ? <Button label={cameraReady ? `Take ${mode} photo` : 'Starting camera…'} onPress={capture} loading={busy} disabled={!cameraReady} /> : null}
+      {mode !== 'barcode' && !photoUri ? <Button label={cameraReady ? 'Take ingredient photo' : 'Starting camera…'} onPress={capture} loading={busy} disabled={!cameraReady} /> : null}
+      {!product && !photoUri ? <Button label={mode === 'barcode' ? 'No barcode? Photograph the ingredients' : 'Use the barcode instead'} secondary disabled={busy} onPress={() => { setMode(mode === 'barcode' ? 'label' : 'barcode'); setScanned(false); setError(null); }} /> : null}
       {photoUri ? <Card>
         <Image accessibilityLabel={`Preview of captured ${mode} photo`} source={{ uri: photoUri }} style={styles.preview} />
-        <Text style={styles.title}>Review before anything is saved</Text>
+        <Text style={styles.title}>Can you read the ingredients?</Text>
         <Text style={styles.body}>{mode === 'label'
-          ? 'Recipe Reborn will read the ingredient list, then require you to correct it before you can generate a recipe.'
+          ? 'If the words are clear, continue. You can correct the ingredient list on the next screen.'
           : 'Recipe Reborn will extract a draft list. You can correct every item before confirming the inventory.'}</Text>
         <Button
-          label={mode === 'label' ? 'Extract and review ingredients' : 'Extract and review items'}
+          label={mode === 'label' ? 'Read these ingredients' : 'Read these items'}
           onPress={mode === 'label' ? reviewLabel : () => router.push({ pathname: '/pantry-review', params: { uri: photoUri, location: mode } })}
           loading={busy}
         />
@@ -154,11 +153,13 @@ export default function ScanScreen() {
       <InlineError message={error} />
       {product ? <Card>
         <Text style={styles.title}>{product.found ? (product.name || 'Product found') : 'Barcode not found'}</Text>
-        <Text style={styles.body}>{product.found ? (product.ingredients_text || 'No ingredient list was supplied by Open Food Facts.') : 'Try the label-photo mode instead.'}</Text>
+        <Text style={styles.body}>{product.found && product.ingredients_text.trim() ? 'We found the ingredients. Check them next, then make your homemade version.' : 'We could not find ingredients for this barcode. Take a photo of the ingredient list instead.'}</Text>
         {product.found && product.ingredients_text.trim() ? <Button label="Review ingredients" onPress={generateFromBarcode} /> : null}
+        {(!product.found || !product.ingredients_text.trim()) ? <Button label="Photograph the ingredients" onPress={() => { setMode('label'); setProduct(null); setScanned(false); setCameraReady(false); setError(null); }} /> : null}
         <Button label="Scan another" secondary onPress={() => { setScanned(false); setProduct(null); }} />
       </Card> : null}
       {busy && mode === 'barcode' ? <Text style={styles.status}>Looking up product…</Text> : null}
+      {error && mode === 'barcode' && !product ? <Button label="Try barcode again" secondary onPress={() => { setScanned(false); setError(null); }} /> : null}
     </ScrollView>
   </Screen>;
 }

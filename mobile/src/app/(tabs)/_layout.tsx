@@ -8,7 +8,7 @@ function TabIcon({ symbol, color }: { symbol: string; color: ColorValue }) {
 }
 
 function HomeIcon({ color }: { color: ColorValue }) { return <TabIcon symbol="🏠" color={color} />; }
-function ScanIcon({ color }: { color: ColorValue }) { return <TabIcon symbol="📷" color={color} />; }
+function RecipesIcon({ color }: { color: ColorValue }) { return <TabIcon symbol="📖" color={color} />; }
 function ShoppingIcon({ color }: { color: ColorValue }) { return <TabIcon symbol="🛒" color={color} />; }
 function AccountIcon({ color }: { color: ColorValue }) { return <TabIcon symbol="👤" color={color} />; }
 
@@ -22,7 +22,8 @@ export default function TabsLayout() {
     tabBarStyle: { height: 64 + insets.bottom, paddingBottom: 8 + insets.bottom, paddingTop: 5 },
   }}>
     <Tabs.Screen name="index" options={{ title: 'Home', headerTitle: 'Recipe Reborn', tabBarIcon: HomeIcon }} />
-    <Tabs.Screen name="scan" options={{ title: 'Scan', tabBarIcon: ScanIcon }} />
+    <Tabs.Screen name="library" options={{ title: 'Recipes', tabBarIcon: RecipesIcon }} />
+    <Tabs.Screen name="scan" options={{ title: 'Scan a package', href: null }} />
     <Tabs.Screen name="shopping" options={{ title: 'Shopping', tabBarIcon: ShoppingIcon }} />
     <Tabs.Screen name="account" options={{ title: 'Account', tabBarIcon: AccountIcon }} />
   </Tabs>;

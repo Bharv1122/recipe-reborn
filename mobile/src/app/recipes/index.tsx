@@ -1,7 +1,7 @@
 import { useCallback, useState } from 'react';
 import { Pressable, RefreshControl, ScrollView, StyleSheet, Text } from 'react-native';
 import { Stack, useFocusEffect, useRouter } from 'expo-router';
-import { Card, InlineError, Screen } from '@/components/ui';
+import { Button, Card, InlineError, Screen } from '@/components/ui';
 import { listRecipes } from '@/services/recipes';
 import type { RecipeSummary } from '@/types';
 import { colors } from '@/theme';
@@ -20,10 +20,11 @@ export default function RecipesScreen() {
   useFocusEffect(useCallback(() => { load(); }, [load]));
 
   return <Screen>
-    <Stack.Screen options={{ headerShown: true, title: 'Saved recipes', headerTintColor: colors.green }} />
+    <Stack.Screen options={{ headerShown: true, title: 'My recipes', headerTintColor: colors.green, headerStyle: { backgroundColor: colors.white } }} />
     <ScrollView contentContainerStyle={styles.content} refreshControl={<RefreshControl refreshing={loading} onRefresh={load} />}>
       <InlineError message={error} />
-      {!loading && !recipes.length ? <Card><Text style={styles.title}>No saved recipes yet</Text><Text style={styles.body}>Generate a recipe and save it to see it here.</Text></Card> : null}
+      <Button label="Plan my meals" secondary onPress={() => router.push('/meal-plans')} />
+      {!loading && !recipes.length ? <Card><Text style={styles.title}>Your recipes will live here</Text><Text style={styles.body}>Make your first recipe, then save it to cook again.</Text><Button label="Make my first recipe" onPress={() => router.push('/generate')} /></Card> : null}
       {recipes.map((recipe) => <Pressable accessibilityRole="button" accessibilityLabel={recipe.title} accessibilityHint="Opens the saved recipe" key={recipe.id} onPress={() => router.push({ pathname: '/recipes/[id]', params: { id: recipe.id } })}>
         <Card>
           <Text style={styles.title}>{recipe.title}</Text>
@@ -31,6 +32,7 @@ export default function RecipesScreen() {
           {recipe.dietaryTags.length ? <Text style={styles.tags}>{recipe.dietaryTags.join(' · ')}</Text> : null}
         </Card>
       </Pressable>)}
+      {recipes.length ? <Button label="Organize into collections" secondary onPress={() => router.push('/collections')} /> : null}
     </ScrollView>
   </Screen>;
 }

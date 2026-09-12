@@ -4,6 +4,7 @@ import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
 import { Button, Card, InlineError, Screen } from '@/components/ui';
 import { apiRequest } from '@/services/api';
 import { getRecipe } from '@/services/recipes';
+import { stageShoppingDraft } from '@/services/shopping-handoff';
 import type { Recipe } from '@/types';
 import { colors } from '@/theme';
 
@@ -13,10 +14,11 @@ function parseArray(value: string): string[] {
 }
 
 export default function RecipeDetailScreen() {
-  const { id } = useLocalSearchParams<{ id: string }>();
+  const { id, justSaved } = useLocalSearchParams<{ id: string; justSaved?: string }>();
   const router = useRouter();
   const [recipe, setRecipe] = useState<Recipe | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [showMore, setShowMore] = useState(false);
   useEffect(() => { if (id) getRecipe(id).then((data) => setRecipe(data.recipe)).catch((value) => setError(value.message)); }, [id]);
   const ingredients = useMemo(() => recipe ? parseArray(recipe.freshIngredients) : [], [recipe]);
   const instructions = useMemo(() => recipe ? parseArray(recipe.instructions) : [], [recipe]);
@@ -34,16 +36,21 @@ export default function RecipeDetailScreen() {
     <ScrollView contentContainerStyle={styles.content}>
       <InlineError message={error} />
       {recipe ? <Card>
+        {justSaved === '1' ? <Text style={styles.heading}>Saved in My recipes</Text> : null}
         <Text style={styles.title}>{recipe.title}</Text>
         <Text style={styles.meta}>{[recipe.prepTime, recipe.cookTime, recipe.servings && `${recipe.servings} servings`].filter(Boolean).join(' · ')}</Text>
+        <Button label="Add to a meal plan" onPress={() => router.push({ pathname: '/meal-plans', params: { recipeId: recipe.id } })} />
+        <Button label="Shop for these ingredients" secondary onPress={() => { stageShoppingDraft({ title: recipe.title, ingredients }); router.push('/(tabs)/shopping'); }} />
         <Text style={styles.heading}>Fresh ingredients</Text>
         {ingredients.map((item, index) => <Text key={`${item}-${index}`} style={styles.body}>• {item}</Text>)}
         <Text style={styles.heading}>Instructions</Text>
         {instructions.map((item, index) => <Text key={`${index}-${item}`} style={styles.body}>{index + 1}. {item}</Text>)}
-        <Button label="Add to collection" secondary onPress={() => router.push({ pathname: '/collections', params: { recipeId: recipe.id } })} />
-        <Button label="Add to meal plan" secondary onPress={() => router.push({ pathname: '/meal-plans', params: { recipeId: recipe.id } })} />
-        <Button label="Ask AI Chef" secondary onPress={() => router.push('/chat')} />
-        <Button label="Delete saved recipe" secondary onPress={remove} />
+        <Button label="Need cooking help? Ask AI Chef" secondary onPress={() => router.push('/chat')} />
+        <Button label={showMore ? 'Hide recipe options' : 'More recipe options'} secondary onPress={() => setShowMore(!showMore)} />
+        {showMore ? <>
+          <Button label="Add to collection" secondary onPress={() => router.push({ pathname: '/collections', params: { recipeId: recipe.id } })} />
+          <Button label="Delete saved recipe" secondary onPress={remove} />
+        </> : null}
       </Card> : <Text style={styles.meta}>Loading recipe…</Text>}
     </ScrollView>
   </Screen>;

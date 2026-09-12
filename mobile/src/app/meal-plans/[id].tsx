@@ -56,7 +56,11 @@ export default function MealPlanDetailScreen() {
           </View>)}
         </Card>;
       }) : null}
-      {plan && !plan.mealPlanRecipes.length ? <Card><Text style={styles.body}>No meals added yet.</Text></Card> : null}
+      {plan ? <Card>
+        <Text style={styles.title}>{plan.mealPlanRecipes.length ? 'Ready for the week' : 'Choose your first recipe'}</Text>
+        <Text style={styles.body}>{plan.mealPlanRecipes.length ? 'Open a meal to see its recipe and shop for the ingredients.' : 'Open a saved recipe and tap Add to a meal plan.'}</Text>
+        <Button label="Choose from My recipes" secondary onPress={() => router.push('/(tabs)/library')} />
+      </Card> : null}
     </ScrollView></Screen>;
 }
 

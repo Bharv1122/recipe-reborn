@@ -1,6 +1,6 @@
 export type ScanRecipeHandoff = {
-  source: 'label';
-  origin: 'barcode' | 'label-photo';
+  source: 'label' | 'pantry';
+  origin: 'barcode' | 'label-photo' | 'pantry-photo';
   ingredients: string;
   context: string;
 };

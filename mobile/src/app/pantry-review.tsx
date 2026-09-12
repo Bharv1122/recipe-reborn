@@ -1,6 +1,8 @@
 import { useMemo, useState } from 'react';
 import { Image, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
-import { Stack, useLocalSearchParams } from 'expo-router';
+import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
+import { File } from 'expo-file-system';
+import { stageScanRecipeHandoff } from '@/services/scan-recipe-handoff';
 import * as ImagePicker from 'expo-image-picker';
 import { apiRequest, apiResponse } from '@/services/api';
 import { Button, Card, Field, InlineError, Screen } from '@/components/ui';
@@ -11,6 +13,7 @@ type DraftItem = { name: string; quantity: string | null; location: Location; co
 type PendingPhoto = { uri: string; location: Location };
 
 export default function PantryReviewScreen() {
+  const router = useRouter();
   const params = useLocalSearchParams<{ uri?: string; location?: string }>();
   const initialPhotos = useMemo<PendingPhoto[]>(() => params.uri ? [{
     uri: params.uri,
@@ -35,8 +38,8 @@ export default function PantryReviewScreen() {
     setBusy(true); setError(null); setSaved(false);
     try {
       const form = new FormData();
-      photos.forEach((photo, index) => {
-        form.append('images', { uri: photo.uri, name: `inventory-${index + 1}.jpg`, type: 'image/jpeg' } as unknown as Blob);
+      photos.forEach((photo) => {
+        form.append('images', new File(photo.uri));
         form.append('locations', photo.location);
       });
       const response = await apiResponse('/api/pantry-inventory/extract', { method: 'POST', body: form });
@@ -63,30 +66,35 @@ export default function PantryReviewScreen() {
   };
 
   return <Screen>
-    <Stack.Screen options={{ headerShown: true, title: 'Review pantry inventory', headerTintColor: colors.green }} />
+    <Stack.Screen options={{ headerShown: true, title: 'Ingredients from a photo', headerTintColor: colors.green }} />
     <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
-      <Card>
-        <Text style={styles.title}>1. Add up to four photos</Text>
+      {!items.length ? <Card>
+        <Text style={styles.title}>Show us what you have</Text>
         <Text style={styles.body}>Choose the location before adding each batch. Photos are analyzed for this request and are not stored by Recipe Reborn.</Text>
-        <View accessibilityRole="radiogroup" style={styles.row}>{(['fridge', 'pantry', 'unknown'] as Location[]).map((location) => <Pressable accessibilityRole="radio" accessibilityState={{ selected: defaultLocation === location }} key={location} onPress={() => setDefaultLocation(location)} style={[styles.pill, defaultLocation === location && styles.pillActive]}><Text style={defaultLocation === location ? styles.pillActiveText : styles.pillText}>{location}</Text></Pressable>)}</View>
+        <View accessibilityRole="radiogroup" style={styles.row}>{(['fridge', 'pantry', 'unknown'] as Location[]).map((location) => <Pressable accessibilityRole="radio" accessibilityState={{ checked: defaultLocation === location }} key={location} onPress={() => setDefaultLocation(location)} style={[styles.pill, defaultLocation === location && styles.pillActive]}><Text style={defaultLocation === location ? styles.pillActiveText : styles.pillText}>{location}</Text></Pressable>)}</View>
         <View style={styles.photos}>{photos.map((photo, index) => <Pressable accessibilityRole="button" accessibilityLabel={`Remove ${photo.location} photo ${index + 1}`} key={`${photo.uri}-${index}`} onPress={() => setPhotos((current) => current.filter((_, photoIndex) => photoIndex !== index))}><Image accessible={false} source={{ uri: photo.uri }} style={styles.photo} /><Text style={styles.remove}>Remove</Text></Pressable>)}</View>
         <Button label="Choose photos" secondary onPress={choosePhotos} disabled={photos.length >= 4 || busy} />
-        <Button label="Extract draft list" onPress={extract} loading={busy} disabled={!photos.length} />
-      </Card>
+        <Button label="Find ingredients in these photos" onPress={extract} loading={busy} disabled={!photos.length} />
+      </Card> : null}
       <InlineError message={error} />
       {items.length ? <Card>
-        <Text style={styles.title}>2. Correct every item</Text>
+        <Text style={styles.title}>Check your ingredients</Text>
         <Text style={styles.body}>AI can miss items or read them incorrectly. Edit, remove, or add items before confirming.</Text>
         {notes.map((note) => <Text key={note} style={styles.note}>Review note: {note}</Text>)}
-        {items.map((item, index) => <View key={`${index}-${item.name}`} style={styles.item}>
+        {items.map((item, index) => <View key={index} style={styles.item}>
           <Field accessibilityLabel={`Item ${index + 1} name`} value={item.name} onChangeText={(name) => updateItem(index, { name })} placeholder="Item name" />
           <Field accessibilityLabel={`Item ${index + 1} quantity`} value={item.quantity || ''} onChangeText={(quantity) => updateItem(index, { quantity })} placeholder="Quantity (optional)" />
-          <View accessibilityRole="radiogroup" style={styles.row}>{(['fridge', 'pantry', 'unknown'] as Location[]).map((location) => <Pressable accessibilityLabel={`${location} location for item ${index + 1}`} accessibilityRole="radio" accessibilityState={{ selected: item.location === location }} key={location} onPress={() => updateItem(index, { location })} style={[styles.pill, item.location === location && styles.pillActive]}><Text style={item.location === location ? styles.pillActiveText : styles.pillText}>{location}</Text></Pressable>)}</View>
+          <View accessibilityRole="radiogroup" style={styles.row}>{(['fridge', 'pantry', 'unknown'] as Location[]).map((location) => <Pressable accessibilityLabel={`${location} location for item ${index + 1}`} accessibilityRole="radio" accessibilityState={{ checked: item.location === location }} key={location} onPress={() => updateItem(index, { location })} style={[styles.pill, item.location === location && styles.pillActive]}><Text style={item.location === location ? styles.pillActiveText : styles.pillText}>{location}</Text></Pressable>)}</View>
           {item.confidence ? <Text style={styles.body}>AI confidence: {item.confidence}</Text> : null}
           <Button label="Remove item" secondary onPress={() => removeItem(index)} />
         </View>)}
         <Button label="Add item" secondary onPress={() => setItems((current) => [...current, { name: '', quantity: null, location: 'unknown' }])} />
-        <Button label={saved ? 'Inventory saved' : 'Confirm and save inventory'} onPress={save} loading={busy} disabled={saved} />
+        <Button label="Use these ingredients" disabled={busy || !items.some((item) => item.name.trim())} onPress={() => {
+          stageScanRecipeHandoff({ source: 'pantry', origin: 'pantry-photo', ingredients: items.filter((item) => item.name.trim()).map((item) => [item.quantity, item.name.trim()].filter(Boolean).join(' ')).join(', '), context: 'Ingredients you reviewed from your photos' });
+          router.replace({ pathname: '/generate', params: { source: 'pantry' } });
+        }} />
+        <Button label={saved ? 'Pantry list saved' : 'Save this pantry list (optional)'} secondary onPress={save} loading={busy} disabled={saved} />
+        <Button label="Choose different photos" secondary disabled={busy} onPress={() => { setItems([]); setSaved(false); setError(null); }} />
       </Card> : null}
     </ScrollView>
   </Screen>;

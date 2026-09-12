@@ -36,6 +36,9 @@ export default function MealPlansScreen() {
   const { user } = useAuth();
   const [plans, setPlans] = useState<Plan[]>([]);
   const [view, setView] = useState<'plans' | 'create'>('plans');
+  const [showPreferences, setShowPreferences] = useState(false);
+  const [showEmptyPlan, setShowEmptyPlan] = useState(false);
+  const [selectedPlanId, setSelectedPlanId] = useState<string | null>(null);
   const [name, setName] = useState('');
   const [day, setDay] = useState<typeof days[number]>('monday');
   const [mealType, setMealType] = useState<MealType>('dinner');
@@ -101,7 +104,8 @@ export default function MealPlansScreen() {
   const create = async () => {
     try {
       setError(null);
-      await apiRequest('/api/mobile/meal-plans', { method: 'POST', body: JSON.stringify({ name, weekStartDate: nextMondayIso() }) });
+      const created = await apiRequest<{ mealPlan: Plan }>('/api/mobile/meal-plans', { method: 'POST', body: JSON.stringify({ name, weekStartDate: nextMondayIso() }) });
+      setSelectedPlanId(created.mealPlan.id);
       setName(''); await load(); setView('plans');
     } catch (value) { setError(value instanceof Error ? value.message : 'Could not create meal plan.'); }
   };
@@ -133,7 +137,7 @@ export default function MealPlansScreen() {
         <Button label="Back to meal plans" secondary onPress={() => { setError(null); setView('plans'); }} />
         <Card>
         <Text style={styles.sectionTitle}>Generate a seven-day meal plan</Text>
-        <Text style={styles.body}>Choose exactly what you want. Your plan is checked for meal count, servings, and allergens before it is saved.</Text>
+        <Text style={styles.body}>Choose the week, meals and servings. We will put the recipes together for you.</Text>
         <Text style={styles.label}>Week starting</Text>
         <Field accessibilityLabel="Week starting" placeholder="YYYY-MM-DD" value={weekStartDate} onChangeText={setWeekStartDate} autoCapitalize="none" />
         <Text style={styles.label}>Meals each day</Text>
@@ -141,6 +145,9 @@ export default function MealPlansScreen() {
         <Text style={styles.note}>Exactly {selectedMealTypes.length * 7} meals will be created for the week.</Text>
         <Text style={styles.label}>Servings per recipe</Text>
         <Field accessibilityLabel="Servings per recipe" value={servings} onChangeText={setServings} keyboardType="number-pad" placeholder="2" />
+        <Text style={styles.note}>Your saved allergies and food preferences apply.</Text>
+        <Button label={showPreferences ? 'Hide optional preferences' : 'Adjust food preferences (optional)'} secondary onPress={() => setShowPreferences(!showPreferences)} />
+        {showPreferences ? <>
         <Text style={styles.label}>Daily calorie target (optional)</Text>
         <Field accessibilityLabel="Daily calorie target" value={calorieTarget} onChangeText={setCalorieTarget} keyboardType="number-pad" placeholder="For example, 2000" />
         <Text style={styles.label}>Allergies — never included</Text>
@@ -150,19 +157,29 @@ export default function MealPlansScreen() {
         <Text style={styles.note}>These start with your Account preferences. Changes here apply only to this plan.</Text>
         <Text style={styles.label}>Dietary preferences</Text>
         <View style={styles.wrap}>{dietaryOptions.map((value) => <Pressable accessibilityRole="checkbox" accessibilityState={{ checked: selectedDietary.includes(value) }} key={value} onPress={() => toggleDietary(value)} style={[styles.chip, selectedDietary.includes(value) && styles.active]}><Text style={selectedDietary.includes(value) ? styles.activeText : styles.chipText}>{value}</Text></Pressable>)}</View>
+        </> : null}
         {generating ? <View style={styles.generating}><Text style={styles.generatingTitle}>Creating {selectedMealTypes.length * 7} meals · {elapsedSeconds}s elapsed</Text><Text style={styles.note}>Safety and serving checks run before anything is saved.</Text></View> : null}
         <Button label={generating ? 'Generating weekly plan…' : 'Generate weekly plan'} onPress={generate} loading={generating} disabled={!selectedMealTypes.length} />
         </Card>
-        <Card><Text style={styles.label}>Or create an empty plan</Text><Field accessibilityLabel="New meal-plan name" placeholder="New meal-plan name" value={name} onChangeText={setName} /><Button label="Create next-week plan" secondary onPress={create} disabled={!name.trim() || generating} /></Card>
+        <Button label={showEmptyPlan ? 'Hide empty-plan option' : 'Prefer to choose recipes yourself?'} secondary onPress={() => setShowEmptyPlan(!showEmptyPlan)} />
+        {showEmptyPlan ? <Card><Text style={styles.label}>Start an empty plan for next week</Text><Field accessibilityLabel="New meal-plan name" placeholder="For example, Next week's dinners" value={name} onChangeText={setName} /><Button label="Create empty plan" onPress={create} disabled={!name.trim() || generating} /></Card> : null}
       </> : null}
       {recipeId ? <Card>
         <Text style={styles.sectionTitle}>Choose day and meal</Text>
-        <View accessibilityRole="radiogroup" style={styles.wrap}>{days.map((value) => <Pressable accessibilityLabel={value} accessibilityRole="radio" accessibilityState={{ selected: day === value }} key={value} onPress={() => setDay(value)} style={[styles.chip, day === value && styles.active]}><Text style={day === value ? styles.activeText : styles.chipText}>{value.slice(0, 3)}</Text></Pressable>)}</View>
-        <View accessibilityRole="radiogroup" style={styles.wrap}>{mealTypes.map((value) => <Pressable accessibilityRole="radio" accessibilityState={{ selected: mealType === value }} key={value} onPress={() => setMealType(value)} style={[styles.chip, mealType === value && styles.active]}><Text style={mealType === value ? styles.activeText : styles.chipText}>{value}</Text></Pressable>)}</View>
+        <View accessibilityRole="radiogroup" style={styles.wrap}>{days.map((value) => <Pressable accessibilityLabel={value} accessibilityRole="radio" accessibilityState={{ checked: day === value }} key={value} onPress={() => setDay(value)} style={[styles.chip, day === value && styles.active]}><Text style={day === value ? styles.activeText : styles.chipText}>{value.slice(0, 3)}</Text></Pressable>)}</View>
+        <View accessibilityRole="radiogroup" style={styles.wrap}>{mealTypes.map((value) => <Pressable accessibilityRole="radio" accessibilityState={{ checked: mealType === value }} key={value} onPress={() => setMealType(value)} style={[styles.chip, mealType === value && styles.active]}><Text style={mealType === value ? styles.activeText : styles.chipText}>{value}</Text></Pressable>)}</View>
+        <Text style={styles.body}>Next, choose the plan below. Nothing is added until you tap Add recipe.</Text>
       </Card> : null}
       <InlineError message={error} />{message ? <Text style={styles.success}>{message}</Text> : null}
-      {(recipeId || view === 'plans') ? plans.map((plan) => <Pressable accessibilityRole="button" accessibilityLabel={plan.name} accessibilityHint={recipeId ? 'Adds this recipe to the meal plan' : 'Opens the meal plan'} accessibilityState={{ busy: addingPlanId === plan.id, disabled: addingPlanId !== null }} disabled={addingPlanId !== null} key={plan.id} onPress={() => choose(plan)}><Card><Text style={styles.sectionTitle}>{plan.name}</Text><Text style={styles.body}>{addingPlanId === plan.id ? 'Adding recipe…' : `${new Date(plan.weekStartDate).toLocaleDateString()} · ${plan.mealPlanRecipes.length} meals`}</Text></Card></Pressable>) : null}
-      {(recipeId || view === 'plans') && !plans.length ? <Text style={styles.body}>{recipeId ? 'No meal plans yet.' : 'No saved meal plans yet. Create your first one above.'}</Text> : null}
+      {(recipeId || view === 'plans') ? plans.map((plan) => <Pressable accessibilityRole="button" accessibilityLabel={plan.name} accessibilityHint={recipeId ? 'Selects this meal plan' : 'Opens the meal plan'} accessibilityState={{ busy: addingPlanId === plan.id, disabled: addingPlanId !== null }} disabled={addingPlanId !== null} key={plan.id} onPress={() => recipeId ? setSelectedPlanId(plan.id) : choose(plan)}><Card><Text style={styles.sectionTitle}>{recipeId && selectedPlanId === plan.id ? `Selected: ${plan.name}` : plan.name}</Text><Text style={styles.body}>{addingPlanId === plan.id ? 'Adding recipe…' : `${new Date(plan.weekStartDate).toLocaleDateString(undefined, { timeZone: 'UTC' })} · ${plan.mealPlanRecipes.length} meals`}</Text></Card></Pressable>) : null}
+      {recipeId && selectedPlanId ? <Button label={`Add recipe to ${day} ${mealType}`} loading={addingPlanId !== null} onPress={() => { const plan = plans.find((item) => item.id === selectedPlanId); if (plan) void choose(plan); }} /> : null}
+      {recipeId && !plans.length ? <Card>
+        <Text style={styles.sectionTitle}>Create your first meal plan</Text>
+        <Text style={styles.body}>Give the plan for next week a name. Then add this recipe to the day you chose.</Text>
+        <Field accessibilityLabel="New meal-plan name" placeholder="For example, Next week's dinners" value={name} onChangeText={setName} />
+        <Button label="Create meal plan" onPress={create} disabled={!name.trim()} />
+      </Card> : null}
+      {!recipeId && view === 'plans' && !plans.length ? <Text style={styles.body}>No saved meal plans yet. Create your first one above.</Text> : null}
     </ScrollView>
   </Screen>;
 }
