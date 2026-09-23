@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { AppState, StyleSheet, Text, View } from 'react-native';
-import { useFocusEffect } from 'expo-router';
+import { useNavigation } from 'expo-router';
 import { AudioModule, RecordingPresets, setAudioModeAsync, useAudioRecorder } from 'expo-audio';
 import { File } from 'expo-file-system';
 import { Button, InlineError } from '@/components/ui';
@@ -20,6 +20,7 @@ export function VoiceInput({ label, disabled, onTranscript, onBusyChange }: {
   label: string; disabled?: boolean; onTranscript(text: string): void; onBusyChange(busy: boolean): void;
 }) {
   const recorder = useAudioRecorder(RecordingPresets.HIGH_QUALITY);
+  const navigation = useNavigation();
   const [phase, setPhase] = useState<Phase>('idle');
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState('');
@@ -46,16 +47,24 @@ export function VoiceInput({ label, disabled, onTranscript, onBusyChange }: {
     if (active.current) setPhase('idle');
   }, [onBusyChange, recorder]);
 
-  useFocusEffect(useCallback(() => {
-    active.current = true;
-    setPhase(phaseRef.current);
-    return () => { active.current = false; void cancel(); };
-  }, [cancel]));
+  const cancelRef = useRef(cancel);
+  useEffect(() => { cancelRef.current = cancel; }, [cancel]);
+  useEffect(() => {
+    const focus = () => { active.current = true; setPhase(phaseRef.current); };
+    const blur = () => { active.current = false; void cancelRef.current(); };
+    if (navigation.isFocused()) focus(); else blur();
+    const unsubscribeFocus = navigation.addListener('focus', focus);
+    const unsubscribeBlur = navigation.addListener('blur', blur);
+    // Navigation objects can change while this screen is still focused. Replacing
+    // a subscription must not cancel the recording the user just started.
+    return () => { unsubscribeFocus(); unsubscribeBlur(); };
+  }, [navigation]);
+  useEffect(() => () => { active.current = false; void cancelRef.current(); }, []);
   useEffect(() => {
     // iOS permission prompts temporarily make the app inactive; they are not a cancellation.
-    const subscription = AppState.addEventListener('change', (state) => { if (state === 'background') void cancel(); });
+    const subscription = AppState.addEventListener('change', (state) => { if (state === 'background') void cancelRef.current(); });
     return () => subscription.remove();
-  }, [cancel]);
+  }, []);
 
   const finish = () => {
     if (phaseRef.current !== 'recording') return;
