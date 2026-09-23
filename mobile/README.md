@@ -10,7 +10,8 @@ Requirements: Node.js 22.13 or newer, npm, and the Recipe Reborn backend environ
 2. Run the web API from the repository root: `npm run dev`.
 3. Copy `.env.example` to `.env.local` in this folder.
 4. Set `EXPO_PUBLIC_API_BASE_URL` to a URL the device can reach. An Android emulator commonly uses `http://10.0.2.2:3000`; a phone needs the computer's LAN address over a trusted network.
-5. From `mobile/`, run `npm install`, then `npx expo start`.
+5. From `mobile/`, run `npm ci`, then `npx expo start`. The committed `.npmrc`
+   preserves the peer-dependency resolution used by the lockfile, including on EAS.
 
 Run `npm run verify` for typechecking, linting, and Android/iOS production JS bundles. This app intentionally does not target web. Camera, Keychain/Keystore, SQLite, password-reset links, and notification behavior still require real iOS and Android devices. Push delivery additionally requires an EAS project ID and platform credentials; the opt-in registration and deletion server boundary is implemented.
 
