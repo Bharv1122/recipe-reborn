@@ -30,6 +30,7 @@ export function VoiceInput({ label, disabled, onTranscript, onBusyChange }: {
   const abortRef = useRef<AbortController | null>(null);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const pending = useRef<Promise<void> | null>(null);
+  const requestingPermission = useRef(false);
 
   const cancel = useCallback(async () => {
     if (phaseRef.current === 'idle' || phaseRef.current === 'canceling') return;
@@ -61,8 +62,11 @@ export function VoiceInput({ label, disabled, onTranscript, onBusyChange }: {
   }, [navigation]);
   useEffect(() => () => { active.current = false; void cancelRef.current(); }, []);
   useEffect(() => {
-    // iOS permission prompts temporarily make the app inactive; they are not a cancellation.
-    const subscription = AppState.addEventListener('change', (state) => { if (state === 'background') void cancelRef.current(); });
+    // Android's permission activity can briefly background this app too. No audio
+    // is recorded during that request; startup checks foreground state afterwards.
+    const subscription = AppState.addEventListener('change', (state) => {
+      if (state === 'background' && !requestingPermission.current) void cancelRef.current();
+    });
     return () => subscription.remove();
   }, []);
 
@@ -100,9 +104,16 @@ export function VoiceInput({ label, disabled, onTranscript, onBusyChange }: {
     phaseRef.current = 'starting'; setPhase('starting'); onBusyChange(true); setError(null); setNotice('');
     pending.current = (async () => {
     try {
-      const permission = await AudioModule.requestRecordingPermissionsAsync();
+      let permission = await AudioModule.getRecordingPermissionsAsync();
+      if (!active.current || current !== operation.current) return;
+      if (!permission.granted) {
+        requestingPermission.current = true;
+        try { permission = await AudioModule.requestRecordingPermissionsAsync(); }
+        finally { requestingPermission.current = false; }
+      }
       if (!active.current || current !== operation.current) return;
       if (!permission.granted) throw new Error('Microphone access is off. Enable it in your phone settings, or type instead.');
+      if (AppState.currentState !== 'active') throw new Error('Return to Recipe Reborn and tap the voice button again to start recording.');
       await setAudioModeAsync({ allowsRecording: true, playsInSilentMode: true });
       await recorder.prepareToRecordAsync();
       if (!active.current || current !== operation.current) { await recorder.stop(); removeRecorderClip(recorder); return; }
