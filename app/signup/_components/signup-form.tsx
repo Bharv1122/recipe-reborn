@@ -66,7 +66,8 @@ export function SignupForm() {
         return;
       }
 
-      await trackFunnelEvent('signup_completed');
+      // Optional analytics must not delay sign-in after the account is created.
+      void trackFunnelEvent('signup_completed');
 
       toast.success('Account created successfully!');
 

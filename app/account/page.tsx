@@ -106,7 +106,8 @@ export default function AccountPage() {
         const prefs = await response.json();
         setAllergies((prefs.allergies || []).join(', '));
         setDislikes((prefs.dislikedIngredients || []).join(', '));
-        await trackFunnelEvent('profile_completed');
+        // Confirm the saved preferences even if analytics is slow or unavailable.
+        void trackFunnelEvent('profile_completed');
         toast.success('Food preferences saved — all new recipes will respect them');
       } else {
         toast.error('Failed to save preferences');
