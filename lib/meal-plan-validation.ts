@@ -198,6 +198,11 @@ function titlesDescribeSameMeal(first: string, second: string): boolean {
   return shared / Math.max(firstTokens.size, secondTokens.size) >= 0.8;
 }
 
+/** Keep generation instructions aligned with the exclusions validation enforces. */
+export function expandBlockedIngredients(values: string[]): string[] {
+  return Array.from(new Set(values.flatMap(termsForAllergy)));
+}
+
 export type MealValidationResult =
   | { success: true; meal: ValidatedMeal }
   | { success: false; error: MealPlanValidationError };
