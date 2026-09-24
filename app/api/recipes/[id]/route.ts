@@ -4,6 +4,7 @@ import { authOptions } from '@/lib/auth-options';
 import { prisma } from '@/lib/db';
 import { z } from 'zod';
 import { recipeComparisonSchema } from '@/lib/recipe-comparison-validation';
+import { parseStoredRecipeList } from '@/lib/recipe-list';
 
 export const dynamic = 'force-dynamic';
 
@@ -54,7 +55,7 @@ export async function GET(request: NextRequest, props: { params: Promise<{ id: s
   }
 }
 
-// Update a recipe (rating and notes)
+// Update a recipe and invalidate ingredient-dependent estimates when needed.
 export async function PATCH(request: NextRequest, props: { params: Promise<{ id: string }> }) {
   const params = await props.params;
   try {
@@ -75,7 +76,7 @@ export async function PATCH(request: NextRequest, props: { params: Promise<{ id:
       return NextResponse.json({ error: 'Recipe not found' }, { status: 404 });
     }
 
-    const update = recipeUpdateSchema.safeParse(await request.json());
+    const update = recipeUpdateSchema.safeParse(await request.json().catch(() => null));
     if (!update.success) {
       return NextResponse.json(
         { error: 'Invalid recipe update', details: update.error.flatten() },
@@ -85,6 +86,9 @@ export async function PATCH(request: NextRequest, props: { params: Promise<{ id:
 
     const { rating, notes, folderId, winePairing, freshIngredients } = update.data;
     const comparison = recipeComparisonSchema.safeParse(recipe.comparisonSnapshot);
+    // Compare parsed lists so harmless JSON whitespace does not discard estimates.
+    const ingredientsChanged = freshIngredients !== undefined &&
+      JSON.stringify(parseStoredRecipeList(freshIngredients)) !== JSON.stringify(parseStoredRecipeList(recipe.freshIngredients));
 
     if (folderId) {
       const folder = await prisma.folder.findFirst({
@@ -105,8 +109,12 @@ export async function PATCH(request: NextRequest, props: { params: Promise<{ id:
         ...(winePairing !== undefined && { winePairing }),
         ...(freshIngredients !== undefined && { freshIngredients }),
         // An ingredient change invalidates the saved homemade estimate, not the package facts.
-        ...(freshIngredients !== undefined && freshIngredients !== recipe.freshIngredients && comparison.success
-          ? { comparisonSnapshot: { ...comparison.data, freshNutrition: null } }
+        ...(ingredientsChanged
+          ? {
+              calories: null, protein: null, carbs: null, fat: null, fiber: null, sodium: null,
+              estimatedCostPerServing: null, storeBoughtCost: null,
+              ...(comparison.success && { comparisonSnapshot: { ...comparison.data, freshNutrition: null } }),
+            }
           : {}),
       },
     });

@@ -5,7 +5,8 @@ import { prisma } from '@/lib/db';
 import { AI_CHAT_URL, AI_API_KEY, MODEL_FAST } from '@/lib/ai';
 import { extractJsonPayload } from '@/lib/ai-json';
 import { lookupNutrients } from '@/lib/usda';
-import type { NutritionValues } from '@/lib/nutrition-facts';
+import { nullableNutritionNumber, type FreshNutritionEstimate, type NutritionValues } from '@/lib/nutrition-facts';
+import { recipeComparisonSchema } from '@/lib/recipe-comparison-validation';
 
 interface ParsedIngredient {
   name: string;
@@ -186,14 +187,18 @@ Be as accurate as possible based on standard nutritional data for these ingredie
     throw new Error('Failed to parse nutrition data from AI response');
   }
 
-  return {
-    calories: Math.round(Number(nutrition.calories) || 0),
-    protein: Number(nutrition.protein) || 0,
-    carbs: Number(nutrition.carbs) || 0,
-    fat: Number(nutrition.fat) || 0,
-    fiber: Number(nutrition.fiber) || 0,
-    sodium: Math.round(Number(nutrition.sodium) || 0),
+  const normalized: NutritionValues = {
+    calories: nullableNutritionNumber(nutrition.calories),
+    protein: nullableNutritionNumber(nutrition.protein),
+    carbs: nullableNutritionNumber(nutrition.carbs),
+    fat: nullableNutritionNumber(nutrition.fat),
+    fiber: nullableNutritionNumber(nutrition.fiber),
+    sodium: nullableNutritionNumber(nutrition.sodium),
   };
+  if (Object.values(normalized).every((value) => value === null)) {
+    throw new Error('Nutrition estimate did not contain usable values');
+  }
+  return normalized;
 }
 
 // POST /api/recipes/[id]/nutrition - Get or generate nutrition information for a recipe
@@ -218,10 +223,14 @@ export async function POST(req: Request, props: { params: Promise<{ id: string }
     }
 
     const servings = Math.max(1, parseInt(recipe.servings || '1') || 1);
+    const comparison = recipeComparisonSchema.safeParse(recipe.comparisonSnapshot);
+    if (comparison.success && comparison.data.freshNutrition) {
+      return NextResponse.json(comparison.data.freshNutrition);
+    }
 
     // If nutrition already exists, return it. Older rows did not store the
     // calculation method, so label that limitation instead of inventing one.
-    if (recipe.calories) {
+    if (!comparison.success && [recipe.calories, recipe.protein, recipe.carbs, recipe.fat, recipe.fiber, recipe.sodium].some((value) => value != null)) {
       return NextResponse.json({
         calories: recipe.calories,
         protein: recipe.protein,
@@ -257,31 +266,40 @@ export async function POST(req: Request, props: { params: Promise<{ id: string }
       );
     }
 
-    // Update the recipe with nutrition data
-    const updatedRecipe = await prisma.recipe.update({
-      where: { id: params.id },
-      data: {
-        calories: nutrition.calories || null,
-        protein: nutrition.protein || null,
-        carbs: nutrition.carbs || null,
-        fat: nutrition.fat || null,
-        fiber: nutrition.fiber || null,
-        sodium: nutrition.sodium || null,
-      },
-    });
-
-    return NextResponse.json({
-      calories: updatedRecipe.calories,
-      protein: updatedRecipe.protein,
-      carbs: updatedRecipe.carbs,
-      fat: updatedRecipe.fat,
-      fiber: updatedRecipe.fiber,
-      sodium: updatedRecipe.sodium,
+    const freshNutrition: FreshNutritionEstimate = {
+      ...nutrition,
       perServing: true,
       accuracy: 'estimated',
       basisLabel: `Per recipe serving (recipe makes ${servings})`,
       sourceLabel,
+    };
+    const comparisonSnapshot = recipeComparisonSchema.parse({
+      ...(comparison.success ? comparison.data : { version: 1 as const, source: 'dish' as const, originalNutrition: null }),
+      freshNutrition,
     });
+    // A concurrent edit must not attach an estimate to different ingredients.
+    const updated = await prisma.recipe.updateMany({
+      where: {
+        id: params.id,
+        userId: session.user.id,
+        freshIngredients: recipe.freshIngredients,
+        servings: recipe.servings,
+        updatedAt: recipe.updatedAt,
+      },
+      data: {
+        calories: nutrition.calories == null ? null : Math.round(nutrition.calories),
+        protein: nutrition.protein ?? null,
+        carbs: nutrition.carbs ?? null,
+        fat: nutrition.fat ?? null,
+        fiber: nutrition.fiber ?? null,
+        sodium: nutrition.sodium == null ? null : Math.round(nutrition.sodium),
+        comparisonSnapshot,
+      },
+    });
+    if (updated.count !== 1) {
+      return NextResponse.json({ error: 'The recipe changed while nutrition was being estimated. Reopen it and try again.' }, { status: 409 });
+    }
+    return NextResponse.json(freshNutrition);
   } catch (error) {
     console.error('Error analyzing nutrition:', error);
     return NextResponse.json(

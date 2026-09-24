@@ -10,6 +10,8 @@ const label = z.string().trim().min(1).max(500);
 export const recipeComparisonSchema = z.object({
   version: z.literal(1),
   source: z.enum(['label', 'pantry', 'dish', 'random']),
+  detectedAdditives: z.array(z.string().trim().min(1).max(500)).max(150).optional(),
+  originalProductName: label.nullable().optional(),
   originalNutrition: z.object({
     values,
     basisLabel: label,

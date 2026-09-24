@@ -2,14 +2,18 @@
 
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
+import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog';
 import { Textarea } from '@/components/ui/textarea';
 import { StarRating } from '@/components/ui/star-rating';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { X, Clock, Users, Save, Wine, Info, Loader2, Share2, Facebook, Twitter, PiggyBank, ChefHat, MessageCircle, ShoppingCart } from 'lucide-react';
+import { Save, Wine, Info, Loader2, Share2, Facebook, Twitter, ChefHat, MessageCircle, ShoppingCart } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import toast from 'react-hot-toast';
-import { InteractiveIngredient } from '@/app/generator/_components/interactive-ingredient';
+import { RecipePresentation } from '@/components/recipe-presentation';
+import { recipeComparisonSchema } from '@/lib/recipe-comparison-validation';
+import type { RecipeComparisonSnapshot } from '@/shared/recipe-comparison';
+import type { FreshNutritionEstimate } from '@/shared/nutrition-facts';
 import { VoiceReader } from '@/components/voice-reader';
 import { RecipeChat } from '@/components/recipe-chat';
 import { parseStoredRecipeList } from '@/lib/recipe-list';
@@ -29,6 +33,13 @@ interface Recipe {
   winePairing?: string | null;
   estimatedCostPerServing?: number | null;
   storeBoughtCost?: number | null;
+  comparisonSnapshot?: unknown;
+  calories?: number | null;
+  protein?: number | null;
+  carbs?: number | null;
+  fat?: number | null;
+  fiber?: number | null;
+  sodium?: number | null;
   createdAt: string;
 }
 
@@ -88,22 +99,25 @@ export function RecipeDetailModal({ recipe, onClose, onUpdate }: RecipeDetailMod
   const [isLoadingIngredient, setIsLoadingIngredient] = useState(false);
 
   // Nutrition and scaling state
-  const [nutrition, setNutrition] = useState<any>(null);
+  const [comparison, setComparison] = useState<RecipeComparisonSnapshot | null>(() => {
+    const parsed = recipeComparisonSchema.safeParse(recipe.comparisonSnapshot);
+    if (parsed.success) return parsed.data;
+    const hasLegacyNutrition = [recipe.calories, recipe.protein, recipe.carbs, recipe.fat, recipe.fiber, recipe.sodium].some(value => value != null);
+    return hasLegacyNutrition ? { version: 1, source: 'dish', originalNutrition: null,
+      freshNutrition: { calories: recipe.calories ?? null, protein: recipe.protein ?? null,
+        carbs: recipe.carbs ?? null, fat: recipe.fat ?? null, fiber: recipe.fiber ?? null,
+        sodium: recipe.sodium ?? null, perServing: true, accuracy: 'estimated',
+        basisLabel: `Per recipe serving (recipe makes ${recipe.servings || '1'})`,
+        sourceLabel: 'Saved estimate • calculation method not recorded' } } : null;
+  });
+  const [savedIngredients, setSavedIngredients] = useState(() => parseStoredRecipeList(recipe.freshIngredients));
+  const ingredientsChanged = JSON.stringify(freshIngredients) !== JSON.stringify(savedIngredients);
+  const [costsInvalidated, setCostsInvalidated] = useState(false);
+  const displayedComparison = ingredientsChanged && comparison ? { ...comparison, freshNutrition: null } : comparison;
   const [isLoadingNutrition, setIsLoadingNutrition] = useState(false);
   const [scaledIngredients, setScaledIngredients] = useState<string | null>(null);
   const [scaleFactor, setScaleFactor] = useState(1);
   const [isScaling, setIsScaling] = useState(false);
-
-  useEffect(() => {
-    const handleEscape = (e: KeyboardEvent) => {
-      if (e?.key === 'Escape') {
-        onClose();
-      }
-    };
-
-    document.addEventListener('keydown', handleEscape);
-    return () => document.removeEventListener('keydown', handleEscape);
-  }, [onClose]);
 
   // Load wine pairing if it exists
   useEffect(() => {
@@ -137,6 +151,15 @@ export function RecipeDetailModal({ recipe, onClose, onUpdate }: RecipeDetailMod
         throw new Error('Failed to update recipe');
       }
 
+      const data = await response.json();
+      const parsed = recipeComparisonSchema.safeParse(data.recipe?.comparisonSnapshot);
+      if (ingredientsChanged) {
+        setComparison(parsed.success ? parsed.data : null);
+        setCostsInvalidated(true);
+        setScaledIngredients(null);
+        setScaleFactor(1);
+      }
+      setSavedIngredients([...freshIngredients]);
       toast.success('Recipe updated successfully');
       onUpdate?.();
     } catch (error) {
@@ -150,12 +173,16 @@ export function RecipeDetailModal({ recipe, onClose, onUpdate }: RecipeDetailMod
   const handleDeleteIngredient = (index: number) => {
     const updatedIngredients = freshIngredients.filter((_, i) => i !== index);
     setFreshIngredients(updatedIngredients);
+    setScaledIngredients(null);
+    setScaleFactor(1);
   };
 
-  const handleSubstituteIngredient = (index: number, newIngredient: string) => {
+  const handleSubstituteIngredient = (index: number, _originalIngredient: string, newIngredient: string) => {
     const updatedIngredients = [...freshIngredients];
     updatedIngredients[index] = newIngredient;
     setFreshIngredients(updatedIngredients);
+    setScaledIngredients(null);
+    setScaleFactor(1);
   };
 
   const fetchWinePairing = async () => {
@@ -286,7 +313,8 @@ export function RecipeDetailModal({ recipe, onClose, onUpdate }: RecipeDetailMod
       }
 
       const data = await response.json();
-      setNutrition(data);
+      setComparison(current => ({ ...(current ?? { version: 1, source: 'dish', originalNutrition: null }), freshNutrition: data as FreshNutritionEstimate }));
+      onUpdate?.();
       toast.success('Nutrition information loaded');
     } catch (error) {
       console.error('Error fetching nutrition:', error);
@@ -327,23 +355,15 @@ export function RecipeDetailModal({ recipe, onClose, onUpdate }: RecipeDetailMod
   };
 
   return (
-    <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4 overflow-y-auto">
-      <div className="max-w-4xl w-full my-8">
+    <Dialog open onOpenChange={(open) => { if (!open) onClose(); }}>
+      <DialogContent aria-describedby={undefined} className="block w-[calc(100%-2rem)] max-w-4xl max-h-[90dvh] overflow-y-auto rounded-lg p-0">
         <Card className="shadow-2xl border-0 bg-white">
           <CardHeader className="bg-gradient-to-r from-emerald-50 to-orange-50 relative">
-            <Button
-              onClick={onClose}
-              variant="ghost"
-              size="icon"
-              className="absolute right-4 top-4 text-gray-500 hover:text-gray-700"
-            >
-              <X className="h-5 w-5" />
-            </Button>
-            <CardTitle className="text-2xl text-gray-900 pr-12">{recipe?.title}</CardTitle>
+            <DialogTitle className="min-w-0 break-words text-xl text-gray-900 pr-12 sm:text-2xl">{recipe?.title}</DialogTitle>
           </CardHeader>
           <CardContent className="pt-6">
             <Tabs defaultValue="recipe" className="w-full">
-              <TabsList className="grid w-full grid-cols-4">
+              <TabsList className="flex h-auto w-full flex-wrap justify-start gap-1">
                 <TabsTrigger value="recipe">Recipe</TabsTrigger>
                 <TabsTrigger value="wine">
                   <Wine className="h-4 w-4 mr-2" />
@@ -360,29 +380,25 @@ export function RecipeDetailModal({ recipe, onClose, onUpdate }: RecipeDetailMod
               </TabsList>
 
               {/* Recipe Tab */}
-              <TabsContent value="recipe" className="space-y-6 max-h-[60vh] overflow-y-auto mt-6">
-            {/* Recipe Meta Info */}
-            <div className="flex items-center gap-6 text-sm text-gray-600">
-              {recipe?.prepTime && (
-                <div className="flex items-center gap-2">
-                  <Clock className="h-4 w-4" />
-                  <span>Prep: {recipe?.prepTime}</span>
-                </div>
-              )}
-              {recipe?.cookTime && (
-                <div className="flex items-center gap-2">
-                  <Clock className="h-4 w-4" />
-                  <span>Cook: {recipe?.cookTime}</span>
-                </div>
-              )}
-              {recipe?.servings && (
-                <div className="flex items-center gap-2">
-                  <Users className="h-4 w-4" />
-                  <span>Servings: {recipe?.servings}</span>
-                </div>
-              )}
-            </div>
-
+              <TabsContent value="recipe" className="space-y-6 mt-6">
+                <RecipePresentation
+                  recipe={{ ...recipe, freshIngredients, instructions,
+                    estimatedCostPerServing: ingredientsChanged || costsInvalidated ? null : recipe.estimatedCostPerServing,
+                    storeBoughtCost: ingredientsChanged || costsInvalidated ? null : recipe.storeBoughtCost }}
+                  dietaryTags={recipe.dietaryTags}
+                  comparison={displayedComparison}
+                  isLoadingNutrition={isLoadingNutrition}
+                  onDeleteIngredient={isLoadingNutrition || isSaving ? undefined : handleDeleteIngredient}
+                  onSubstituteIngredient={isLoadingNutrition || isSaving ? undefined : handleSubstituteIngredient}
+                />
+                {ingredientsChanged && <p role="status" className="text-sm text-amber-800">Ingredients changed. Save your changes before calculating a new nutrition estimate.</p>}
+                {!displayedComparison?.freshNutrition && (
+                  <Button onClick={fetchNutrition} disabled={isLoadingNutrition || ingredientsChanged || isSaving} variant="outline">
+                    {isLoadingNutrition ? 'Calculating estimate…' : 'Get Nutrition Info'}
+                  </Button>
+                )}
+                <div className="border-t pt-6 space-y-4">
+                  <h3 className="text-lg font-semibold text-gray-900">Cooking tools</h3>
             {/* Cooking Mode + Read Aloud */}
             <div className="flex flex-wrap items-center gap-2">
               <Link href={`/cooking-mode/${recipe?.id}`}>
@@ -412,92 +428,6 @@ export function RecipeDetailModal({ recipe, onClose, onUpdate }: RecipeDetailMod
               />
             </div>
 
-            {/* Cost Savings Banner */}
-            {typeof recipe?.estimatedCostPerServing === 'number' &&
-              typeof recipe?.storeBoughtCost === 'number' &&
-              recipe.storeBoughtCost > recipe.estimatedCostPerServing && (
-                <div className="flex items-center gap-3 p-4 bg-gradient-to-r from-emerald-50 to-orange-50 border border-emerald-200 rounded-lg">
-                  <PiggyBank className="h-8 w-8 text-emerald-600 flex-shrink-0" />
-                  <div>
-                    <p className="font-semibold text-emerald-700">
-                      You saved ~${(recipe.storeBoughtCost - recipe.estimatedCostPerServing).toFixed(2)} per serving!
-                    </p>
-                    <p className="text-sm text-gray-600">
-                      Homemade ~${recipe.estimatedCostPerServing.toFixed(2)}/serving vs. store-bought ~$
-                      {recipe.storeBoughtCost.toFixed(2)}/serving
-                    </p>
-                  </div>
-                </div>
-              )}
-
-            {/* Dietary Tags */}
-            {recipe?.dietaryTags?.length > 0 && (
-              <div className="flex flex-wrap gap-2">
-                {recipe?.dietaryTags?.map?.((tag) => (
-                  <span
-                    key={tag}
-                    className="px-3 py-1 bg-emerald-100 text-emerald-700 rounded-full text-sm font-medium"
-                  >
-                    {tag}
-                  </span>
-                ))}
-              </div>
-            )}
-
-            {/* Nutrition & Scaling */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 p-4 bg-gradient-to-r from-blue-50 to-purple-50 rounded-lg border border-blue-200">
-              {/* Nutrition Info */}
-              <div>
-                <h3 className="text-sm font-semibold text-gray-900 mb-2 flex items-center gap-2">
-                  📊 Nutrition (per serving)
-                </h3>
-                {!nutrition ? (
-                  <Button
-                    onClick={fetchNutrition}
-                    disabled={isLoadingNutrition}
-                    variant="outline"
-                    size="sm"
-                    className="w-full"
-                  >
-                    {isLoadingNutrition ? (
-                      <>
-                        <Loader2 className="mr-2 h-3 w-3 animate-spin" />
-                        Analyzing...
-                      </>
-                    ) : (
-                      'Get Nutrition Info'
-                    )}
-                  </Button>
-                ) : (
-                  <div className="grid grid-cols-2 gap-2 text-sm">
-                    {nutrition.calories && (
-                      <div className="bg-white rounded px-2 py-1">
-                        <span className="text-gray-600">Calories:</span>{' '}
-                        <span className="font-semibold">{nutrition.calories}</span>
-                      </div>
-                    )}
-                    {nutrition.protein && (
-                      <div className="bg-white rounded px-2 py-1">
-                        <span className="text-gray-600">Protein:</span>{' '}
-                        <span className="font-semibold">{nutrition.protein}g</span>
-                      </div>
-                    )}
-                    {nutrition.carbs && (
-                      <div className="bg-white rounded px-2 py-1">
-                        <span className="text-gray-600">Carbs:</span>{' '}
-                        <span className="font-semibold">{nutrition.carbs}g</span>
-                      </div>
-                    )}
-                    {nutrition.fat && (
-                      <div className="bg-white rounded px-2 py-1">
-                        <span className="text-gray-600">Fat:</span>{' '}
-                        <span className="font-semibold">{nutrition.fat}g</span>
-                      </div>
-                    )}
-                  </div>
-                )}
-              </div>
-
               {/* Recipe Scaling */}
               <div>
                 <h3 className="text-sm font-semibold text-gray-900 mb-2 flex items-center gap-2">
@@ -506,7 +436,7 @@ export function RecipeDetailModal({ recipe, onClose, onUpdate }: RecipeDetailMod
                 <div className="flex items-center gap-2">
                   <Button
                     onClick={() => handleScaleRecipe(0.5)}
-                    disabled={isScaling}
+                    disabled={isScaling || ingredientsChanged}
                     variant="outline"
                     size="sm"
                     className="flex-1"
@@ -515,7 +445,7 @@ export function RecipeDetailModal({ recipe, onClose, onUpdate }: RecipeDetailMod
                   </Button>
                   <Button
                     onClick={() => handleScaleRecipe(1)}
-                    disabled={isScaling || scaleFactor === 1}
+                    disabled={isScaling || ingredientsChanged || scaleFactor === 1}
                     variant={scaleFactor === 1 ? 'default' : 'outline'}
                     size="sm"
                     className="flex-1"
@@ -524,7 +454,7 @@ export function RecipeDetailModal({ recipe, onClose, onUpdate }: RecipeDetailMod
                   </Button>
                   <Button
                     onClick={() => handleScaleRecipe(2)}
-                    disabled={isScaling}
+                    disabled={isScaling || ingredientsChanged}
                     variant="outline"
                     size="sm"
                     className="flex-1"
@@ -533,7 +463,7 @@ export function RecipeDetailModal({ recipe, onClose, onUpdate }: RecipeDetailMod
                   </Button>
                   <Button
                     onClick={() => handleScaleRecipe(3)}
-                    disabled={isScaling}
+                    disabled={isScaling || ingredientsChanged}
                     variant="outline"
                     size="sm"
                     className="flex-1"
@@ -550,47 +480,8 @@ export function RecipeDetailModal({ recipe, onClose, onUpdate }: RecipeDetailMod
                   </div>
                 )}
               </div>
-            </div>
-
-            {/* Ingredients */}
-            <div>
-              <h3 className="text-lg font-semibold text-gray-900 mb-3">
-                Fresh Ingredients
-                {scaledIngredients && (
-                  <span className="ml-2 text-sm font-normal text-blue-600">
-                    (Scaled to {scaleFactor}x)
-                  </span>
-                )}
-              </h3>
-              <ul className="space-y-1">
-                {(scaledIngredients ? scaledIngredients.split('\n') : freshIngredients)?.map?.((ingredient: string, index: number) => (
-                  <li key={index}>
-                    <InteractiveIngredient
-                      ingredient={ingredient}
-                      index={index}
-                      onDelete={!scaledIngredients ? handleDeleteIngredient : undefined}
-                      onSubstitute={!scaledIngredients ? handleSubstituteIngredient : undefined}
-                      showDelete={!scaledIngredients}
-                    />
-                  </li>
-                ))}
-              </ul>
-            </div>
-
-            {/* Instructions */}
-            <div>
-              <h3 className="text-lg font-semibold text-gray-900 mb-3">Instructions</h3>
-              <ol className="space-y-3">
-                {instructions?.map?.((instruction: string, index: number) => (
-                  <li key={index} className="flex items-start gap-3">
-                    <span className="flex-shrink-0 w-6 h-6 bg-emerald-600 text-white rounded-full flex items-center justify-center text-sm font-medium">
-                      {index + 1}
-                    </span>
-                    <span className="text-gray-700 pt-0.5">{instruction}</span>
-                  </li>
-                ))}
-              </ol>
-            </div>
+                  {scaledIngredients && <div className="rounded-lg border p-4"><h4 className="font-semibold">Ingredients scaled to {scaleFactor}x</h4><p className="text-sm text-gray-600 mb-3">The recipe and per-serving comparison above stay unchanged.</p><ul className="space-y-2">{parseStoredRecipeList(scaledIngredients).map((ingredient, index) => <li key={index}>{ingredient}</li>)}</ul></div>}
+                </div>
 
                 {/* Divider */}
                 <div className="border-t border-gray-200 my-6"></div>
@@ -630,7 +521,7 @@ export function RecipeDetailModal({ recipe, onClose, onUpdate }: RecipeDetailMod
               </TabsContent>
 
               {/* Wine Pairing Tab */}
-              <TabsContent value="wine" className="space-y-4 max-h-[60vh] overflow-y-auto mt-6">
+              <TabsContent value="wine" className="space-y-4 mt-6">
                 {!wineLoaded && !isLoadingWine && (
                   <div className="text-center py-12">
                     <Wine className="h-16 w-16 text-gray-300 mx-auto mb-4" />
@@ -708,7 +599,7 @@ export function RecipeDetailModal({ recipe, onClose, onUpdate }: RecipeDetailMod
               </TabsContent>
 
               {/* Ingredient Info Tab */}
-              <TabsContent value="ingredients" className="space-y-4 max-h-[60vh] overflow-y-auto mt-6">
+              <TabsContent value="ingredients" className="space-y-4 mt-6">
                 <div>
                   <p className="text-sm text-gray-600 mb-4">
                     💡 Tip: Click on any ingredient above to view info, find substitutes, or add to your shopping list!
@@ -816,7 +707,7 @@ export function RecipeDetailModal({ recipe, onClose, onUpdate }: RecipeDetailMod
               </TabsContent>
 
               {/* Ask AI Tab */}
-              <TabsContent value="chat" className="max-h-[60vh] overflow-y-auto mt-6">
+              <TabsContent value="chat" className="mt-6">
                 <RecipeChat
                   recipe={{
                     title: recipe?.title ?? '',
@@ -905,7 +796,7 @@ export function RecipeDetailModal({ recipe, onClose, onUpdate }: RecipeDetailMod
             </div>
           </CardContent>
         </Card>
-      </div>
-    </div>
+      </DialogContent>
+    </Dialog>
   );
 }

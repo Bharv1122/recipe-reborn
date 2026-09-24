@@ -1,19 +1,24 @@
 import { NextResponse } from 'next/server';
 import { getRequestUserId } from '@/lib/request-auth';
 import { rateLimit } from '@/lib/rate-limit';
-import { nullableNutritionNumber } from '@/lib/nutrition-facts';
 import { AI_API_KEY, AI_CHAT_URL, MODEL_FAST } from '@/lib/ai';
 import { extractJsonPayload } from '@/lib/ai-json';
+import { z } from 'zod';
 
 export const dynamic = 'force-dynamic';
 
-type NutritionEstimate = {
-  calories: number;
-  protein: number;
-  carbs: number;
-  fat: number;
-  fiber: number;
-  sodium: number;
+const nutrientKeys = ['calories', 'protein', 'carbs', 'fat', 'fiber', 'sodium'] as const;
+const nutrient = z.number().finite().nonnegative().nullable();
+const nutritionSchema = z.object({
+  calories: nutrient, protein: nutrient, carbs: nutrient,
+  fat: nutrient, fiber: nutrient, sodium: nutrient,
+}).strict().refine((values) => Object.values(values).some((value) => value !== null),
+  'Nutrition estimate must contain at least one usable value');
+const nutritionJsonSchema = {
+  type: 'object',
+  properties: Object.fromEntries(nutrientKeys.map((key) => [key, { type: ['number', 'null'], minimum: 0 }])),
+  required: [...nutrientKeys],
+  additionalProperties: false,
 };
 
 function asRecipeText(value: unknown) {
@@ -49,6 +54,7 @@ export async function POST(request: Request) {
     const response = await fetch(AI_CHAT_URL, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${AI_API_KEY}` },
+      signal: AbortSignal.timeout(45_000),
       body: JSON.stringify({
         model: MODEL_FAST,
         messages: [
@@ -58,21 +64,24 @@ export async function POST(request: Request) {
           },
           {
             role: 'user',
-            content: `Estimate nutrition per serving for this recipe. Values are estimates, not medical advice.\n\nRecipe: ${title}\nServings: ${servings}\n\nIngredients:\n${freshIngredients}\n\nInstructions:\n${instructions}\n\nReturn JSON with calories (kcal), protein (g), carbs (g), fat (g), fiber (g), and sodium (mg).`,
+            content: `Estimate nutrition per serving for this recipe. Values are estimates, not medical advice.\n\nRecipe: ${title}\nServings: ${servings}\n\nIngredients:\n${freshIngredients}\n\nInstructions:\n${instructions}\n\nReturn exactly one flat JSON object with these six required keys: {"calories": number_or_null, "protein": number_or_null, "carbs": number_or_null, "fat": number_or_null, "fiber": number_or_null, "sodium": number_or_null}. Calories are kcal, protein/carbs/fat/fiber are grams, and sodium is milligrams. All numbers describe ONE serving. Use nonnegative numbers without units or text, including 0 when appropriate. Use null only for a nutrient that cannot be reasonably estimated. Do not wrap this object in nutrition, nutrients, perServing, or any other property. Do not return arrays, descriptions, ranges, or explanatory text.`,
           },
         ],
         temperature: 0.2,
         max_tokens: 1000,
+        reasoning_effort: 'none',
+        response_format: { type: 'json_schema', json_schema: { name: 'recipe_nutrition_estimate', strict: true, schema: nutritionJsonSchema } },
       }),
     });
 
     if (!response.ok) throw new Error(`AI request failed: ${response.status}`);
     const data = await response.json();
-    const parsed = JSON.parse(extractJsonPayload(data.choices?.[0]?.message?.content || '')) as Partial<NutritionEstimate>;
-    const rounded = (value: unknown, precision = 1) => {
-      const number = nullableNutritionNumber(value);
-      return number === null ? null : Math.round(number * precision) / precision;
-    };
+    const choice = data?.choices?.[0];
+    if (choice?.finish_reason !== 'stop') throw new Error('Nutrition provider did not complete its response');
+    const content = choice?.message?.content;
+    if (typeof content !== 'string' || !content.trim()) throw new Error('Nutrition provider returned no content');
+    const parsed = nutritionSchema.parse(JSON.parse(extractJsonPayload(content)));
+    const rounded = (value: number | null, precision = 1) => value === null ? null : Math.round(value * precision) / precision;
 
     return NextResponse.json({
       calories: rounded(parsed.calories),
@@ -87,7 +96,8 @@ export async function POST(request: Request) {
       sourceLabel: 'Estimated from the generated recipe',
     });
   } catch (error) {
-    console.error('Automatic nutrition estimate failed:', error);
-    return NextResponse.json({ error: 'Failed to calculate nutrition' }, { status: 500 });
+    // Do not log provider content: it can include the user's recipe text.
+    console.error('Automatic nutrition estimate failed:', error instanceof Error ? error.name : 'Unknown error');
+    return NextResponse.json({ error: 'Nutrition is temporarily unavailable. Please try again.' }, { status: 503 });
   }
 }

@@ -7,16 +7,17 @@ import { Textarea } from '@/components/ui/textarea';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Loader2, ChefHat, Sparkles, Save, Clock, Users, Link as LinkIcon, Camera, Upload, X, Mic, PiggyBank, ScanBarcode, AlertTriangle, Leaf, ArrowRight, Ban, CheckCircle2, FolderPlus, CalendarDays } from 'lucide-react';
+import { Loader2, ChefHat, Sparkles, Save, Link as LinkIcon, Camera, Upload, X, Mic, ScanBarcode, AlertTriangle, ArrowRight, Ban, CheckCircle2, FolderPlus, CalendarDays } from 'lucide-react';
 import toast from 'react-hot-toast';
-import { InteractiveIngredient } from './interactive-ingredient';
+import { RecipePresentation } from '@/components/recipe-presentation';
+import type { RecipeComparisonSnapshot } from '@/shared/recipe-comparison';
 import { VoiceChat } from './voice-chat';
 import { BarcodeScanner } from './barcode-scanner';
 import { PantryCheckDialog } from './pantry-check-dialog';
 import { PantryIdeaCard } from './pantry-idea-card';
 import { PantryPhotoInventory } from './pantry-photo-inventory';
 import { OriginalNutritionForm } from './original-nutrition-form';
-import { NutritionComparison, type FreshNutritionEstimate } from './nutrition-comparison';
+import { type FreshNutritionEstimate } from './nutrition-comparison';
 import { detectAdditives, type DetectedAdditive } from '@/lib/additives';
 import { EXAMPLE_LABEL } from '@/lib/example-label';
 import type { OriginalNutrition } from '@/lib/nutrition-facts';
@@ -82,7 +83,6 @@ export function RecipeGenerator({ savedRecipeCount = 0, recentIngredients = [], 
   // Additives found in the ORIGINAL processed ingredients — powers the
   // before/after transformation reveal. Empty for pantry / fresh input.
   const [detectedAdditives, setDetectedAdditives] = useState<DetectedAdditive[]>([]);
-  const [isLabelTransformation, setIsLabelTransformation] = useState(false);
   const [loadingElapsed, setLoadingElapsed] = useState(0);
   const [photoError, setPhotoError] = useState<string | null>(null);
   const [isPhotoDragging, setIsPhotoDragging] = useState(false);
@@ -90,6 +90,20 @@ export function RecipeGenerator({ savedRecipeCount = 0, recentIngredients = [], 
   const [originalNutrition, setOriginalNutrition] = useState<OriginalNutrition | null>(null);
   const [isLoadingNutrition, setIsLoadingNutrition] = useState(false);
   const [isDemoRun, setIsDemoRun] = useState(false);
+  const [isLoadingCost, setIsLoadingCost] = useState(false);
+  const [resultContext, setResultContext] = useState<{
+    source: RecipeComparisonSnapshot['source'];
+    originalIngredients: string;
+    originalNutrition: OriginalNutrition | null;
+    detectedAdditives: string[];
+  } | null>(null);
+  const comparisonSnapshot: RecipeComparisonSnapshot = {
+    version: 1,
+    source: resultContext?.source ?? 'dish',
+    originalNutrition: resultContext?.originalNutrition ?? null,
+    freshNutrition: nutrition,
+    detectedAdditives: resultContext?.detectedAdditives ?? [],
+  };
   const [isSaved, setIsSaved] = useState(false);
   const [savedRecipeId, setSavedRecipeId] = useState<string | null>(null);
   const [isCanceling, setIsCanceling] = useState(false);
@@ -154,6 +168,8 @@ export function RecipeGenerator({ savedRecipeCount = 0, recentIngredients = [], 
   useEffect(() => {
     if (!recipe) return;
     const controller = new AbortController();
+    let disposed = false;
+    const timeout = setTimeout(() => controller.abort(), 45_000);
     const estimateNutrition = async () => {
       setNutrition(null);
       setIsLoadingNutrition(true);
@@ -166,21 +182,25 @@ export function RecipeGenerator({ savedRecipeCount = 0, recentIngredients = [], 
         });
         const data = await response.json().catch(() => null);
         if (!response.ok) throw new Error(data?.error ?? 'Failed to calculate nutrition');
-        setNutrition(data as FreshNutritionEstimate);
+        if (!controller.signal.aborted) setNutrition(data as FreshNutritionEstimate);
       } catch (error: any) {
         if (error?.name !== 'AbortError') toast.error(error?.message ?? 'Failed to calculate nutrition');
       } finally {
-        if (!controller.signal.aborted) setIsLoadingNutrition(false);
+        clearTimeout(timeout);
+        if (!disposed) setIsLoadingNutrition(false);
       }
     };
     estimateNutrition();
-    return () => controller.abort();
-  }, [recipe]);
+    return () => { disposed = true; clearTimeout(timeout); controller.abort(); };
+  }, [recipe?.title, recipe?.freshIngredients, recipe?.instructions, recipe?.servings]);
 
   useEffect(() => {
     if (!recipe) return;
     const controller = new AbortController();
+    let disposed = false;
+    const timeout = setTimeout(() => controller.abort(), 45_000);
     const estimateCost = async () => {
+      setIsLoadingCost(true);
       try {
         const response = await fetch('/api/recipe-cost/estimate', {
           method: 'POST',
@@ -190,13 +210,16 @@ export function RecipeGenerator({ savedRecipeCount = 0, recentIngredients = [], 
         });
         const data = await response.json().catch(() => null);
         if (!response.ok) return;
-        setRecipe((current) => current ? { ...current, ...data } : current);
+        if (!controller.signal.aborted) setRecipe((current) => current ? { ...current, ...data } : current);
       } catch (error: any) {
         if (error?.name !== 'AbortError') console.error('Recipe cost estimate failed:', error);
+      } finally {
+        clearTimeout(timeout);
+        if (!disposed) setIsLoadingCost(false);
       }
     };
     estimateCost();
-    return () => controller.abort();
+    return () => { disposed = true; clearTimeout(timeout); controller.abort(); };
   }, [recipe?.title, recipe?.freshIngredients, recipe?.servings]);
 
   // Guest → signup handoff: a visitor who transformed a label on the landing
@@ -348,7 +371,7 @@ export function RecipeGenerator({ savedRecipeCount = 0, recentIngredients = [], 
     const effectiveSource = sourceOverride ?? (ingredientsOverride ? 'label' : inputMode);
     if (!dietaryRestriction) {
       setDetectedAdditives(effectiveSource === 'pantry' ? [] : detectAdditives(inputText));
-      setIsLabelTransformation(effectiveSource !== 'pantry');
+
       if (effectiveSource === 'pantry') setOriginalNutrition(null);
     }
     if (!ingredientsOverride && !dietaryRestriction) {
@@ -373,6 +396,9 @@ export function RecipeGenerator({ savedRecipeCount = 0, recentIngredients = [], 
         pantryExtraIngredient: pantrySelection?.extraIngredient,
       });
 
+      setResultContext({ source: effectiveSource, originalIngredients: inputText,
+        originalNutrition: effectiveSource === 'label' && !ingredientsOverride ? originalNutrition : null,
+        detectedAdditives: effectiveSource === 'label' ? detectAdditives(inputText).map(a => a.name) : [] });
       setRecipe(generatedRecipe);
       if (dietaryRestriction) {
         setAppliedDietaryTags((prev) => [...(prev ?? []), dietaryRestriction]);
@@ -396,7 +422,7 @@ export function RecipeGenerator({ savedRecipeCount = 0, recentIngredients = [], 
   };
 
   const saveRecipe = async () => {
-    if (!recipe) return;
+    if (!recipe || isLoadingNutrition || isLoadingCost || isSaving || isRegeneratingWithSubstitute) return;
 
     setIsSaving(true);
     setShowSavePrompt(false); // Close the prompt dialog
@@ -409,7 +435,8 @@ export function RecipeGenerator({ savedRecipeCount = 0, recentIngredients = [], 
         },
         body: JSON.stringify({
           title: recipe?.title,
-          originalIngredients: ingredients,
+          originalIngredients: resultContext?.originalIngredients || ingredients || recipe.title,
+          comparisonSnapshot,
           freshIngredients: recipe?.freshIngredients,
           instructions: recipe?.instructions,
           dietaryTags: appliedDietaryTags,
@@ -450,7 +477,7 @@ export function RecipeGenerator({ savedRecipeCount = 0, recentIngredients = [], 
     setIsImporting(true);
     setRecipe(null);
     setDetectedAdditives([]);
-    setIsLabelTransformation(false);
+
     setOriginalNutrition(null);
     setIsSaved(false);
     setSavedRecipeId(null);
@@ -471,13 +498,12 @@ export function RecipeGenerator({ savedRecipeCount = 0, recentIngredients = [], 
       }
 
       const data = await response.json();
+      setResultContext({ source: 'dish', originalIngredients: data.recipe.originalIngredients || data.recipe.title, originalNutrition: null, detectedAdditives: [] });
       setRecipe(data.recipe);
       setIngredients(data.recipe.originalIngredients);
       
       // Set dietary tags if any
-      if (data.recipe.dietaryTags?.length > 0) {
-        setAppliedDietaryTags(data.recipe.dietaryTags);
-      }
+      setAppliedDietaryTags(data.recipe.dietaryTags ?? []);
 
       toast.success('Recipe imported successfully!');
       setShowSavePrompt(true); // Show save prompt after import
@@ -609,7 +635,7 @@ export function RecipeGenerator({ savedRecipeCount = 0, recentIngredients = [], 
         setIngredients(extractedIngredients);
         // Snapshot the additives on this label for the transformation reveal
         setDetectedAdditives(detectAdditives(extractedIngredients));
-        setIsLabelTransformation(true);
+
         setIsDemoRun(false);
         clearImage(); // Clear the photo preview
 
@@ -624,6 +650,9 @@ export function RecipeGenerator({ savedRecipeCount = 0, recentIngredients = [], 
             ingredients: extractedIngredients,
             source: 'label',
           });
+          setResultContext({ source: 'label', originalIngredients: extractedIngredients,
+            originalNutrition: data?.originalNutrition ?? null,
+            detectedAdditives: detectAdditives(extractedIngredients).map(a => a.name) });
           setRecipe(generatedRecipe);
           setIsSaved(false);
           setSavedRecipeId(null);
@@ -651,6 +680,7 @@ export function RecipeGenerator({ savedRecipeCount = 0, recentIngredients = [], 
           servings: data.servings?.toString() || '4',
         };
 
+        setResultContext({ source: 'dish', originalIngredients: data.ingredients.join(', '), originalNutrition: null, detectedAdditives: [] });
         setRecipe(extractedRecipe);
         setIsDemoRun(false);
         setIsSaved(false);
@@ -661,9 +691,7 @@ export function RecipeGenerator({ savedRecipeCount = 0, recentIngredients = [], 
         setIngredients(data.ingredients.join(', '));
         
         // Set dietary tags if any
-        if (data.dietaryTags?.length > 0) {
-          setAppliedDietaryTags(data.dietaryTags);
-        }
+        setAppliedDietaryTags(data.dietaryTags ?? []);
 
         toast.success('Recipe extracted successfully!');
         setShowSavePrompt(true); // Show save prompt after extracting complete recipe
@@ -686,6 +714,8 @@ export function RecipeGenerator({ savedRecipeCount = 0, recentIngredients = [], 
     setRecipe({
       ...recipe,
       freshIngredients: updatedIngredients,
+      estimatedCostPerServing: undefined,
+      storeBoughtCost: undefined,
     });
     setIsSaved(false);
     setSavedRecipeId(null);
@@ -786,7 +816,7 @@ export function RecipeGenerator({ savedRecipeCount = 0, recentIngredients = [], 
   };
 
   return (
-    <div className="space-y-8 overflow-x-hidden">
+    <fieldset disabled={isSaving} className="min-w-0 space-y-8 overflow-x-hidden">
       {(savedRecipeCount === 1 || recentIngredients.length > 0 || (daysSinceLastRecipe ?? 0) >= 3) && (
         <section className="rounded-2xl border border-orange-200 bg-white p-4 shadow-sm sm:p-5">
           <h2 className="text-lg font-bold text-gray-900">
@@ -936,7 +966,7 @@ export function RecipeGenerator({ savedRecipeCount = 0, recentIngredients = [], 
                     setIngredients(inventoryText);
                     setOriginalNutrition(null);
                     setDetectedAdditives([]);
-                    setIsLabelTransformation(false);
+
                   }}
                 />
               )}
@@ -956,7 +986,13 @@ export function RecipeGenerator({ savedRecipeCount = 0, recentIngredients = [], 
               {inputMode === 'label' && (
                 <OriginalNutritionForm
                   value={originalNutrition}
-                  onChange={setOriginalNutrition}
+                  onChange={(value) => {
+                    setOriginalNutrition(value);
+                    if (resultContext?.source === 'label' && resultContext.originalIngredients === ingredients) {
+                      setResultContext({ ...resultContext, originalNutrition: value });
+                      setIsSaved(false);
+                    }
+                  }}
                   disabled={isBusy}
                 />
               )}
@@ -1313,7 +1349,7 @@ export function RecipeGenerator({ savedRecipeCount = 0, recentIngredients = [], 
               <Button
                 onClick={saveRecipe}
                 variant="outline"
-                disabled={isSaving}
+                disabled={isSaving || isLoadingNutrition || isLoadingCost || isRegeneratingWithSubstitute}
                 className="min-h-11 w-full border-emerald-700 text-emerald-800 hover:bg-emerald-50 focus-visible:ring-2 focus-visible:ring-emerald-700 focus-visible:ring-offset-2 sm:w-auto"
               >
                 {isSaving ? (
@@ -1324,7 +1360,7 @@ export function RecipeGenerator({ savedRecipeCount = 0, recentIngredients = [], 
                 ) : (
                   <>
                     <Save className="mr-2 h-4 w-4" />
-                    Save Recipe
+                    {isLoadingNutrition || isLoadingCost ? 'Finishing estimates…' : 'Save Recipe'}
                   </>
                 )}
               </Button>
@@ -1343,178 +1379,16 @@ export function RecipeGenerator({ savedRecipeCount = 0, recentIngredients = [], 
               </div>
             )}
 
-            {/* Truthful transformation reveal: detected source items vs generated output. */}
-            {isLabelTransformation && (
-              <div className="rounded-xl border border-emerald-200 overflow-hidden">
-                <div className="bg-gradient-to-r from-amber-50 via-white to-emerald-50 px-4 py-3 border-b border-emerald-100">
-                  <p className="text-center text-sm font-semibold text-gray-700">
-                    Processed label → generated fresh recipe
-                  </p>
-                </div>
-                <div className="grid grid-cols-1 sm:grid-cols-[1fr_auto_1fr] items-stretch">
-                  {/* BEFORE */}
-                  <div className="p-4 bg-red-50/60">
-                    <div className="flex items-center gap-2 mb-2">
-                      <AlertTriangle className="h-4 w-4 text-red-500 flex-shrink-0" />
-                      <span className="text-xs font-semibold text-red-600 uppercase tracking-wide">
-                        Detected on the label
-                      </span>
-                    </div>
-                    <p className="text-2xl font-bold text-red-600 mb-2">
-                      {detectedAdditives.length > 0
-                        ? `${detectedAdditives.length} flagged item${detectedAdditives.length === 1 ? '' : 's'}`
-                        : 'No common additives matched'}
-                    </p>
-                    {detectedAdditives.length > 0 ? (
-                    <div className="flex flex-wrap gap-1.5">
-                      {detectedAdditives.slice(0, 6).map((a) => (
-                        <span
-                          key={a.name}
-                          title={a.concern}
-                          className="px-2 py-0.5 bg-red-100 text-red-700 rounded-full text-xs font-medium"
-                        >
-                          {a.name}
-                        </span>
-                      ))}
-                      {detectedAdditives.length > 6 && (
-                        <span className="px-2 py-0.5 bg-red-100 text-red-700 rounded-full text-xs font-medium">
-                          +{detectedAdditives.length - 6} more
-                        </span>
-                      )}
-                    </div>
-                    ) : (
-                      <p className="text-sm text-red-700">The label is still shown next to its fresh-ingredient replacement.</p>
-                    )}
-                  </div>
-
-                  {/* Arrow */}
-                  <div className="flex items-center justify-center py-2 sm:px-2 bg-white">
-                    <div className="bg-emerald-100 rounded-full p-2">
-                      <ArrowRight className="h-5 w-5 text-emerald-700 rotate-90 sm:rotate-0" aria-hidden="true" />
-                    </div>
-                  </div>
-
-                  {/* AFTER */}
-                  <div className="p-4 bg-emerald-50/60">
-                    <div className="flex items-center gap-2 mb-2">
-                      <Leaf className="h-4 w-4 text-emerald-600 flex-shrink-0" />
-                      <span className="text-xs font-semibold text-emerald-700 uppercase tracking-wide">
-                        Generated fresh ingredients
-                      </span>
-                    </div>
-                    <ul className="space-y-1 text-sm text-gray-700">
-                      {recipe.freshIngredients.slice(0, 5).map((ingredient, index) => (
-                        <li key={`${ingredient}-${index}`} className="break-words">• {ingredient}</li>
-                      ))}
-                    </ul>
-                    {recipe.freshIngredients.length > 5 && (
-                      <p className="mt-2 text-xs font-medium text-emerald-800">
-                        +{recipe.freshIngredients.length - 5} more in the recipe
-                      </p>
-                    )}
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {/* Cost Savings Banner */}
-            {typeof recipe?.estimatedCostPerServing === 'number' &&
-              typeof recipe?.storeBoughtCost === 'number' &&
-              recipe.storeBoughtCost > recipe.estimatedCostPerServing && (
-                <div className="flex items-center gap-3 p-4 bg-gradient-to-r from-emerald-50 to-orange-50 border border-emerald-200 rounded-lg">
-                  <PiggyBank className="h-8 w-8 text-emerald-600 flex-shrink-0" />
-                  <div>
-                    <p className="font-semibold text-emerald-700">
-                      Estimated cost difference: ~${(recipe.storeBoughtCost - recipe.estimatedCostPerServing).toFixed(2)} per serving
-                    </p>
-                    <p className="text-sm text-gray-600">
-                      AI estimate only: homemade ~${recipe.estimatedCostPerServing.toFixed(2)}/serving vs. store-bought ~$
-                      {recipe.storeBoughtCost.toFixed(2)}/serving. Actual prices vary.
-                    </p>
-                  </div>
-                </div>
-              )}
-
-            <NutritionComparison
-              original={originalNutrition}
-              fresh={nutrition}
-              isLoading={isLoadingNutrition}
+            <RecipePresentation
+              recipe={recipe}
+              dietaryTags={appliedDietaryTags}
+              comparison={comparisonSnapshot}
+              isLoadingNutrition={isLoadingNutrition}
+              onDeleteIngredient={isSaving ? undefined : handleDeleteIngredient}
+              onSubstituteIngredient={isSaving ? undefined : handleSubstituteIngredient}
+              isRegeneratingWithSubstitute={isRegeneratingWithSubstitute}
+              substituteName={substitutionInfo?.substitute}
             />
-
-            {/* Recipe Meta Info */}
-            <div className="flex items-center gap-6 text-sm text-gray-600">
-              <div className="flex items-center gap-2">
-                <Clock className="h-4 w-4" />
-                <span>Prep: {recipe?.prepTime}</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <Clock className="h-4 w-4" />
-                <span>Cook: {recipe?.cookTime}</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <Users className="h-4 w-4" />
-                <span>Servings: {recipe?.servings}</span>
-              </div>
-            </div>
-
-            {/* Dietary Tags */}
-            {appliedDietaryTags?.length > 0 && (
-              <div className="flex flex-wrap gap-2">
-                {appliedDietaryTags?.map?.((tag) => (
-                  <span
-                    key={tag}
-                    className="px-3 py-1 bg-emerald-100 text-emerald-700 rounded-full text-sm font-medium"
-                  >
-                    {tag}
-                  </span>
-                ))}
-              </div>
-            )}
-
-            {/* Ingredients */}
-            <div>
-              <div className="flex items-center gap-3 mb-1">
-                <h3 className="text-lg font-semibold text-gray-900">Fresh Ingredients</h3>
-                {isRegeneratingWithSubstitute && (
-                  <div className="flex items-center gap-2 text-sm text-emerald-600 animate-pulse">
-                    <Loader2 className="h-4 w-4 animate-spin" />
-                    <span>Regenerating with {substitutionInfo?.substitute}...</span>
-                  </div>
-                )}
-              </div>
-              <p className="text-xs text-gray-500 mb-3">
-                Tap any ingredient for info, substitutes, shopping list, or to remove it
-              </p>
-              <ul className="space-y-1">
-                {recipe?.freshIngredients?.map?.((ingredient, index) => (
-                  <li key={index}>
-                    <InteractiveIngredient
-                      ingredient={ingredient}
-                      index={index}
-                      onDelete={handleDeleteIngredient}
-                      onSubstitute={handleSubstituteIngredient}
-                      showDelete={true}
-                      isRegenerating={isRegeneratingWithSubstitute}
-                    />
-                  </li>
-                ))}
-              </ul>
-            </div>
-
-            {/* Instructions */}
-            <div>
-              <h3 className="text-lg font-semibold text-gray-900 mb-3">Instructions</h3>
-              <ol className="space-y-3">
-                {recipe?.instructions?.map?.((instruction, index) => (
-                  <li key={index} className="flex items-start gap-3">
-                    <span className="flex-shrink-0 w-6 h-6 bg-emerald-600 text-white rounded-full flex items-center justify-center text-sm font-medium">
-                      {index + 1}
-                    </span>
-                    <span className="text-gray-700 pt-0.5">{instruction}</span>
-                  </li>
-                ))}
-              </ol>
-            </div>
 
             {/* Dietary Customization Buttons */}
             <div className="pt-6 border-t">
@@ -1642,7 +1516,7 @@ export function RecipeGenerator({ savedRecipeCount = 0, recentIngredients = [], 
             <AlertDialogCancel>Save Later</AlertDialogCancel>
             <AlertDialogAction
               onClick={saveRecipe}
-              disabled={isSaving}
+              disabled={isSaving || isLoadingNutrition || isLoadingCost || isRegeneratingWithSubstitute}
               className="bg-emerald-600 hover:bg-emerald-700"
             >
               {isSaving ? (
@@ -1653,13 +1527,13 @@ export function RecipeGenerator({ savedRecipeCount = 0, recentIngredients = [], 
               ) : (
                 <>
                   <Save className="mr-2 h-4 w-4" />
-                  Save Now
+                  {isLoadingNutrition || isLoadingCost ? 'Finishing estimates…' : 'Save Now'}
                 </>
               )}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
-    </div>
+    </fieldset>
   );
 }

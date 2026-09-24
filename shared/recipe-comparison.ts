@@ -5,4 +5,6 @@ export interface RecipeComparisonSnapshot {
   source: 'label' | 'pantry' | 'dish' | 'random';
   originalNutrition: OriginalNutrition | null;
   freshNutrition: FreshNutritionEstimate | null;
+  detectedAdditives?: string[];
+  originalProductName?: string | null;
 }

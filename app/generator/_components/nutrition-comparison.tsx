@@ -77,12 +77,12 @@ export function NutritionComparison({
 
           {!original && (
             <p className="mt-3 rounded-lg bg-white p-3 text-sm text-blue-900 shadow-sm">
-              No original Nutrition Facts were provided. Add the package values in the input area to enable the before side; Recipe Reborn will not infer them from an ingredient list.
+              No original Nutrition Facts were provided for this recipe. Recipe Reborn will not infer package values from an ingredient list.
             </p>
           )}
           {original?.reviewRequired && (
             <p className="mt-3 rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm text-amber-950">
-              The scanned label values must be reviewed and confirmed in the input area before they are shown as exact source values.
+              The scanned label values have not been confirmed, so they are not shown as exact source values.
             </p>
           )}
 

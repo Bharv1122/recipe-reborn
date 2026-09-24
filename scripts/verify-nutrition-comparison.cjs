@@ -45,7 +45,7 @@ const moduleParent = module;
   });
   let providerCalls = 0;
   const originalFetch = global.fetch;
-  global.fetch = async () => { providerCalls++; return Response.json({ choices: [{ message: { content: JSON.stringify({ calories: 200.6, protein: 4.14, carbs: null, fat: -2, sodium: 0 }) } }] }); };
+  global.fetch = async () => { providerCalls++; return Response.json({ choices: [{ finish_reason: 'stop', message: { content: JSON.stringify({ calories: 200.6, protein: 4.14, carbs: null, fat: null, fiber: null, sodium: 0 }) } }] }); };
   const request = (body, authorized = true) => new Request('https://example.invalid/api/nutrition/estimate', { method: 'POST', headers: authorized ? { authorization: 'Bearer qa' } : {}, body: typeof body === 'string' ? body : JSON.stringify(body) });
   const recipe = { title: 'Oats', freshIngredients: ['1 cup oats'], instructions: ['Cook oats'], servings: '2' };
   try {
