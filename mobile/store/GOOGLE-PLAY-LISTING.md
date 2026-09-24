@@ -2,7 +2,8 @@
 
 - App name: Recipe Reborn
 - Category: Food & Drink
-- Contact/support: https://recipereborn.com/account-deletion
+- Contact/support: https://recipereborn.com/support
+- Account deletion: https://recipereborn.com/account-deletion
 - Privacy policy: https://recipereborn.com/privacy
 
 ## Short description

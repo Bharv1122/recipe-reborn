@@ -25,27 +25,44 @@ export function PackageNutritionReview({ value, onChange }: { value: OriginalNut
   </>;
 }
 
-export function RecipeComparison({ recipe, originalIngredients, original, isPackage }: {
+export type NutritionEstimateStatus = 'pending' | 'ready' | 'failed';
+
+export function RecipeComparison({ recipe, originalIngredients, original, isPackage, savedNutrition = null, estimateOnMount = true, onNutrition, onStatusChange }: {
   recipe: GeneratedRecipe;
   originalIngredients: string;
   original: OriginalNutrition | null;
   isPackage: boolean;
+  savedNutrition?: FreshNutritionEstimate | null;
+  estimateOnMount?: boolean;
+  onNutrition?: (value: FreshNutritionEstimate) => void;
+  onStatusChange?: (status: NutritionEstimateStatus) => void;
 }) {
-  const [nutrition, setNutrition] = useState<FreshNutritionEstimate | null>(null);
-  const [busy, setBusy] = useState(true);
+  const [nutrition, setNutrition] = useState<FreshNutritionEstimate | null>(savedNutrition);
+  const [busy, setBusy] = useState(!savedNutrition && estimateOnMount);
   const [failed, setFailed] = useState(false);
   const [attempt, setAttempt] = useState(0);
+  const requestBody = JSON.stringify({ title: recipe.title, freshIngredients: recipe.freshIngredients, instructions: recipe.instructions, servings: recipe.servings });
   useEffect(() => {
+    if (attempt === 0 && (savedNutrition || !estimateOnMount)) return;
     const controller = new AbortController();
     let active = true;
+    let settled = false;
+    onStatusChange?.('pending');
+    const fail = () => {
+      if (!active || settled) return;
+      settled = true; setFailed(true); setBusy(false); onStatusChange?.('failed');
+    };
+    const timeout = setTimeout(() => { fail(); controller.abort(); }, 45_000);
     apiRequest<FreshNutritionEstimate>('/api/nutrition/estimate', {
       method: 'POST', signal: controller.signal,
-      body: JSON.stringify({ title: recipe.title, freshIngredients: recipe.freshIngredients, instructions: recipe.instructions, servings: recipe.servings }),
-    }).then((value) => { if (active) setNutrition(value); })
-      .catch(() => { if (active) setFailed(true); })
-      .finally(() => { if (active) setBusy(false); });
-    return () => { active = false; controller.abort(); };
-  }, [recipe, attempt]);
+      body: requestBody,
+    }).then((value) => {
+      if (active && !settled) {
+        settled = true; setNutrition(value); setBusy(false); onNutrition?.(value); onStatusChange?.('ready');
+      }
+    }).catch(fail).finally(() => clearTimeout(timeout));
+    return () => { active = false; clearTimeout(timeout); controller.abort(); };
+  }, [requestBody, attempt, savedNutrition, estimateOnMount, onNutrition, onStatusChange]);
 
   const before = isPackage ? detectAdditives(originalIngredients) : [];
   const after = isPackage ? detectAdditives(recipe.freshIngredients.join(', ')) : [];
@@ -76,6 +93,7 @@ export function RecipeComparison({ recipe, originalIngredients, original, isPack
       {isPackage ? <Text style={styles.note}>Package: {readyOriginal ? `${readyOriginal.basisLabel} · ${readyOriginal.sourceLabel}` : original?.reviewRequired ? 'Confirm the scanned values in the ingredient review to include them here.' : 'No package Nutrition Facts were provided.'}</Text> : null}
       <Text style={styles.note}>Homemade: {nutrition?.basisLabel || 'Per recipe serving'} · estimated</Text>
       {busy ? <Text accessibilityLiveRegion="polite" style={styles.note}>Estimating homemade nutrition…</Text> : null}
+      {!estimateOnMount && !nutrition && !busy && !failed ? <Text style={styles.note}>No homemade nutrition estimate was saved with this recipe.</Text> : null}
       <View style={styles.nutrient}>
         <Text style={styles.nutrientName}>Nutrient</Text>
         {isPackage ? <Text style={styles.number}>Package</Text> : null}
@@ -87,7 +105,7 @@ export function RecipeComparison({ recipe, originalIngredients, original, isPack
         <Text style={styles.number}>{nutrition?.[key] == null ? '—' : `${nutrition[key]} ${unit}`}</Text>
       </View>)}
       <Text style={styles.note}>Homemade values are estimates and vary with ingredients and portions.{isPackage ? ' Serving sizes may differ; these are not equal-portion comparisons.' : ''} — means unavailable.</Text>
-      {failed ? <><Text style={styles.note}>Nutrition could not load. Your recipe is ready to use.</Text><Button label="Retry nutrition" secondary onPress={() => { setBusy(true); setFailed(false); setNutrition(null); setAttempt((value) => value + 1); }} /></> : null}
+      {failed ? <><Text style={styles.note}>Nutrition could not load. Your recipe is ready to use.</Text><Button label="Retry nutrition" secondary onPress={() => { setBusy(true); setFailed(false); setNutrition(null); onStatusChange?.('pending'); setAttempt((value) => value + 1); }} /></> : null}
     </Card>
   </>;
 }

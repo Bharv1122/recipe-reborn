@@ -3,15 +3,16 @@ import { Platform } from 'react-native';
 import * as Device from 'expo-device';
 import { useSQLiteContext } from 'expo-sqlite';
 import { apiRequest, publicRequest } from '@/services/api';
-import { clearRegisteredPushToken, clearTokens, readRegisteredPushToken, readTokens, saveTokens } from '@/services/auth-storage';
+import { clearRegisteredPushToken, clearTokens, getSessionRevision, readRegisteredPushToken, readTokens, saveCachedUser, saveTokens } from '@/services/auth-storage';
 import type { MobileUser, TokenPair } from '@/types';
 import { clearShoppingCache } from '@/services/shopping-cache';
+import { restoreStoredSession } from '@/services/session-recovery';
 
 interface AuthContextValue {
   user: MobileUser | null;
   loading: boolean;
   signIn(email: string, password: string): Promise<void>;
-  signUp(email: string, password: string, code?: string): Promise<void>;
+  signUp(email: string, password: string, code?: string, adultConfirmed?: boolean): Promise<void>;
   signOut(): Promise<void>;
   refreshAccount(): Promise<void>;
 }
@@ -24,21 +25,24 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [loading, setLoading] = useState(true);
 
   const refreshAccount = useCallback(async () => {
+    const revision = getSessionRevision();
     const data = await apiRequest<{ user: MobileUser }>('/api/mobile/auth/me');
+    if (!await saveCachedUser(data.user, revision)) return;
     setUser(data.user);
   }, []);
 
   useEffect(() => {
     (async () => {
       try {
-        if (await readTokens()) await refreshAccount();
+        setUser(await restoreStoredSession());
       } catch {
-        await clearTokens();
+        // A local storage read failure must not erase an otherwise valid token.
+        setUser(null);
       } finally {
         setLoading(false);
       }
     })();
-  }, [refreshAccount]);
+  }, []);
 
   const signIn = useCallback(async (email: string, password: string) => {
     const data = await publicRequest<{ tokens: TokenPair; user: MobileUser }>('/api/mobile/auth/login', {
@@ -51,14 +55,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       }),
     });
     await clearShoppingCache(db);
+    await clearTokens();
     await saveTokens(data.tokens);
+    await saveCachedUser(data.user);
     setUser(data.user);
   }, [db]);
 
-  const signUp = useCallback(async (email: string, password: string, code?: string) => {
+  const signUp = useCallback(async (email: string, password: string, code?: string, adultConfirmed = false) => {
     await publicRequest('/api/signup', {
       method: 'POST',
-      body: JSON.stringify({ email, password, confirmPassword: password, code: code || undefined, src: 'mobile' }),
+      body: JSON.stringify({ email, password, confirmPassword: password, code: code || undefined, src: 'mobile', adultConfirmed }),
     });
     await signIn(email, password);
   }, [signIn]);

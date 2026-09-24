@@ -1,11 +1,11 @@
 import { useCallback, useRef, useState } from 'react';
 import { Image, ScrollView, StyleSheet, Text, View } from 'react-native';
-import { File } from 'expo-file-system';
 import { CameraView, useCameraPermissions, type BarcodeScanningResult } from 'expo-camera';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { apiRequest, apiResponse } from '@/services/api';
 import { makePendingFoodPhoto, type CapturePurpose } from '@/services/camera-inventory';
 import { stageScanRecipeHandoff } from '@/services/scan-recipe-handoff';
+import { preparePhotoUpload, removeUploadCopy } from '@/services/photo-upload';
 import { Button, Card, InlineError, Screen } from '@/components/ui';
 import { colors } from '@/theme';
 import type { OriginalNutrition } from '../../../../shared/nutrition-facts';
@@ -56,9 +56,11 @@ export default function ScanScreen() {
   const reviewLabel = async () => {
     if (!photoUri) return;
     setBusy(true); setError(null);
+    let upload: Awaited<ReturnType<typeof preparePhotoUpload>> | null = null;
     try {
+      upload = await preparePhotoUpload(photoUri);
       const form = new FormData();
-      form.append('image', new File(photoUri));
+      form.append('image', upload);
       const response = await apiResponse('/api/extract-recipe-from-photo', { method: 'POST', body: form });
       const data = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(data.error || 'Could not read that package label.');
@@ -77,7 +79,10 @@ export default function ScanScreen() {
       router.push('/generate');
     } catch (value) {
       setError(value instanceof Error ? value.message : 'Could not read that package label.');
-    } finally { setBusy(false); }
+    } finally {
+      if (upload) removeUploadCopy(upload);
+      setBusy(false);
+    }
   };
 
   const capture = async () => {

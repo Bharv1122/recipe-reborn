@@ -7,6 +7,7 @@ import { getRecipe } from '@/services/recipes';
 import { stageShoppingDraft } from '@/services/shopping-handoff';
 import type { Recipe } from '@/types';
 import { colors } from '@/theme';
+import { RecipeComparison } from '@/components/recipe-comparison';
 
 function parseArray(value: string): string[] {
   try { const parsed = JSON.parse(value); return Array.isArray(parsed) ? parsed.map(String) : [value]; }
@@ -52,6 +53,15 @@ export default function RecipeDetailScreen() {
           <Button label="Delete saved recipe" secondary onPress={remove} />
         </> : null}
       </Card> : <Text style={styles.meta}>Loading recipe…</Text>}
+      {recipe?.comparisonSnapshot ? <RecipeComparison
+        key={recipe.id}
+        recipe={{ title: recipe.title, freshIngredients: ingredients, instructions, prepTime: recipe.prepTime || '', cookTime: recipe.cookTime || '', servings: recipe.servings || '' }}
+        originalIngredients={recipe.originalIngredients}
+        original={recipe.comparisonSnapshot.originalNutrition}
+        isPackage={recipe.comparisonSnapshot.source === 'label'}
+        savedNutrition={recipe.comparisonSnapshot.freshNutrition}
+        estimateOnMount={false}
+      /> : null}
     </ScrollView>
   </Screen>;
 }

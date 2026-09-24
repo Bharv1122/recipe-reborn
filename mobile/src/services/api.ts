@@ -1,10 +1,10 @@
 import Constants from 'expo-constants';
 import { fetch as expoFetch } from 'expo/fetch';
-import { clearTokens, readTokens, saveTokens } from '@/services/auth-storage';
+import { clearTokens, getSessionRevision, readTokens, saveTokens } from '@/services/auth-storage';
 import type { TokenPair } from '@/types';
 
 const baseUrl = String(Constants.expoConfig?.extra?.apiBaseUrl || 'https://recipereborn.com').replace(/\/$/, '');
-let refreshInFlight: Promise<TokenPair | null> | null = null;
+let refreshInFlight: { revision: number; promise: Promise<TokenPair | null> } | null = null;
 
 export class ApiError extends Error {
   constructor(message: string, public status: number) {
@@ -19,28 +19,40 @@ async function parseResponse<T>(response: Response): Promise<T> {
   return body as T;
 }
 
-async function refreshSession(): Promise<TokenPair | null> {
-  if (refreshInFlight) return refreshInFlight;
-  refreshInFlight = (async () => {
-    const existing = await readTokens();
-    if (!existing) return null;
+function ensureSession(revision: number) {
+  if (revision !== getSessionRevision()) throw new ApiError('Your sign-in changed. Please try again.', 409);
+}
+
+async function refreshSession(revision: number): Promise<TokenPair | null> {
+  if (refreshInFlight?.revision === revision) return refreshInFlight.promise;
+  const promise = (async () => {
     try {
+      const existing = await readTokens();
+      ensureSession(revision);
+      if (!existing) return null;
       const response = await fetch(`${baseUrl}/api/mobile/auth/refresh`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ refreshToken: existing.refreshToken }),
       });
       const data = await parseResponse<{ tokens: TokenPair }>(response);
-      await saveTokens(data.tokens);
+      ensureSession(revision);
+      if (!await saveTokens(data.tokens, revision)) ensureSession(revision);
       return data.tokens;
-    } catch {
-      await clearTokens();
-      return null;
-    } finally {
-      refreshInFlight = null;
+    } catch (error) {
+      ensureSession(revision);
+      // A connection failure or temporary server error does not revoke a
+      // session. Keep its refresh token for a later online retry.
+      if (error instanceof ApiError && (error.status === 401 || error.status === 403)) {
+        await clearTokens(revision);
+        return null;
+      }
+      throw error;
     }
   })();
-  return refreshInFlight;
+  refreshInFlight = { revision, promise };
+  try { return await promise; }
+  finally { if (refreshInFlight?.promise === promise) refreshInFlight = null; }
 }
 
 export async function publicRequest<T>(path: string, init: RequestInit = {}): Promise<T> {
@@ -52,7 +64,9 @@ export async function publicRequest<T>(path: string, init: RequestInit = {}): Pr
 }
 
 export async function apiResponse(path: string, init: RequestInit = {}, retry = true): Promise<Response> {
+  const revision = getSessionRevision();
   const tokens = await readTokens();
+  ensureSession(revision);
   if (!tokens) throw new ApiError('Please sign in again.', 401);
   const isFormData = typeof FormData !== 'undefined' && init.body instanceof FormData;
   // Expo File objects need Expo's Blob-aware multipart transport.
@@ -64,16 +78,20 @@ export async function apiResponse(path: string, init: RequestInit = {}, retry = 
       ...init.headers,
     },
   });
+  ensureSession(revision);
   if (response.status === 401 && retry) {
-    const refreshed = await refreshSession();
+    const refreshed = await refreshSession(revision);
     if (refreshed) return apiResponse(path, init, false);
   }
   return response;
 }
 
 export async function apiRequest<T>(path: string, init: RequestInit = {}, retry = true): Promise<T> {
+  const revision = getSessionRevision();
   const response = await apiResponse(path, init, retry);
-  return parseResponse<T>(response);
+  const value = await parseResponse<T>(response);
+  ensureSession(revision);
+  return value;
 }
 
 export { baseUrl };

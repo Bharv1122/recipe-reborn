@@ -44,18 +44,17 @@ async function main() {
   assert.match(mealAddRoute, /skipDuplicates:\s*true/, 'The mobile API must make duplicate adds idempotent.');
   assert.match(mealAddRoute, /alreadyExists:\s*result\.count === 0/, 'The mobile API must report an idempotent repeat.');
   assert.match(prismaSchema, /@@unique\(\[mealPlanId, recipeId, day, mealType\]\)/, 'The database schema must prevent duplicate recipe slots.');
-  assert.match(generatorScreen, /label="Specific dish"/);
-  assert.match(generatorScreen, /label="Random"/);
+  assert.match(generatorScreen, /setSource\('dish'\)/, 'Dish entry must remain reachable in the simplified creation flow.');
   assert.match(generatorRoute, /source === 'dish'/);
   assert.match(generatorRoute, /source === 'random'/);
   assert.match(shoppingRoute, /bulkItemSchema/);
   assert.match(shoppingRoute, /prisma\.\$transaction/);
-  assert.match(scanScreen, /label="Generate recipe"/);
+  assert.match(scanScreen, /onPress=\{generateFromBarcode\}/, 'A found barcode must hand its reviewed ingredients to generation.');
   assert.match(scanScreen, /label="Scan another" secondary/);
-  assert.match(scanScreen, /Extract and review ingredients/);
+  assert.match(scanScreen, /onPress=\{mode === 'label' \? reviewLabel/);
   assert.match(scanScreen, /stageScanRecipeHandoff/);
   assert.match(generatorScreen, /takeScanRecipeHandoff/);
-  assert.match(generatorScreen, /Review the scanned ingredients/);
+  assert.match(generatorScreen, /value=\{ingredients\} onChangeText=\{setIngredients\}/, 'Scanned ingredients must remain editable before generation.');
   assert.match(labelRoute, /getRequestUserId\(req\)/, 'Label extraction must accept the secure native bearer token.');
 
   assert.match(config, /icon:\s*'\.\/assets\/images\/recipe-reborn-icon\.png'/);
@@ -80,7 +79,7 @@ async function main() {
   assert.deepEqual(pngSize(iconFiles[3]), [432, 432]);
   assert.deepEqual(pngSize(iconFiles[4]), [512, 512]);
 
-  console.log('Native repair verification passed: camera config, scan-to-generator review, weekly-plan parity, bulk shopping parsing, protected dish/random entry points, and native/store icon assets.');
+  console.log('Native repair verification passed: camera config, scan-to-generator review, weekly-plan parity, bulk shopping parsing, protected dish/random server paths, and native/store icon assets.');
 }
 
 main().catch((error) => {

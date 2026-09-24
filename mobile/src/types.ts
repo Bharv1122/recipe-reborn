@@ -1,3 +1,5 @@
+import type { RecipeComparisonSnapshot } from '../../shared/recipe-comparison';
+
 export interface MobileUser {
   id: string;
   email: string | null;
@@ -45,6 +47,7 @@ export interface RecipeSummary {
 }
 
 export interface Recipe extends RecipeSummary {
+  comparisonSnapshot?: RecipeComparisonSnapshot | null;
   originalIngredients: string;
   freshIngredients: string;
   instructions: string;

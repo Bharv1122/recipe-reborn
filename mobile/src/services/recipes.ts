@@ -1,5 +1,6 @@
 import { ApiError, apiRequest, apiResponse } from '@/services/api';
 import type { GeneratedRecipe, Recipe, RecipeSummary } from '@/types';
+import type { RecipeComparisonSnapshot } from '../../../shared/recipe-comparison';
 
 export async function listRecipes() {
   return apiRequest<{ recipes: RecipeSummary[] }>('/api/mobile/recipes');
@@ -9,10 +10,10 @@ export async function getRecipe(id: string) {
   return apiRequest<{ recipe: Recipe }>(`/api/mobile/recipes/${encodeURIComponent(id)}`);
 }
 
-export async function saveGeneratedRecipe(originalIngredients: string, recipe: GeneratedRecipe) {
+export async function saveGeneratedRecipe(originalIngredients: string, recipe: GeneratedRecipe, comparisonSnapshot?: RecipeComparisonSnapshot) {
   return apiRequest<{ recipe: Recipe }>('/api/mobile/recipes', {
     method: 'POST',
-    body: JSON.stringify({ originalIngredients, dietaryTags: [], ...recipe }),
+    body: JSON.stringify({ originalIngredients, dietaryTags: [], ...recipe, comparisonSnapshot }),
   });
 }
 
