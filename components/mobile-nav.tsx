@@ -33,11 +33,11 @@ export function MobileNav({ authStatus }: MobileNavProps) {
       <Button
         variant="ghost"
         size="icon"
-        className="text-white hover:text-emerald-900 hover:bg-white/90 lg:hidden"
+        className="shrink-0 text-white hover:text-emerald-900 hover:bg-white/90 sm:w-auto sm:px-3"
         aria-label="Open menu"
         onClick={() => setOpen(true)}
       >
-        <Menu className="h-6 w-6" />
+        <Menu className="h-6 w-6" /><span className="ml-2 hidden sm:inline">Menu</span>
       </Button>
       <SheetContent
         side="right"
