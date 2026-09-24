@@ -8,6 +8,7 @@ import { requiredRecipeMetadataSchema } from '@/lib/recipe-metadata-validation';
 import { logServerError } from '@/lib/server-error-log';
 import { clearGenerationCancellation, wasGenerationCanceled } from '@/lib/generation-cancellation';
 import { getRequestUserId } from '@/lib/request-auth';
+import { buildIngredientReconciliationPrompt, validateIngredientReconciliation } from '@/lib/recipe-ingredient-integrity';
 
 export const dynamic = 'force-dynamic';
 export const maxDuration = 60;
@@ -266,7 +267,7 @@ Provide a JSON response with this exact structure:
 }
 
 Respond with raw JSON only. Do not include code blocks, markdown, or any other formatting.`;
-    } else if (dietaryRestriction) {
+    } else if (dietaryRestriction && source !== 'pantry') {
       prompt = `Transform the following recipe to be ${dietaryRestriction} compliant. Ensure ALL ingredients and instructions align with ${dietaryRestriction} dietary restrictions.
 
 Original processed ingredients: ${ingredients}
@@ -288,6 +289,7 @@ Respond with raw JSON only. Do not include code blocks, markdown, or any other f
       prompt = `You are a professional chef helping users cook with what they already have at home.
 
 The user has these ingredients on hand in their pantry/fridge: ${ingredients}
+${dietaryRestriction ? `Additional dietary request: ${dietaryRestriction}` : ''}
 ${pantryTargetTitle ? `The user selected this specific dish idea: ${pantryTargetTitle}` : ''}
 ${pantryExtraIngredient ? `They intentionally chose to buy exactly one additional ingredient: ${pantryExtraIngredient}. Include it as a required ingredient, do not mark it optional, and do not add any other required grocery ingredients beyond basic staples.` : ''}
 
@@ -339,6 +341,9 @@ Provide a JSON response with this exact structure:
 Respond with raw JSON only. Do not include code blocks, markdown, or any other formatting.`;
     }
 
+    prompt += `\n\nINGREDIENT LIST COMPLETENESS:
+The legacy field name "freshIngredients" means the COMPLETE recipe ingredient list, not only fresh foods or extra groceries to buy. Include every food used in any cooking or serving step with a quantity, including ingredients the user already has, canned or packaged foods, broth, seasonings, water used in the recipe, garnishes, and optional toppings. Mark optional ingredients as optional in both the list and steps. Do not put a food in the instructions without listing it. You do not have to use every pantry item: choose a coherent dish, and omit unused inventory from both the list and steps.`;
+
     // Apply the user's saved food preferences to every generation variant
     const prefLines: string[] = [];
     if (user.allergies.length > 0) {
@@ -380,11 +385,17 @@ Respond with raw JSON only. Do not include code blocks, markdown, or any other f
       }),
     };
 
+    // Initial generation, any transient retry, and ingredient reconciliation
+    // share one deadline, leaving room for quota/cancellation cleanup.
+    const generationDeadline = Date.now() + 52_000;
     const openModelStream = async () => {
       const controller = new AbortController();
-      const timeout = setTimeout(() => controller.abort(), 52_000);
+      const remaining = generationDeadline - Date.now();
+      if (remaining <= 0) throw new Error('Recipe generation timed out');
+      const timeout = setTimeout(() => controller.abort(), remaining);
       const abortForClient = () => controller.abort();
       request.signal.addEventListener('abort', abortForClient, { once: true });
+      if (request.signal.aborted) controller.abort();
 
       const cleanup = () => {
         clearTimeout(timeout);
@@ -436,6 +447,53 @@ Respond with raw JSON only. Do not include code blocks, markdown, or any other f
       throw new Error(`LLM API request failed (${response.status})`);
     }
 
+    let outputCanceled = false;
+    let ingredientReviewController: AbortController | null = null;
+    const reconcilePantryIngredients = async (recipe: z.infer<typeof recipeResultSchema>) => {
+      const remaining = Math.min(15_000, generationDeadline - Date.now());
+      if (remaining <= 0) throw new Error('Ingredient review timed out');
+      const controller = new AbortController();
+      ingredientReviewController = controller;
+      const abortForClient = () => controller.abort();
+      request.signal.addEventListener('abort', abortForClient, { once: true });
+      if (request.signal.aborted || outputCanceled) controller.abort();
+      let timedOut = false;
+      const timeout = setTimeout(() => { timedOut = true; controller.abort(); }, remaining);
+      try {
+        const review = await fetch(AI_CHAT_URL, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${AI_API_KEY}` },
+          signal: controller.signal,
+          body: JSON.stringify({
+            model: MODEL_SMART,
+            messages: [{ role: 'user', content: buildIngredientReconciliationPrompt({
+              originalPrompt: prompt, pantryIngredients: ingredients, recipe,
+            }) }],
+            stream: false,
+            response_format: { type: 'json_object' },
+            max_tokens: 3500,
+            reasoning_effort: 'low',
+          }),
+        });
+        if (!review.ok) throw new Error('Ingredient review unavailable');
+        const result = await review.json();
+        const choice = result.choices?.[0];
+        if (choice?.finish_reason !== 'stop' || typeof choice?.message?.content !== 'string') {
+          throw new Error('Ingredient review was incomplete');
+        }
+        return validateIngredientReconciliation(JSON.parse(choice.message.content), {
+          pantryIngredients: ingredients, recipe,
+        });
+      } catch (error) {
+        if (timedOut) throw new Error('Ingredient review timed out');
+        throw error;
+      } finally {
+        clearTimeout(timeout);
+        request.signal.removeEventListener('abort', abortForClient);
+        ingredientReviewController = null;
+      }
+    };
+
     const stream = new ReadableStream({
       async start(controller) {
         const reader = response?.body?.getReader();
@@ -463,14 +521,24 @@ Respond with raw JSON only. Do not include code blocks, markdown, or any other f
                       throw new Error('Recipe response did not match the required structure');
                     }
                     const finalResult = validation.data;
+                    if (outputCanceled || request.signal.aborted || await wasGenerationCanceled(user.id, generationId.data)) {
+                      throw new DOMException('Recipe generation canceled', 'AbortError');
+                    }
+                    // Do not send a pantry recipe to either client (or start
+                    // nutrition estimation) until its ingredient list covers
+                    // the foods used throughout the cooking/serving steps.
+                    if (source === 'pantry') {
+                      modelStream.cleanup();
+                      finalResult.freshIngredients = await reconcilePantryIngredients(finalResult);
+                    }
                     const includedAllergen = findIncludedAllergen(
-                      finalResult.freshIngredients,
+                      [...finalResult.freshIngredients, ...finalResult.instructions],
                       user.allergies
                     );
                     if (includedAllergen) {
                       throw new Error('Recipe response included a saved allergen');
                     }
-                    if (await wasGenerationCanceled(user.id, generationId.data)) {
+                    if (outputCanceled || request.signal.aborted || await wasGenerationCanceled(user.id, generationId.data)) {
                       throw new DOMException('Recipe generation canceled', 'AbortError');
                     }
                     const charged = await chargeGenerationSlot();
@@ -479,7 +547,7 @@ Respond with raw JSON only. Do not include code blocks, markdown, or any other f
                     }
                     // Close the narrow race where cancellation lands after the
                     // pre-charge check but before the completed event is sent.
-                    if (await wasGenerationCanceled(user.id, generationId.data)) {
+                    if (outputCanceled || request.signal.aborted || await wasGenerationCanceled(user.id, generationId.data)) {
                       throw new DOMException('Recipe generation canceled', 'AbortError');
                     }
                     const finalData = JSON.stringify({
@@ -495,6 +563,7 @@ Respond with raw JSON only. Do not include code blocks, markdown, or any other f
                       logServerError('generation_validation_failed', e);
                     }
                     await rollbackGenerationCharge();
+                    if (outputCanceled) return;
                     controller.enqueue(
                       encoder.encode(
                         `data: ${JSON.stringify({
@@ -518,7 +587,7 @@ Respond with raw JSON only. Do not include code blocks, markdown, or any other f
                     message: 'Generating recipe...',
                   });
                   controller.enqueue(encoder.encode(`data: ${progressData}\n\n`));
-                } catch (e) {
+                } catch {
                   // Skip invalid JSON
                 }
               }
@@ -529,6 +598,7 @@ Respond with raw JSON only. Do not include code blocks, markdown, or any other f
           modelStream.abort();
           modelStream.cleanup();
           await rollbackGenerationCharge();
+          if (outputCanceled) return;
           controller.enqueue(
             encoder.encode(
               `data: ${JSON.stringify({ status: 'error', message: 'Stream failed' })}\n\n`
@@ -548,6 +618,8 @@ Respond with raw JSON only. Do not include code blocks, markdown, or any other f
         controller.close();
       },
       async cancel() {
+        outputCanceled = true;
+        ingredientReviewController?.abort();
         modelStream.abort();
         modelStream.cleanup();
         await rollbackGenerationCharge();
