@@ -32,6 +32,14 @@
         "track": "alpha",
         "releaseStatus": "completed"
       }
+    },
+    "play-alpha-draft": {
+      "android": {
+        "applicationId": "com.recipereborn.app",
+        "track": "alpha",
+        "releaseStatus": "draft",
+        "changesNotSentForReview": true
+      }
     }
   }
 }

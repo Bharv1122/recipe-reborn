@@ -22,7 +22,7 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
   },
   android: {
     package: process.env.EXPO_ANDROID_PACKAGE || 'com.recipereborn.app',
-    versionCode: 14,
+    versionCode: 15,
     softwareKeyboardLayoutMode: 'resize',
     adaptiveIcon: {
       foregroundImage: './assets/images/recipe-reborn-android-foreground.png',
@@ -63,6 +63,7 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
       },
     ],
     ['expo-notifications', { color: '#0B6B3A' }],
+    './plugins/with-optional-microphone',
   ],
   experiments: { typedRoutes: true },
   extra: {
