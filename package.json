@@ -8,6 +8,7 @@
     "lint": "eslint .",
     "verify:meal-plan": "tsx scripts/verify-meal-plan-safety.ts",
     "verify:meal-plan-generation": "tsx scripts/verify-meal-plan-generation.ts",
+    "verify:chef-chat": "node scripts/verify-chef-chat.cjs",
     "verify:ai-features": "tsx scripts/verify-ai-features.ts",
     "verify:pantry-inventory": "tsx scripts/verify-pantry-inventory.ts",
     "verify:partner-code": "tsx scripts/verify-partner-code.ts",

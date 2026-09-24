@@ -10,6 +10,7 @@ import { Toaster } from 'react-hot-toast';
 import { SrcCapture } from './_components/src-capture';
 import { getVerifiedServerSession } from '@/lib/verified-session';
 import { FunnelVisitTracker } from './_components/funnel-visit-tracker';
+import { AskChef } from '@/components/ask-chef';
 
 const inter = Inter({ subsets: ['latin'] });
 
@@ -146,7 +147,8 @@ export default async function RootLayout({
           <SrcCapture />
           <FunnelVisitTracker />
           <Header />
-          <main>{children}</main>
+          <main className="pb-24">{children}</main>
+          <AskChef />
           <Toaster position="top-center" />
         </Providers>
         <Analytics />
