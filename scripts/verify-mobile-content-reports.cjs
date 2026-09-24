@@ -53,7 +53,7 @@ function hooks() {
   assert.deepEqual(JSON.parse(calls[2].init.body), { source: 'generated', reason: 'incorrect', recipe: { title: 'Test soup', freshIngredients: ['water'], instructions: ['Boil'] } });
   for (const [status, body] of [[200, { ok: true, id: 'id' }], [201, { ok: true }], [201, { ok: false, id: 'id' }], [201, { ok: true, id: ' ' }]]) {
     globalThis.reportApi = async () => new Response(JSON.stringify(body), { status });
-    await assert.rejects(service.submitContentReport(selected, 'unsafe', ''), /could not confirm/);
+    await assert.rejects(service.submitContentReport(selected, 'unsafe', ''), { message: 'We could not confirm that your report was saved. Please try again.' });
   }
   globalThis.reportApi = async () => new Response('{', { status: 201 });
   await assert.rejects(service.submitContentReport(selected, 'unsafe', ''), /could not confirm/);
@@ -61,8 +61,26 @@ function hooks() {
     globalThis.reportApi = async () => new Response(JSON.stringify({ error: 'Please try later.' }), { status });
     await assert.rejects(service.submitContentReport(selected, 'unsafe', ''), error => error.status === status && error.message === 'Please try later.');
   }
-  globalThis.reportApi = async () => { throw new Error('Network unavailable'); };
-  await assert.rejects(service.submitContentReport(selected, 'unsafe', ''), /Network unavailable/);
+  for (const failure of [new TypeError('fetch failed: java.net.UnknownHostException: Unable to resolve host recipereborn.com'), new Error('Network unavailable'), 'native transport failed']) {
+    globalThis.reportApi = async () => { throw failure; };
+    await assert.rejects(service.submitContentReport(selected, 'unsafe', ''), error => {
+      assert.equal(error.message, 'We could not confirm your report. Check your connection and try again.');
+      assert.doesNotMatch(error.message, /java\.|UnknownHostException|fetch failed|native transport/i);
+      return true;
+    });
+  }
+  const originalSetTimeout = globalThis.setTimeout, originalClearTimeout = globalThis.clearTimeout;
+  let fireTimeout, timerCleared = false;
+  const timerToken = Symbol('report timer');
+  try {
+    globalThis.setTimeout = (callback, milliseconds) => { assert.equal(milliseconds, 30_000); fireTimeout = callback; return timerToken; };
+    globalThis.clearTimeout = token => { assert.equal(token, timerToken); timerCleared = true; };
+    globalThis.reportApi = async (_url, init) => new Promise((_resolve, reject) => init.signal.addEventListener('abort', () => reject(new Error('native AbortException')), { once: true }));
+    const timedOut = service.submitContentReport(selected, 'unsafe', '');
+    fireTimeout();
+    await assert.rejects(timedOut, { message: 'We could not confirm your report in time. Please try again when your connection is ready.' });
+    assert.equal(timerCleared, true);
+  } finally { globalThis.setTimeout = originalSetTimeout; globalThis.clearTimeout = originalClearTimeout; }
   globalThis.reportApi = async () => ({ status: 201, ok: true, json: async () => { globalThis.reportRevision++; return { ok: true, id: 'stale' }; } });
   await assert.rejects(service.submitContentReport(selected, 'unsafe', ''), error => error.status === 409);
   console.log('PASS: transport sends only selected content; saved snapshot stays server-owned; only durable 201 + ID succeeds; malformed, network, HTTP and session-change failures remain failures.');

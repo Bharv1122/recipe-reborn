@@ -7,6 +7,8 @@ export type ReportTarget =
   | { source: 'saved'; recipeId: string }
   | { source: 'chat'; message: string };
 
+class ReportConfirmationError extends Error {}
+
 export async function submitContentReport(target: ReportTarget, reason: ReportReason, details: string): Promise<string> {
   const revision = getSessionRevision();
   // Send only the selected content, never a full conversation or account profile.
@@ -31,11 +33,14 @@ export async function submitContentReport(target: ReportTarget, reason: ReportRe
       throw new ApiError(typeof message === 'string' ? message : 'Your report could not be sent. Please try again.', response.status);
     }
     if (response.status !== 201 || body?.ok !== true || typeof body.id !== 'string' || !body.id.trim()) {
-      throw new Error('We could not confirm that your report was saved. Please try again.');
+      throw new ReportConfirmationError('We could not confirm that your report was saved. Please try again.');
     }
     return body.id;
   } catch (error) {
-    if (controller.signal.aborted) throw new Error('We could not confirm your report in time. Please try again when your connection is ready.');
-    throw error;
+    if (error instanceof ApiError || error instanceof ReportConfirmationError) throw error;
+    if (controller.signal.aborted) throw new ReportConfirmationError('We could not confirm your report in time. Please try again when your connection is ready.');
+    // A transport failure can happen after the server saved the report. Keep
+    // that uncertainty explicit and do not expose native networking details.
+    throw new ReportConfirmationError('We could not confirm your report. Check your connection and try again.');
   } finally { clearTimeout(timer); }
 }

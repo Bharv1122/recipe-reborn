@@ -21,6 +21,7 @@ node_modules/
 /prisma/
 /public/
 /scripts/
+/supabase/
 /types/
 
 # Root web configuration and setup scripts are not native build inputs.
