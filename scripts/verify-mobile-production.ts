@@ -71,6 +71,34 @@ async function main() {
     });
     assert.equal(savedRecipe.response.status, 201, JSON.stringify(savedRecipe.body));
     const recipeId = savedRecipe.body.recipe.id as string;
+    const reportBody = { reason: 'other', details: 'Synthetic release verification; not a customer report.' };
+    const submittedReports = [];
+    for (const selectedContent of [
+      { source: 'generated', recipe: { title: 'Synthetic report soup', freshIngredients: ['carrots'], instructions: ['Cook safely.'] } },
+      { source: 'saved', recipeId },
+      { source: 'chat', message: 'Synthetic selected assistant response.' },
+    ]) {
+      const report = await jsonRequest('/api/mobile/recipe-reports', {
+        method: 'POST', headers: auth, body: JSON.stringify({ ...reportBody, ...selectedContent }),
+      });
+      assert.equal(report.response.status, 201, JSON.stringify(report.body));
+      assert.equal(report.body.ok, true);
+      assert.equal(typeof report.body.id, 'string');
+      submittedReports.push(report.body.id as string);
+    }
+    const storedChat = await prisma.recipeReport.findFirst({ where: { id: submittedReports[2], userId: me.body.user.id } });
+    assert.deepEqual(storedChat?.recipeSnapshot, { kind: 'chat', content: 'Synthetic selected assistant response.' });
+    const storedRecipe = await prisma.recipeReport.findFirst({ where: { id: submittedReports[1], userId: me.body.user.id } });
+    assert.equal(storedRecipe?.recipeTitle, 'Synthetic carrot soup');
+    // With three stored reports, a burst must allow exactly seven more. This
+    // verifies the actual Postgres row lock across concurrent server requests.
+    const reportBurst = await Promise.all(Array.from({ length: 10 }, (_, index) => jsonRequest('/api/mobile/recipe-reports', {
+      method: 'POST', headers: auth,
+      body: JSON.stringify({ ...reportBody, source: 'chat', message: `Synthetic concurrent report ${index}.` }),
+    })));
+    assert.equal(reportBurst.filter(result => result.response.status === 201).length, 7, JSON.stringify(reportBurst.map(result => ({ status: result.response.status, body: result.body }))));
+    assert.equal(reportBurst.filter(result => result.response.status === 429).length, 3);
+    assert.equal(await prisma.recipeReport.count({ where: { userId: me.body.user.id } }), 10);
     const recipes = await jsonRequest('/api/mobile/recipes', { headers: auth });
     assert.equal(recipes.response.status, 200, JSON.stringify(recipes.body));
     assert.ok(recipes.body.recipes.some((recipe: { id: string }) => recipe.id === recipeId));
@@ -187,6 +215,7 @@ async function main() {
       method: 'POST', headers: deleteAuth, body: JSON.stringify({ password, confirmation: 'DELETE' }),
     });
     assert.equal(deletion.response.status, 200, JSON.stringify(deletion.body));
+    assert.equal(await prisma.recipeReport.count({ where: { userId: me.body.user.id } }), 0, 'Account deletion did not remove content reports.');
 
     console.log(JSON.stringify({
       signup: signup.response.status,
@@ -207,6 +236,7 @@ async function main() {
       accountDeletion: deletion.response.status,
       mobilePushTokenRls: security.relrowsecurity,
       directClientGrants: grants.length,
+      contentReports: { selectedContentTypes: 3, concurrentAccepted: 7, concurrentLimited: 3, accountDeletionCascade: true },
     }));
   } finally {
     await prisma.user.deleteMany({ where: { email } });

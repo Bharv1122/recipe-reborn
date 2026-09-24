@@ -8,6 +8,7 @@ import { stageShoppingDraft } from '@/services/shopping-handoff';
 import type { Recipe } from '@/types';
 import { colors } from '@/theme';
 import { RecipeComparison } from '@/components/recipe-comparison';
+import { ReportContentAction } from '@/components/report-content';
 
 function parseArray(value: string): string[] {
   try { const parsed = JSON.parse(value); return Array.isArray(parsed) ? parsed.map(String) : [value]; }
@@ -47,6 +48,7 @@ export default function RecipeDetailScreen() {
         <Text style={styles.heading}>Instructions</Text>
         {instructions.map((item, index) => <Text key={`${index}-${item}`} style={styles.body}>{index + 1}. {item}</Text>)}
         <Button label="Need cooking help? Ask AI Chef" secondary onPress={() => router.push('/chat')} />
+        <ReportContentAction target={{ source: 'saved', recipeId: recipe.id }} />
         <Button label={showMore ? 'Hide recipe options' : 'More recipe options'} secondary onPress={() => setShowMore(!showMore)} />
         {showMore ? <>
           <Button label="Add to collection" secondary onPress={() => router.push({ pathname: '/collections', params: { recipeId: recipe.id } })} />

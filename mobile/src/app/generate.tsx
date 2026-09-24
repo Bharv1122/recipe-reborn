@@ -9,6 +9,7 @@ import type { GeneratedRecipe } from '@/types';
 import { colors } from '@/theme';
 import { PackageNutritionReview, RecipeComparison, type NutritionEstimateStatus } from '@/components/recipe-comparison';
 import { VoiceInput } from '@/components/voice-input';
+import { ReportContentAction } from '@/components/report-content';
 import type { FreshNutritionEstimate, OriginalNutrition } from '../../../shared/nutrition-facts';
 
 type Source = 'label' | 'pantry' | 'dish';
@@ -104,6 +105,7 @@ export default function GenerateScreen() {
           {recipe.instructions.map((item, index) => <Text key={`${index}-${item}`} style={styles.body}>{index + 1}. {item}</Text>)}
           <Button label={saveLabel} onPress={save} loading={saving} disabled={nutritionStatus === 'pending'} />
           <Button label="Change ingredients" secondary disabled={saving} onPress={() => { setRecipe(null); setError(null); }} />
+          <ReportContentAction target={{ source: 'generated', recipe: { title: recipe.title, freshIngredients: recipe.freshIngredients, instructions: recipe.instructions } }} />
         </Card>
       </> : !source ? <Card>
         <Text style={styles.title}>Where would you like to start?</Text>

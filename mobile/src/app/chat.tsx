@@ -8,6 +8,7 @@ import { clearChatHistory, loadChatHistory, saveChatHistory, type StoredChatMess
 import { useAuth } from '@/providers/auth-provider';
 import { colors } from '@/theme';
 import { VoiceInput } from '@/components/voice-input';
+import { ReportContentAction } from '@/components/report-content';
 
 type ChatMessage = StoredChatMessage;
 const starterQuestions = [
@@ -95,6 +96,7 @@ export default function ChatScreen() {
         {messages.map((message, index) => <View key={`${message.role}-${index}`} style={[styles.bubble, message.role === 'user' ? styles.userBubble : styles.chefBubble]}>
           <Text style={styles.label}>{message.role === 'user' ? 'You' : 'AI Chef'}</Text>
           <Text style={styles.message}>{message.content}</Text>
+          {message.role === 'assistant' ? <ReportContentAction target={{ source: 'chat', message: message.content }} /> : null}
         </View>)}
         {messages.length ? <Pressable accessibilityRole="button" accessibilityLabel="Clear AI Chef history" onPress={confirmClear} style={styles.clear}><Text style={styles.clearText}>Clear chat history</Text></Pressable> : null}
       </ScrollView>

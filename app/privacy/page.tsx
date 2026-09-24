@@ -52,7 +52,7 @@ export default function PrivacyPage() {
               <li>Optional microphone recordings you submit for transcription, and the text returned for you to review</li>
               <li>AI Chef questions and recent conversation context used to answer them</li>
               <li>Package nutrition facts and estimated recipe nutrition, including comparisons kept with recipes you save</li>
-              <li>Recipe reports, including the selected concern, optional note, and reported recipe contents</li>
+              <li>Content reports you choose to send, including your account ID, selected concern, optional note, and the reported recipe or selected AI Chef response</li>
               <li>Search queries and filter selections</li>
               <li>Login times and session data</li>
             </ul>
@@ -96,7 +96,7 @@ export default function PrivacyPage() {
               <li><strong>Communication:</strong> To send you service-related notifications and updates</li>
               <li><strong>Security:</strong> To monitor and analyze usage to protect against unauthorized access</li>
               <li><strong>Improvement:</strong> To understand how users interact with the Service and make improvements</li>
-              <li><strong>Content Safety:</strong> To review user reports about unsafe, offensive, or inaccurate AI-generated recipes</li>
+              <li><strong>Content Safety:</strong> To review user reports about unsafe, offensive, or inaccurate AI-generated recipes and AI Chef responses, and improve content safeguards</li>
             </ul>
           </section>
 
@@ -151,7 +151,7 @@ export default function PrivacyPage() {
               We retain your personal information for as long as your account is active or as needed to provide the Service. If you delete your account, we will delete or anonymize your personal information within a reasonable timeframe, except where we are required to retain it for legal or regulatory purposes.
             </p>
             <p className="text-gray-700 leading-relaxed mt-4">
-              Recipe Reborn does not save submitted source photos or microphone recordings as account content. The mobile app attempts to remove temporary upload copies and recordings after processing or cancellation; photos in your photo library remain under your control. Extracted ingredients, reviewed pantry inventory, transcripts used in a saved recipe or chat, and saved nutrition comparisons can remain as part of those features. AI Chef conversation history is stored locally as described above. Provider processing and retention are separate from what Recipe Reborn saves in your account.
+              Recipe Reborn does not save submitted source photos or microphone recordings as account content. The mobile app attempts to remove temporary upload copies and recordings after processing or cancellation; photos in your photo library remain under your control. Extracted ingredients, reviewed pantry inventory, transcripts used in a saved recipe or chat, and saved nutrition comparisons can remain as part of those features. AI Chef conversation history is stored locally as described above. If you report an AI Chef response, only that selected response and your report are saved on our server for developer review; reporting does not upload the full conversation. Content reports are removed when your account is deleted. Provider processing and retention are separate from what Recipe Reborn saves in your account.
             </p>
           </section>
 
