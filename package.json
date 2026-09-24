@@ -13,6 +13,7 @@
     "verify:mobile-foundation": "tsx scripts/verify-mobile-foundation.ts",
     "verify:mobile-production": "tsx scripts/verify-mobile-production.ts",
     "verify:native-repair": "tsx scripts/verify-native-repair.ts",
+    "verify:recipe-comparison": "tsx scripts/verify-recipe-comparison.ts",
     "postinstall": "prisma generate"
   },
   "prisma": {

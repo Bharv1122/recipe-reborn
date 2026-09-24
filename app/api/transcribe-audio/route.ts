@@ -57,6 +57,7 @@ function detectAudioFormat(bytes: Uint8Array, fallbackMime: string): string {
 export async function POST(request: NextRequest) {
   let timeout: ReturnType<typeof setTimeout> | undefined;
   let abortRecording: (() => void) | undefined;
+  let timedOut = false;
   try {
     const userId = await getRequestUserId(request);
     if (!userId) {
@@ -108,7 +109,7 @@ export async function POST(request: NextRequest) {
     abortRecording = () => controller.abort();
     request.signal.addEventListener('abort', abortRecording, { once: true });
     if (request.signal.aborted) controller.abort();
-    timeout = setTimeout(() => controller.abort(), 45_000);
+    timeout = setTimeout(() => { timedOut = true; controller.abort(); }, 45_000);
     const response = await fetch(AI_AUDIO_URL, {
       method: 'POST',
       headers: {
@@ -151,13 +152,42 @@ export async function POST(request: NextRequest) {
     }
 
     const data = await response.json();
-    const parts = data?.candidates?.[0]?.content?.parts;
+    const candidate = data?.candidates?.[0];
+    if (candidate?.finishReason === 'MAX_TOKENS') {
+      return NextResponse.json(
+        { error: 'The recording was too long to transcribe fully. Please record a shorter message or type your ingredients.' },
+        { status: 502 }
+      );
+    }
+    if (data?.promptFeedback?.blockReason || !candidate ||
+      (candidate.finishReason && candidate.finishReason !== 'STOP')) {
+      return NextResponse.json(
+        { error: 'That recording could not be transcribed. Please try again or type your ingredients.' },
+        { status: 502 }
+      );
+    }
+    const parts = candidate.content?.parts;
+    if (!Array.isArray(parts)) {
+      return NextResponse.json(
+        { error: 'No transcription was returned. Please try again or type your ingredients.' },
+        { status: 502 }
+      );
+    }
     const text = Array.isArray(parts)
       ? parts.filter((part: { text?: unknown; thought?: boolean }) => !part.thought && typeof part.text === 'string').map((part: { text: string }) => part.text).join('').trim()
       : '';
 
     return NextResponse.json({ text }, { status: 200 });
   } catch (error) {
+    if (timedOut) {
+      return NextResponse.json(
+        { error: 'Transcription took too long. Please try again or type your ingredients.' },
+        { status: 504 }
+      );
+    }
+    if (request.signal.aborted) {
+      return NextResponse.json({ error: 'Recording canceled.' }, { status: 499 });
+    }
     console.error('Transcription error:', error);
     return NextResponse.json(
       { error: 'Internal server error' },

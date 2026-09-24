@@ -63,6 +63,10 @@ async function main() {
         title: 'Synthetic carrot soup', originalIngredients: 'carrots, water',
         freshIngredients: ['2 carrots', '2 cups water'], instructions: ['Simmer safely.'],
         dietaryTags: ['synthetic-audit'], prepTime: '5 min', cookTime: '20 min', servings: '1 serving',
+        comparisonSnapshot: {
+          version: 1, source: 'pantry', originalNutrition: null,
+          freshNutrition: { calories: 120, protein: 3, carbs: 20, fat: 4, fiber: null, sodium: 0, perServing: true, accuracy: 'estimated', basisLabel: 'Per recipe serving', sourceLabel: 'Synthetic audit estimate' },
+        },
       }),
     });
     assert.equal(savedRecipe.response.status, 201, JSON.stringify(savedRecipe.body));
@@ -72,6 +76,9 @@ async function main() {
     assert.ok(recipes.body.recipes.some((recipe: { id: string }) => recipe.id === recipeId));
     const recipeDetail = await jsonRequest(`/api/mobile/recipes/${recipeId}`, { headers: auth });
     assert.equal(recipeDetail.response.status, 200, JSON.stringify(recipeDetail.body));
+    assert.equal(recipeDetail.body.recipe.comparisonSnapshot?.freshNutrition?.calories, 120, 'Saved comparison did not reopen from the real API/database.');
+    assert.equal(recipeDetail.body.recipe.comparisonSnapshot?.freshNutrition?.fiber, null);
+    assert.equal(recipeDetail.body.recipe.comparisonSnapshot?.freshNutrition?.sodium, 0);
     const recipeUpdate = await jsonRequest(`/api/mobile/recipes/${recipeId}`, {
       method: 'PATCH', headers: auth, body: JSON.stringify({ rating: 5, notes: 'Synthetic audit' }),
     });

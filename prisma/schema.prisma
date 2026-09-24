@@ -222,6 +222,9 @@ model Recipe {
   fiber    Float? // grams
   sodium   Int? // mg
 
+  // Reviewed package facts and the homemade estimate captured when saved.
+  comparisonSnapshot Json?
+
   // Cost savings (per serving, USD)
   estimatedCostPerServing Float? // homemade cost
   storeBoughtCost         Float? // store-bought equivalent cost

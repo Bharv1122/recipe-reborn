@@ -111,6 +111,7 @@ export function originalNutritionFromLabelScan(scanned: unknown): OriginalNutrit
     sodium: nullableNutritionNumber(facts.sodium),
   };
   if (!hasNutritionValues(values)) return null;
+  const servingsPerContainer = nullableNutritionNumber(facts.servingsPerContainer);
 
   return {
     values,
@@ -118,7 +119,7 @@ export function originalNutritionFromLabelScan(scanned: unknown): OriginalNutrit
       typeof facts.basisLabel === 'string' && facts.basisLabel.trim()
         ? facts.basisLabel.trim()
         : 'Per labeled serving (serving size unreadable)',
-    servingsPerContainer: nullableNutritionNumber(facts.servingsPerContainer),
+    servingsPerContainer: servingsPerContainer !== null && servingsPerContainer > 0 ? servingsPerContainer : null,
     source: 'label_scan',
     sourceLabel: 'Nutrition Facts label scan',
     accuracy: 'exact',

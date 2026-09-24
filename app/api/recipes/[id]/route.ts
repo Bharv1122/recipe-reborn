@@ -3,6 +3,7 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth-options';
 import { prisma } from '@/lib/db';
 import { z } from 'zod';
+import { recipeComparisonSchema } from '@/lib/recipe-comparison-validation';
 
 export const dynamic = 'force-dynamic';
 
@@ -83,6 +84,7 @@ export async function PATCH(request: NextRequest, props: { params: Promise<{ id:
     }
 
     const { rating, notes, folderId, winePairing, freshIngredients } = update.data;
+    const comparison = recipeComparisonSchema.safeParse(recipe.comparisonSnapshot);
 
     if (folderId) {
       const folder = await prisma.folder.findFirst({
@@ -102,6 +104,10 @@ export async function PATCH(request: NextRequest, props: { params: Promise<{ id:
         ...(folderId !== undefined && { folderId }),
         ...(winePairing !== undefined && { winePairing }),
         ...(freshIngredients !== undefined && { freshIngredients }),
+        // An ingredient change invalidates the saved homemade estimate, not the package facts.
+        ...(freshIngredients !== undefined && freshIngredients !== recipe.freshIngredients && comparison.success
+          ? { comparisonSnapshot: { ...comparison.data, freshNutrition: null } }
+          : {}),
       },
     });
 

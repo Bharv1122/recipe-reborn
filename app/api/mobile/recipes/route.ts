@@ -3,6 +3,7 @@ import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
 import { MobileAuthError, requireMobileUserId } from '@/lib/mobile-auth';
 import { optionalRecipeMetadataSchema } from '@/lib/recipe-metadata-validation';
+import { recipeComparisonSchema } from '@/lib/recipe-comparison-validation';
 
 export const dynamic = 'force-dynamic';
 
@@ -17,6 +18,7 @@ const saveSchema = z.object({
   servings: optionalRecipeMetadataSchema,
   estimatedCostPerServing: z.number().nonnegative().finite().optional(),
   storeBoughtCost: z.number().nonnegative().finite().optional(),
+  comparisonSnapshot: recipeComparisonSchema.optional(),
 });
 
 export async function GET(request: Request) {

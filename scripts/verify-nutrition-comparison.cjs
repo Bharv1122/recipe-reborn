@@ -63,6 +63,7 @@ const moduleParent = module;
     assert.equal(result.carbs, null); assert.equal(result.fat, null); assert.equal(result.fiber, null); assert.equal(result.sodium, 0);
     assert.equal(result.accuracy, 'estimated'); assert.match(result.basisLabel, /makes 2/);
     assert.equal(providerCalls, 1);
+
   } finally { global.fetch = originalFetch; delete global.qaRateLimited; }
   console.log('PASS: package source handoff, additive deduplication, unknown nutrients, sodium units, auth/rate gates, and estimated nutrition response. No live AI or database calls.');
 
@@ -91,6 +92,31 @@ const moduleParent = module;
     assert.equal((await response.json()).text, 'eggs and spinach');
     assert.equal(audioPayload.contents[0].parts[1].inlineData.mimeType, 'audio/m4a', 'Phone M4A must use the native audio endpoint and its supported MIME type.');
     assert.equal(providerCalls, 1);
+    for (const candidate of [
+      { candidates: [{ finishReason:'MAX_TOKENS', content:{parts:[{text:'partial ingredients'}]} }] },
+      { promptFeedback:{blockReason:'SAFETY'} },
+      { candidates:[{finishReason:'SAFETY'}] },
+      { candidates:[{finishReason:'STOP'}] },
+    ]) {
+      global.fetch = async () => Response.json(candidate);
+      const failure = await voice.POST(recording(mp4));
+      assert.equal(failure.status, 502, 'Blocked, truncated or malformed provider responses must not be accepted as complete.');
+      assert.equal((await failure.json()).text, undefined);
+    }
+    global.fetch = async () => Response.json({candidates:[{finishReason:'STOP',content:{parts:[{text:''}]}}]});
+    assert.equal((await (await voice.POST(recording(mp4))).json()).text,'','Valid silence stays distinct from provider failure.');
+    const originalTimer = global.setTimeout;
+    try {
+      global.setTimeout = (callback, delay, ...args) => originalTimer(callback, delay === 45_000 ? 1 : delay, ...args);
+      global.fetch = async (_url, options) => new Promise((_resolve,reject) => {
+        const abort = () => reject(new DOMException('Aborted','AbortError'));
+        if(options.signal.aborted)abort();else options.signal.addEventListener('abort',abort,{once:true});
+      });
+      assert.equal((await voice.POST(recording(mp4))).status,504,'Provider timeout must be visible as retryable.');
+      const abort = new AbortController();
+      const canceled = new Request(recording(mp4),{signal:abort.signal});abort.abort();
+      assert.equal((await voice.POST(canceled)).status,499,'User cancellation must not look like a server crash.');
+    } finally { global.setTimeout = originalTimer; }
   } finally { global.fetch = originalFetch; delete global.qaRateLimited; }
 
   const calls = [];
@@ -99,7 +125,7 @@ const moduleParent = module;
   const api = await bundle('mobile/src/services/api.ts', {
     'expo-constants':'export default {expoConfig:{extra:{apiBaseUrl:"https://example.invalid"}}};',
     'expo/fetch':'export const fetch = (...args) => globalThis.qaExpoFetch(...args);',
-    '@/services/auth-storage':'let tokens={accessToken:"expired",refreshToken:"refresh"}; export async function readTokens(){return tokens;} export async function saveTokens(value){tokens=value;} export async function clearTokens(){tokens=null;}',
+    '@/services/auth-storage':'let tokens={accessToken:"expired",refreshToken:"refresh"}; export function getSessionRevision(){return 0;} export async function readTokens(){return tokens;} export async function saveTokens(value){tokens=value;return true;} export async function clearTokens(){tokens=null;}',
   });
   try {
     const form = new FormData(); form.append('audio', mp4, 'clip.m4a');
