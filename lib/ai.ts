@@ -9,3 +9,8 @@ export const AI_API_KEY = process.env.GEMINI_API_KEY ?? '';
 // FAST: chat, substitutions, ingredient info, wine pairing, scaling, nutrition.
 export const MODEL_SMART = 'gemini-2.5-flash';
 export const MODEL_FAST = 'gemini-2.5-flash-lite';
+
+// Native audio accepts phone M4A and browser WebM/Ogg recordings. The
+// OpenAI-compatible input_audio endpoint only accepts WAV and MP3.
+export const AI_AUDIO_URL =
+  `https://generativelanguage.googleapis.com/v1beta/models/${MODEL_SMART}:generateContent`;

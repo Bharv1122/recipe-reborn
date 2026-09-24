@@ -1,7 +1,7 @@
 import { getRequestUserId } from '@/lib/request-auth';
 import { rateLimit } from '@/lib/rate-limit';
 import { NextRequest, NextResponse } from 'next/server';
-import { AI_CHAT_URL, AI_API_KEY, MODEL_SMART } from '@/lib/ai';
+import { AI_AUDIO_URL, AI_API_KEY } from '@/lib/ai';
 
 export const dynamic = 'force-dynamic';
 
@@ -9,9 +9,8 @@ export const dynamic = 'force-dynamic';
 // base64 payload to Gemini well under request limits.
 const MAX_AUDIO_BYTES = 10 * 1024 * 1024;
 
-// The client labels every recording "audio/webm", but the real container
-// varies by browser (Firefox's MediaRecorder emits Ogg). Sniff the magic
-// bytes so Gemini gets the true format.
+// Phone recordings use M4A; browsers may produce WebM or Ogg even when a
+// client labels them differently. Sniff the bytes to send the true format.
 function detectAudioFormat(bytes: Uint8Array, fallbackMime: string): string {
   if (bytes.length >= 4) {
     // "OggS"
@@ -50,11 +49,14 @@ function detectAudioFormat(bytes: Uint8Array, fallbackMime: string): string {
   if (mime.includes('ogg')) return 'ogg';
   if (mime.includes('wav')) return 'wav';
   if (mime.includes('mp3') || mime.includes('mpeg')) return 'mp3';
-  if (mime.includes('mp4')) return 'mp4';
+  if (mime.includes('mp4') || mime.includes('m4a')) return 'mp4';
+  if (mime.includes('flac')) return 'flac';
   return 'webm';
 }
 
 export async function POST(request: NextRequest) {
+  let timeout: ReturnType<typeof setTimeout> | undefined;
+  let abortRecording: (() => void) | undefined;
   try {
     const userId = await getRequestUserId(request);
     if (!userId) {
@@ -101,35 +103,42 @@ export async function POST(request: NextRequest) {
     const format = detectAudioFormat(audioBytes, audioFile.type ?? '');
     const base64Audio = Buffer.from(audioBytes).toString('base64');
 
-    const response = await fetch(AI_CHAT_URL, {
+    const mimeType = format === 'mp4' ? 'audio/m4a' : `audio/${format}`;
+    const controller = new AbortController();
+    abortRecording = () => controller.abort();
+    request.signal.addEventListener('abort', abortRecording, { once: true });
+    if (request.signal.aborted) controller.abort();
+    timeout = setTimeout(() => controller.abort(), 45_000);
+    const response = await fetch(AI_AUDIO_URL, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        Authorization: `Bearer ${AI_API_KEY}`,
+        'x-goog-api-key': AI_API_KEY,
       },
       body: JSON.stringify({
-        model: MODEL_SMART,
-        messages: [
+        contents: [
           {
             role: 'user',
-            content: [
+            parts: [
               {
-                type: 'text',
                 text: 'Transcribe this audio recording of a person speaking (likely listing recipe ingredients or making a cooking request). Return ONLY the verbatim transcription with no commentary, labels, or quotation marks. If there is no discernible speech, return nothing.',
               },
               {
-                type: 'input_audio',
-                input_audio: {
+                inlineData: {
                   data: base64Audio,
-                  format,
+                  mimeType,
                 },
               },
             ],
           },
         ],
-        temperature: 0,
-        max_tokens: 1000,
+        generationConfig: {
+          temperature: 0,
+          maxOutputTokens: 1000,
+          thinkingConfig: { thinkingBudget: 0 },
+        },
       }),
+      signal: controller.signal,
     });
 
     if (!response.ok) {
@@ -142,8 +151,10 @@ export async function POST(request: NextRequest) {
     }
 
     const data = await response.json();
-    const content = data?.choices?.[0]?.message?.content;
-    const text = typeof content === 'string' ? content.trim() : '';
+    const parts = data?.candidates?.[0]?.content?.parts;
+    const text = Array.isArray(parts)
+      ? parts.filter((part: { text?: unknown; thought?: boolean }) => !part.thought && typeof part.text === 'string').map((part: { text: string }) => part.text).join('').trim()
+      : '';
 
     return NextResponse.json({ text }, { status: 200 });
   } catch (error) {
@@ -152,5 +163,8 @@ export async function POST(request: NextRequest) {
       { error: 'Internal server error' },
       { status: 500 }
     );
+  } finally {
+    if (timeout !== undefined) clearTimeout(timeout);
+    if (abortRecording) request.signal.removeEventListener('abort', abortRecording);
   }
 }

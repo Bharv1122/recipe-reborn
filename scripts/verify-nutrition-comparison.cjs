@@ -69,11 +69,11 @@ const moduleParent = module;
   const voice = await bundle('app/api/transcribe-audio/route.ts', {
     '@/lib/request-auth': 'export async function getRequestUserId(request) { return request.headers.get("authorization") === "Bearer qa" ? "qa" : null; }',
     '@/lib/rate-limit': 'export async function rateLimit() { return { success: !globalThis.qaRateLimited }; }',
-    '@/lib/ai': 'export const AI_API_KEY="test", AI_CHAT_URL="https://example.invalid", MODEL_SMART="test";',
+    '@/lib/ai': 'export const AI_API_KEY="test", AI_AUDIO_URL="https://example.invalid/models/test:generateContent";',
   });
   let audioPayload;
   providerCalls = 0;
-  global.fetch = async (_, options) => { providerCalls++; audioPayload = JSON.parse(options.body); return Response.json({ choices: [{ message: { content: '  eggs and spinach  ' } }] }); };
+  global.fetch = async (url, options) => { assert.match(url,/generateContent$/);providerCalls++; audioPayload = JSON.parse(options.body); return Response.json({ candidates: [{ content: { parts: [{text:'  eggs and spinach  '}] } }] }); };
   const recording = (blob, authorized = true) => { const form = new FormData(); if (blob) form.append('audio', blob, 'clip.m4a'); return new Request('https://example.invalid/api/transcribe-audio', {method:'POST',headers:authorized?{authorization:'Bearer qa'}:{},body:form}); };
   const mp4 = new Blob([new Uint8Array([0,0,0,20,0x66,0x74,0x79,0x70,0,0])], {type:'application/octet-stream'});
   try {
@@ -89,7 +89,7 @@ const moduleParent = module;
     const response = await voice.POST(recording(mp4));
     assert.equal(response.status, 200);
     assert.equal((await response.json()).text, 'eggs and spinach');
-    assert.equal(audioPayload.messages[0].content[1].input_audio.format, 'mp4', 'Native M4A must be recognized from its bytes.');
+    assert.equal(audioPayload.contents[0].parts[1].inlineData.mimeType, 'audio/m4a', 'Phone M4A must use the native audio endpoint and its supported MIME type.');
     assert.equal(providerCalls, 1);
   } finally { global.fetch = originalFetch; delete global.qaRateLimited; }
 
