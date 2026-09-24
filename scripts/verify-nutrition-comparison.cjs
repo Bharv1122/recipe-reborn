@@ -74,7 +74,7 @@ const moduleParent = module;
   });
   let audioPayload;
   providerCalls = 0;
-  global.fetch = async (url, options) => { assert.match(url,/generateContent$/);providerCalls++; audioPayload = JSON.parse(options.body); return Response.json({ candidates: [{ content: { parts: [{text:'  eggs and spinach  '}] } }] }); };
+  global.fetch = async (url, options) => { assert.match(url,/generateContent$/);providerCalls++; audioPayload = JSON.parse(options.body); return Response.json({ candidates: [{ finishReason: 'STOP', content: { parts: [{text:'  eggs and spinach  '}] } }] }); };
   const recording = (blob, authorized = true) => { const form = new FormData(); if (blob) form.append('audio', blob, 'clip.m4a'); return new Request('https://example.invalid/api/transcribe-audio', {method:'POST',headers:authorized?{authorization:'Bearer qa'}:{},body:form}); };
   const mp4 = new Blob([new Uint8Array([0,0,0,20,0x66,0x74,0x79,0x70,0,0])], {type:'application/octet-stream'});
   try {
@@ -97,6 +97,7 @@ const moduleParent = module;
       { promptFeedback:{blockReason:'SAFETY'} },
       { candidates:[{finishReason:'SAFETY'}] },
       { candidates:[{finishReason:'STOP'}] },
+      { candidates:[{content:{parts:[{text:'Unconfirmed partial words'}]}}] },
     ]) {
       global.fetch = async () => Response.json(candidate);
       const failure = await voice.POST(recording(mp4));

@@ -16,7 +16,13 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json();
-    const { email: rawEmail, password, confirmPassword, src, code } = body;
+    const { email: rawEmail, password, confirmPassword, src, code, adultConfirmed } = body;
+    if (adultConfirmed !== true) {
+      return NextResponse.json(
+        { error: 'You must confirm you are 18 or older to create an account. Update the app or sign up on recipereborn.com.' },
+        { status: 400 }
+      );
+    }
     // Case-insensitive matching: mixed-case signups created duplicate/unfindable
     // accounts in the old app — always store lowercase
     const email = typeof rawEmail === 'string' ? rawEmail.trim().toLowerCase() : rawEmail;

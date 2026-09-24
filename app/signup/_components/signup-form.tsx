@@ -16,6 +16,7 @@ export function SignupForm() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [code, setCode] = useState('');
+  const [adultConfirmed, setAdultConfirmed] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [showCommunityCode, setShowCommunityCode] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
@@ -26,6 +27,11 @@ export function SignupForm() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+
+    if (!adultConfirmed) {
+      toast.error('Confirm that you are 18 or older to create an account.');
+      return;
+    }
 
     if (password?.length < 6) {
       toast.error('Password must be at least 6 characters');
@@ -54,6 +60,7 @@ export function SignupForm() {
           // The confirm-password field was removed from the form (it depresses
           // signup conversion); the API still validates it, so mirror password.
           confirmPassword: password,
+          adultConfirmed,
           ...(src ? { src } : {}),
           ...(code.trim() ? { code: code.trim() } : {}),
         }),
@@ -165,10 +172,24 @@ export function SignupForm() {
               />
             </div>
           )}
+          <div className="flex min-h-11 items-center gap-3">
+            <input
+              id="adult-confirmed"
+              type="checkbox"
+              checked={adultConfirmed}
+              onChange={(event) => setAdultConfirmed(event.target.checked)}
+              required
+              disabled={isLoading}
+              className="h-5 w-5 accent-emerald-700"
+            />
+            <Label htmlFor="adult-confirmed" className="cursor-pointer leading-5">
+              I confirm I am 18 or older.
+            </Label>
+          </div>
           <Button
             type="submit"
             className="w-full bg-emerald-600 hover:bg-emerald-700 text-white"
-            disabled={isLoading}
+            disabled={isLoading || !adultConfirmed}
           >
             {isLoading ? (
               <>

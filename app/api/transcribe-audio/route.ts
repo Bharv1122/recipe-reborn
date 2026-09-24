@@ -160,7 +160,7 @@ export async function POST(request: NextRequest) {
       );
     }
     if (data?.promptFeedback?.blockReason || !candidate ||
-      (candidate.finishReason && candidate.finishReason !== 'STOP')) {
+      candidate.finishReason !== 'STOP') {
       return NextResponse.json(
         { error: 'That recording could not be transcribed. Please try again or type your ingredients.' },
         { status: 502 }

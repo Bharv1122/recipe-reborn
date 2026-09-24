@@ -24,7 +24,7 @@ async function main() {
   let primaryError: unknown;
   try {
     const signup = await jsonRequest('/api/signup', {
-      method: 'POST', body: JSON.stringify({ email, password, confirmPassword: password, src: 'ai-feature-audit' }),
+      method: 'POST', body: JSON.stringify({ email, password, confirmPassword: password, adultConfirmed: true, src: 'ai-feature-audit' }),
     });
     assert.equal(signup.response.status, 201, JSON.stringify(signup.body));
     accountCreated = true;

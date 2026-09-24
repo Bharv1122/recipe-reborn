@@ -32,7 +32,7 @@ async function main() {
 
     const signup = await jsonRequest('/api/signup', {
       method: 'POST',
-      body: JSON.stringify({ email, password, confirmPassword: password, src: 'mobile-production-audit' }),
+      body: JSON.stringify({ email, password, confirmPassword: password, adultConfirmed: true, src: 'mobile-production-audit' }),
     });
     assert.equal(signup.response.status, 201, JSON.stringify(signup.body));
 

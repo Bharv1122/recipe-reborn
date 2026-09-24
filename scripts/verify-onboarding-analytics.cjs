@@ -93,6 +93,12 @@ async function verifySignup(options) {
   h.find(tree, n => n.props?.id === 'email').props.onChange({ target: { value: 'synthetic@example.com' } });
   h.find(tree, n => n.props?.id === 'password').props.onChange({ target: { value: 'test-only-password' } });
   tree = h.render();
+  assert.equal(h.find(tree, n => n.props?.id === 'adult-confirmed').props.checked, false);
+  assert.equal(h.find(tree, n => n.props?.type === 'submit').props.disabled, true);
+  await h.find(tree, n => n.type === 'form').props.onSubmit({ preventDefault() {} });
+  assert.equal(h.requests.filter(r => r.url === '/api/signup').length, 0, 'Unchecked confirmation must reject even a direct submit event');
+  h.find(tree, n => n.props?.id === 'adult-confirmed').props.onChange({ target: { checked: true } });
+  tree = h.render();
   let done = false;
   const submission = h.find(tree, n => n.type === 'form').props.onSubmit({ preventDefault() {} }).then(() => { done = true; });
   await flush();
@@ -101,6 +107,7 @@ async function verifySignup(options) {
   const payload = JSON.parse(h.requests.find(r => r.url === '/api/signup').options.body);
   assert.equal(payload.src, 'rr-sep23-personal', 'Campaign attribution must survive signup');
   assert.equal(payload.confirmPassword, payload.password);
+  assert.equal(payload.adultConfirmed, true);
   assert.equal(h.signIns(), options.saveOk === false ? 0 : 1);
   assert.deepEqual(h.routes, options.saveOk === false ? [] : [options.loginError ? '/login' : '/generator']);
   const completionEvents = h.requests.filter(r => r.url === '/api/analytics/event' && JSON.parse(r.options.body).event === 'signup_completed');
