@@ -3,6 +3,7 @@ import { NextResponse } from 'next/server';
 import { authOptions } from '@/lib/auth-options';
 import { AI_API_KEY, AI_CHAT_URL, MODEL_FAST } from '@/lib/ai';
 import { extractJsonPayload } from '@/lib/ai-json';
+import { limitAiRequest } from '@/lib/ai-rate-limit';
 
 export const dynamic = 'force-dynamic';
 
@@ -10,6 +11,9 @@ export async function POST(request: Request) {
   try {
     const session = await getServerSession(authOptions);
     if (!session?.user?.id) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+
+    const aiLimited = await limitAiRequest(session.user.id);
+    if (aiLimited) return aiLimited;
 
     const body = await request.json();
     const title = typeof body.title === 'string' ? body.title.trim() : '';

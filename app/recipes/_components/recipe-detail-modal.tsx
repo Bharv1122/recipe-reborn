@@ -198,6 +198,13 @@ export function RecipeDetailModal({ recipe, onClose, onUpdate }: RecipeDetailMod
         }),
       });
 
+      if (response.status === 403 || response.status === 429) {
+        // Premium gate or daily AI limit: show the server's explanation instead of a generic failure.
+        const body = await response.json().catch(() => null);
+        toast.error(body?.message || body?.error || 'Wine pairing is a Premium feature.');
+        return;
+      }
+
       if (!response.ok) {
         throw new Error('Failed to get wine pairing');
       }
