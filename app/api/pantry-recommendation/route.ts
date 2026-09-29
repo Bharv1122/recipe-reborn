@@ -3,6 +3,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import { authOptions } from '@/lib/auth-options';
 import { AI_CHAT_URL, AI_API_KEY, MODEL_FAST } from '@/lib/ai';
+import { limitAiRequest } from '@/lib/ai-rate-limit';
 
 export const dynamic = 'force-dynamic';
 
@@ -43,6 +44,9 @@ export async function POST(request: NextRequest) {
     if (!session?.user?.id) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
+
+    const aiLimited = await limitAiRequest(session.user.id);
+    if (aiLimited) return aiLimited;
 
     const parsedRequest = requestSchema.safeParse(await request.json());
     if (!parsedRequest.success) {

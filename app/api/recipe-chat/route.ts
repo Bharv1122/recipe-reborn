@@ -2,6 +2,7 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth-options';
 import { NextRequest, NextResponse } from 'next/server';
 import { AI_CHAT_URL, AI_API_KEY, MODEL_FAST } from '@/lib/ai';
+import { limitAiRequest } from '@/lib/ai-rate-limit';
 
 export const dynamic = 'force-dynamic';
 
@@ -25,6 +26,9 @@ export async function POST(request: NextRequest) {
         { status: 401 }
       );
     }
+
+    const aiLimited = await limitAiRequest(session.user.id);
+    if (aiLimited) return aiLimited;
 
     const { messages, recipe } = (await request.json()) as {
       messages?: Array<{ role: string; content: string }>;

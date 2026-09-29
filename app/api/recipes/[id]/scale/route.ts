@@ -3,6 +3,7 @@ import { NextResponse } from 'next/server';
 import { authOptions } from '@/lib/auth-options';
 import { prisma } from '@/lib/db';
 import { AI_CHAT_URL, AI_API_KEY, MODEL_FAST } from '@/lib/ai';
+import { limitAiRequest } from '@/lib/ai-rate-limit';
 
 // POST /api/recipes/[id]/scale - Scale a recipe
 export async function POST(req: Request, props: { params: Promise<{ id: string }> }) {
@@ -12,6 +13,9 @@ export async function POST(req: Request, props: { params: Promise<{ id: string }
     if (!session?.user?.id) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
+
+    const aiLimited = await limitAiRequest(session.user.id);
+    if (aiLimited) return aiLimited;
 
     const { scaleFactor } = await req.json();
 
