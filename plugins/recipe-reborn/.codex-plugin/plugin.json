@@ -1,0 +1,23 @@
+{
+  "name": "recipe-reborn",
+  "version": "0.1.0",
+  "description": "Find your recipes, cook from basic ingredients, plan meals and prepare shopping lists with your Recipe Reborn account.",
+  "author": {
+    "name": "Recipe Reborn"
+  },
+  "skills": "./skills/",
+  "interface": {
+    "displayName": "Recipe Reborn",
+    "shortDescription": "Your recipes, meal plans and shopping lists.",
+    "longDescription": "Connect an existing Recipe Reborn account. Read saved recipes and prepare confirmed cooking and planning actions under existing membership limits.",
+    "developerName": "Recipe Reborn",
+    "category": "Productivity",
+    "capabilities": ["Read", "Write", "Interactive"],
+    "websiteURL": "https://recipereborn.com",
+    "privacyPolicyURL": "https://recipereborn.com/privacy",
+    "termsOfServiceURL": "https://recipereborn.com/terms",
+    "brandColor": "#204D35",
+    "defaultPrompt": ["Find my saved chicken recipes.", "Prepare a weekly meal plan for my review.", "Make a shopping list from my chosen recipes."]
+  },
+  "mcpServers": "./.mcp.json"
+}

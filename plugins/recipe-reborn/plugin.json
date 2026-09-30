@@ -1,0 +1,9 @@
+{
+  "$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
+  "name": "recipe-reborn",
+  "version": "0.1.0",
+  "description": "Use your Recipe Reborn recipes, meal plans and shopping lists with account-linked tools.",
+  "author": { "name": "Recipe Reborn", "url": "https://recipereborn.com" },
+  "homepage": "https://recipereborn.com",
+  "keywords": ["recipes", "meal-planning", "shopping"]
+}
