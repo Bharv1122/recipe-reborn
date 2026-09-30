@@ -11,11 +11,19 @@ const PROTECTED_ROUTES = [
   '/account',
 ];
 
-function withSecurityHeaders(response: NextResponse) {
+// Hands-free kitchen mode (/kitchen/...) offers optional voice commands, so it
+// alone may ask for the microphone (same-origin only). Every other page keeps
+// the microphone blocked exactly as before.
+function permissionsPolicy(pathname: string) {
+  const mic = pathname === '/kitchen' || pathname.startsWith('/kitchen/') ? 'microphone=(self)' : 'microphone=()';
+  return `camera=(), ${mic}, geolocation=()`;
+}
+
+function withSecurityHeaders(response: NextResponse, pathname = '') {
   response.headers.set('X-Frame-Options', 'DENY');
   response.headers.set('X-Content-Type-Options', 'nosniff');
   response.headers.set('Referrer-Policy', 'strict-origin-when-cross-origin');
-  response.headers.set('Permissions-Policy', 'camera=(), microphone=(), geolocation=()');
+  response.headers.set('Permissions-Policy', permissionsPolicy(pathname));
   response.headers.set(
     'Strict-Transport-Security',
     'max-age=63072000; includeSubDomains; preload'
@@ -41,7 +49,7 @@ export async function proxy(request: NextRequest) {
     }
   }
 
-  return withSecurityHeaders(NextResponse.next());
+  return withSecurityHeaders(NextResponse.next(), pathname);
 }
 
 export const config = {
