@@ -180,12 +180,12 @@ export function RecipeDetail({ initial, originalIngredients = '', packageNutriti
       <Card><Text style={styles.heading}>Cooking instructions</Text>{recipe.instructions.map((step, index) => <View key={`${index}-${step}`} style={styles.step}><Text style={styles.stepNumber}>{index + 1}</Text><Text style={[styles.body, styles.grow]}>{step.replace(/^\d+[.)]\s*/, '')}</Text></View>)}</Card>
       <Button label="Edit recipe details" secondary disabled={busy || saving} onPress={() => { setEditDraft(importDraft(recipe)); setEditError(null); setDialog('edit'); }} />
       <Card>
-        <View style={styles.row}><Text style={styles.heading}>Nutrition</Text>{changed && currentNutrition.status === 'ready' ? <Text accessibilityLiveRegion="polite" style={styles.badge}>✓ Updated</Text> : null}</View>
+        <View style={styles.row}><Text style={styles.heading}>Nutrition</Text>{key !== originalKey && currentNutrition.status === 'ready' ? <Text accessibilityLiveRegion="polite" style={styles.badge}>✓ Updated</Text> : null}</View>
         <Text style={styles.note}>Estimated per serving · based on these ingredients</Text>
         {currentNutrition.status === 'pending' ? <Text accessibilityLiveRegion="polite" style={styles.body}>Updating nutrition…</Text> : null}
         <View style={styles.metrics}>{NUTRIENT_FIELDS.slice(0, 4).map(({ key: field, label, unit }) => <View key={field} style={styles.metric}><Text style={styles.metricNumber}>{currentNutrition.value?.[field] ?? '—'}</Text><Text style={styles.note}>{unit} {label === 'Calories' ? '' : label.toLowerCase()}</Text></View>)}</View>
         <Text style={styles.note}>Fiber: {currentNutrition.value?.fiber ?? '—'} g · Sugar: unavailable · Sodium: {currentNutrition.value?.sodium ?? '—'} mg</Text>
-        <Text style={styles.note}>{currentNutrition.status === 'ready' ? changed ? 'Recalculated for your current recipe.' : 'AI estimate from recipe quantities; brands and portions can vary.' : '— means unavailable. No sample values are used.'}</Text>
+        <Text style={styles.note}>{currentNutrition.status === 'ready' ? key !== originalKey ? 'Recalculated for your current recipe.' : 'AI estimate from recipe quantities; brands and portions can vary.' : '— means unavailable. No sample values are used.'}</Text>
         {currentNutrition.status === 'failed' ? <><Text style={styles.body}>{count ? 'Nutrition could not be calculated. You can retry or save without it.' : 'Set the serving count in Edit recipe details to calculate nutrition.'}</Text>{count ? <Button label="Retry nutrition" secondary onPress={() => { setNutrition({ key, value: null, status: 'pending' }); setAttempt(value => value + 1); }} /> : null}</> : null}
       </Card>
       <Card>
