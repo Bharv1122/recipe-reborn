@@ -22,7 +22,7 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
   },
   android: {
     package: process.env.EXPO_ANDROID_PACKAGE || 'com.recipereborn.app',
-    versionCode: 23,
+    versionCode: 24,
     softwareKeyboardLayoutMode: 'resize',
     adaptiveIcon: {
       foregroundImage: './assets/images/recipe-reborn-android-foreground.png',

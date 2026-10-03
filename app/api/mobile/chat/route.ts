@@ -4,12 +4,13 @@ import { prisma } from '@/lib/db';
 import { getRequestUserId } from '@/lib/request-auth';
 import { AI_API_KEY, AI_CHAT_URL, MODEL_FAST } from '@/lib/ai';
 import { limitAiRequest } from '@/lib/ai-rate-limit';
+import { US_COOKING_MEASURES } from '@/shared/cooking-measurements';
 
 const messageSchema = z.object({
   role: z.enum(['user', 'assistant']),
   content: z.string().trim().min(1).max(2000),
 });
-const requestSchema = z.object({ messages: z.array(messageSchema).min(1).max(20) });
+const requestSchema = z.object({ messages: z.array(messageSchema).min(1).max(20), measurementSystem: z.enum(['us']).optional() });
 
 export async function POST(request: Request) {
   let timeout: ReturnType<typeof setTimeout> | undefined;
@@ -50,7 +51,7 @@ export async function POST(request: Request) {
         messages: [
           {
             role: 'system',
-            content: `You are Recipe Reborn's AI Chef. Give concise, practical cooking help, substitutions, meal ideas, and techniques. Favor recipes made from basic ingredients over prepared products. ${safetyContext}`,
+            content: `You are Recipe Reborn's AI Chef. Give concise, practical cooking help, substitutions, meal ideas, and techniques. Favor recipes made from basic ingredients over prepared products. ${safetyContext} ${parsed.data.measurementSystem === 'us' ? US_COOKING_MEASURES : ''}`,
           },
           ...parsed.data.messages,
         ],

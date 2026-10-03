@@ -58,7 +58,7 @@ export default function ChatScreen() {
     setMessages(next); setDraft(''); setBusy(true); setError(null);
     try {
       const result = await apiRequest<{ message: ChatMessage }>('/api/mobile/chat', {
-        method: 'POST', body: JSON.stringify({ messages: next.slice(-20) }),
+        method: 'POST', body: JSON.stringify({ messages: next.slice(-20), measurementSystem: 'us' }),
       });
       setMessages([...next, result.message]);
     } catch (value) {

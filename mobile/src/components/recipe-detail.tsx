@@ -11,6 +11,7 @@ import { colors } from '@/theme';
 import { ingredientAdditives, ingredientAllergens, nutritionKey, recipeKey, scaleDetailRecipe, servingCount, type DetailRecipe } from '../../../shared/recipe-detail';
 import { NUTRIENT_FIELDS, type FreshNutritionEstimate, type OriginalNutrition } from '../../../shared/nutrition-facts';
 import { detectAdditives } from '../../../shared/additives';
+import { hasMetricCookingMeasures } from '../../../shared/cooking-measurements';
 
 type NutritionState = { key: string; value: FreshNutritionEstimate | null; status: 'pending' | 'ready' | 'failed' };
 export type DetailSave = { recipe: DetailRecipe; nutrition: FreshNutritionEstimate | null; changed: boolean; allowLeave(): void };
@@ -115,7 +116,7 @@ export function RecipeDetail({ initial, originalIngredients = '', packageNutriti
     if (nutritionKey(previous.recipe) !== key) setNutrition({ key: nutritionKey(previous.recipe), value: null, status: 'pending' });
     setRecipe(previous.recipe); setHistory(history.slice(0, -1)); setMessage('Change undone'); setError(null);
   };
-  const adapt = async (action: ImportAdaptationAction, label: string) => {
+  const adapt = async (action: ImportAdaptationAction, label: string, measurementsOnly = false) => {
     if (locked.current) return;
     locked.current = true; setBusy(true); setError(null); setDialog(null); setMenu(null);
     const controller = new AbortController(); request.current = controller;
@@ -123,7 +124,9 @@ export function RecipeDetail({ initial, originalIngredients = '', packageNutriti
     try {
       const result = await adaptImportedDraft(importDraft(recipe), action, controller.signal);
       if (!controller.signal.aborted) {
-        replace(importSnapshot(importDraft(result.recipe)), label);
+        const next = importSnapshot(importDraft(result.recipe));
+        if (measurementsOnly && (hasMetricCookingMeasures([...next.freshIngredients, ...next.instructions]) || (count && servingCount(next.servings) ? count !== servingCount(next.servings) : next.servings !== recipe.servings))) throw new Error('The measurement conversion needs another try. Your recipe is unchanged.');
+        replace(measurementsOnly ? { ...recipe, freshIngredients: next.freshIngredients, instructions: next.instructions } : next, label);
         if (result.reviewNotes.length) setMessage(`${label}. ${result.reviewNotes.join(' ')}`);
       }
     } catch (value) { setError(controller.signal.aborted ? 'Change canceled. Your recipe is unchanged.' : value instanceof Error ? value.message : 'Could not update the recipe.'); }
@@ -171,6 +174,7 @@ export function RecipeDetail({ initial, originalIngredients = '', packageNutriti
         </View>
         {!count ? <Text style={styles.note}>The source does not specify a whole serving count. Edit the recipe to set it before calculating nutrition.</Text> : null}
         <Text style={styles.heading}>Ingredients</Text>
+        {hasMetricCookingMeasures([...recipe.freshIngredients, ...recipe.instructions]) ? <Button label="Use cups & spoons" secondary disabled={busy || saving} onPress={() => void adapt({ type: 'measurements', system: 'us' }, 'Converted to U.S. measures. Volume equivalents are approximate; review the ingredients.', true)} /> : null}
         {recipe.freshIngredients.map((ingredient, index) => <View key={`${index}-${ingredient}`} style={styles.ingredient}>
           <View style={styles.grow}><Text style={styles.body}>{ingredient}</Text>{ingredientAdditives([ingredient]).length ? <Text style={styles.note}>Listed additive: {ingredientAdditives([ingredient]).map(item => item.name).join(', ')}</Text> : null}</View>
           <Pressable accessibilityRole="button" accessibilityLabel={`Options for ${ingredient}`} disabled={busy || saving} onPress={() => { setMenu(ingredient); setDialog(null); setInput(''); }} style={styles.touch}><Text style={styles.symbol}>⋮</Text></Pressable>

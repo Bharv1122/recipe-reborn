@@ -73,7 +73,7 @@ export async function POST(request: Request) {
     const aiLimit = await limitAiRequest(userId);
     if (aiLimit) return aiLimit;
     const preferences: AppliedFoodPreferences = {
-      allergies: user.allergies,
+      allergies: parsed.data.action.type === 'measurements' ? [] : user.allergies,
       dislikes: parsed.data.action.type === 'preferences' ? user.dislikedIngredients : [],
       likes: parsed.data.action.type === 'preferences' ? user.likedIngredients : [],
     };

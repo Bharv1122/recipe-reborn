@@ -105,6 +105,7 @@ export default function GenerateScreen() {
         <VoiceInput label={source === 'dish' ? 'Speak my recipe request' : 'Speak my ingredients'} onBusyChange={setVoiceBusy} onTranscript={(text) => setIngredients((current) => [current.trim(), text].filter(Boolean).join('\n'))} />
         {source === 'label' && originalNutrition ? <PackageNutritionReview value={originalNutrition} onChange={setOriginalNutrition} /> : null}
         <Text style={styles.note}>Your saved allergies and food preferences apply.</Text>
+        <Text style={styles.note}>Recipes use cups, tablespoons and teaspoons, with ounces or pounds where needed.</Text>
         <Button label={showPreferences ? 'Hide optional requests' : 'Add a dietary request (optional)'} secondary onPress={() => setShowPreferences(!showPreferences)} />
         {showPreferences ? <Field accessibilityLabel="Dietary request" placeholder="For example, vegetarian" value={dietaryRestriction} onChangeText={setDietaryRestriction} /> : null}
         <Button label="Make my recipe" onPress={run} disabled={!ingredients.trim() || voiceBusy} />

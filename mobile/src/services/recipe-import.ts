@@ -1,6 +1,6 @@
 import { apiRequest } from '@/services/api';
 export type ImportDraft = { title: string; ingredients: string; instructions: string; prepTime: string; cookTime: string; servings: string; dietaryTags: string; reviewNotes: string };
-export type ImportAdaptationAction = { type: 'substitute'; original: string; substitute: string } | { type: 'remove'; original: string } | { type: 'preferences'; oneRecipeDiet: string };
+export type ImportAdaptationAction = { type: 'substitute'; original: string; substitute: string } | { type: 'remove'; original: string } | { type: 'preferences'; oneRecipeDiet: string } | { type: 'measurements'; system: 'us' };
 function text(value: unknown): string { return typeof value === 'string' || typeof value === 'number' ? String(value).trim() : ''; }
 function lines(value: unknown): string {
   if (Array.isArray(value)) return value.map(text).filter(Boolean).join('\n');

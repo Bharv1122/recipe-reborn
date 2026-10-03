@@ -10,6 +10,7 @@ import { clearGenerationCancellation, wasGenerationCanceled } from '@/lib/genera
 import { getRequestUserId } from '@/lib/request-auth';
 import { buildIngredientReconciliationPrompt, validateIngredientReconciliation } from '@/lib/recipe-ingredient-integrity';
 import { findBlockedFoodInRecipe } from '@/lib/food-preferences';
+import { hasMetricCookingMeasures, US_COOKING_MEASURES } from '@/shared/cooking-measurements';
 
 export const dynamic = 'force-dynamic';
 export const maxDuration = 60;
@@ -49,6 +50,8 @@ export async function POST(request: NextRequest) {
 
     const body = await request.json();
     const { ingredients, dietaryRestriction, isSubstitutionRegeneration, originalRecipe, substitution, source } = body;
+    const measurementSystem = z.enum(['us']).optional().safeParse(body.measurementSystem);
+    if (!measurementSystem.success) return NextResponse.json({ error: 'Choose a supported measurement system.' }, { status: 400 });
     const pantryTargetTitleResult = z.string().trim().min(1).max(100).safeParse(body.pantryTargetTitle);
     const pantryExtraIngredientResult = z.string().trim().min(1).max(80).safeParse(body.pantryExtraIngredient);
     const pantryTargetTitle = pantryTargetTitleResult.success ? pantryTargetTitleResult.data : undefined;
@@ -335,6 +338,8 @@ Respond with raw JSON only. Do not include code blocks, markdown, or any other f
     prompt += `\n\nINGREDIENT LIST COMPLETENESS:
 The legacy field name "freshIngredients" means the COMPLETE recipe ingredient list, not only fresh foods or extra groceries to buy. Include every food used in any cooking or serving step with a quantity, including ingredients the user already has, canned or packaged foods, broth, seasonings, water used in the recipe, garnishes, and optional toppings. Mark optional ingredients as optional in both the list and steps. Do not put a food in the instructions without listing it. You do not have to use every pantry item: choose a coherent dish, and omit unused inventory from both the list and steps.`;
 
+    if (measurementSystem.data === 'us') prompt += `\n\nCOOKING MEASUREMENT REQUIREMENTS:\n${US_COOKING_MEASURES}`;
+
     // Apply the user's saved food preferences to every generation variant
     const prefLines: string[] = [];
     if (user.allergies.length > 0) {
@@ -524,6 +529,9 @@ The legacy field name "freshIngredients" means the COMPLETE recipe ingredient li
                     if (source === 'pantry') {
                       modelStream.cleanup();
                       finalResult.freshIngredients = await reconcilePantryIngredients(finalResult);
+                    }
+                    if (measurementSystem.data === 'us' && hasMetricCookingMeasures([...finalResult.freshIngredients, ...finalResult.instructions])) {
+                      throw new Error('Recipe response did not use the requested U.S. cooking measurements');
                     }
                     const includedAllergen = findBlockedFoodInRecipe(
                       { title: finalResult.title, ingredients: finalResult.freshIngredients, instructions: finalResult.instructions },

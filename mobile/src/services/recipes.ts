@@ -26,6 +26,7 @@ export async function generateRecipe(
     method: 'POST',
     body: JSON.stringify({
       ingredients,
+      measurementSystem: 'us',
       source: options.source,
       dietaryRestriction: options.dietaryRestriction || undefined,
       generationId,
