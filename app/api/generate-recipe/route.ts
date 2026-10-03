@@ -12,6 +12,7 @@ import { buildIngredientReconciliationPrompt, validateIngredientReconciliation }
 import { US_COOKING_MEASURES } from '@/shared/cooking-measurements';
 import { recipeResultSchema, parseGeneratedRecipe, validateGeneratedRecipe, GenerationValidationError, generationFailureMessage } from '@/lib/recipe-generation-validation';
 import { withRequestDeadline } from '@/lib/request-deadline';
+import { GenerationServiceUnavailable, generationRetryDelay, waitForGenerationRetry } from '@/lib/generation-provider-retry';
 
 export const dynamic = 'force-dynamic';
 export const maxDuration = 60;
@@ -394,8 +395,10 @@ The legacy field name "freshIngredients" means the COMPLETE recipe ingredient li
     if (!response?.ok) {
       logServerError('generation_model_non_ok', undefined, { status: response.status });
       modelStream.cleanup();
-      // Gemini occasionally returns transient 429/5xx — one retry recovers most of them
-      if (response.status === 429 || response.status >= 500) {
+      const retryDelay = generationRetryDelay(response, generationDeadline);
+      await response.body?.cancel();
+      if (retryDelay !== null) {
+        await waitForGenerationRetry(retryDelay, request.signal);
         try {
           modelStream = await openModelStream();
           response = modelStream.response;
@@ -408,6 +411,8 @@ The legacy field name "freshIngredients" means the COMPLETE recipe ingredient li
     if (!response?.ok) {
       logServerError('generation_model_retry_failed', undefined, { status: response.status });
       modelStream.cleanup();
+      await response.body?.cancel();
+      if (response.status === 429 || response.status >= 500) throw new GenerationServiceUnavailable();
       throw new Error(`LLM API request failed (${response.status})`);
     }
 
@@ -626,7 +631,11 @@ The legacy field name "freshIngredients" means the COMPLETE recipe ingredient li
       },
     });
   } catch (error) {
+    if (request.signal.aborted) return new NextResponse(null, { status: 499 });
     logServerError('generation_request_failed', error);
+    if (error instanceof GenerationServiceUnavailable) {
+      return NextResponse.json({ error: error.message }, { status: 503, headers: { 'Retry-After': '30' } });
+    }
     return NextResponse.json(
       { error: 'Failed to generate recipe' },
       { status: 500 }

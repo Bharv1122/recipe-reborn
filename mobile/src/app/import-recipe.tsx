@@ -13,6 +13,9 @@ import { colors } from '@/theme';
 import { takeChefRecipe } from '@/services/chef-recipe-handoff';
 import { stageScanRecipeHandoff } from '@/services/scan-recipe-handoff';
 import { MISSING_SOURCE_DIRECTIONS } from '../../../shared/recipe-import';
+import { recipeBrowserUrl } from '../../../shared/recipe-browser';
+import { RecipeWebsite } from '@/components/recipe-website';
+import { VoiceInput } from '@/components/voice-input';
 
 type Source = 'photo' | 'file' | 'url' | 'text';
 type Attachment = { uri: string; name: string; size: number; image: boolean; temporary: boolean };
@@ -20,9 +23,14 @@ export default function ImportRecipeScreen() {
   const router = useRouter();
   const [source, setSource] = useState<Source>('photo');
   const [url, setUrl] = useState('');
+  const [website, setWebsite] = useState<string | null>(null);
+  const [voiceBusy, setVoiceBusy] = useState(false);
   const [recipeText, setRecipeText] = useState('');
   const [partial, setPartial] = useState<{ title: string; ingredients: string; reviewNotes: string } | null>(null);
   const [directions, setDirections] = useState('');
+  const directionsRef = useRef(directions);
+  const recipeTextRef = useRef(recipeText);
+  useEffect(() => { directionsRef.current = directions; recipeTextRef.current = recipeText; }, [directions, recipeText]);
   const [attachment, setAttachment] = useState<Attachment | null>(null);
   const [draft, setDraft] = useState<ImportDraft | null>(() => { const chef = takeChefRecipe(); return chef ? importDraft(chef) : null; });
   const [sourceDraft, setSourceDraft] = useState<ImportDraft | null>(draft);
@@ -40,11 +48,11 @@ export default function ImportRecipeScreen() {
     temporary.current = null; setAttachment(null);
   };
   const selectSource = (next: Source) => {
-    if (busyRef.current) return;
+    if (busyRef.current || voiceBusy) return;
     clearAttachment(); setSource(next); setDraft(null); setSourceDraft(null); setPartial(null); setDirections(''); setError(null);
   };
   const choosePhoto = async (camera: boolean) => {
-    if (busyRef.current) return;
+    if (busyRef.current || voiceBusy) return;
     busyRef.current = true; setBusy(true); setError(null);
     try {
       if (camera && !(await ImagePicker.requestCameraPermissionsAsync()).granted) {
@@ -64,7 +72,7 @@ export default function ImportRecipeScreen() {
     finally { busyRef.current = false; setBusy(false); }
   };
   const chooseFile = async () => {
-    if (busyRef.current) return;
+    if (busyRef.current || voiceBusy) return;
     busyRef.current = true; setBusy(true); setError(null);
     try {
       const result = await DocumentPicker.getDocumentAsync({ type: ['image/jpeg', 'image/png', 'image/webp', 'text/plain', 'text/markdown', 'application/pdf'], copyToCacheDirectory: true, multiple: false });
@@ -86,7 +94,7 @@ export default function ImportRecipeScreen() {
     finally { busyRef.current = false; setBusy(false); }
   };
   const extract = async () => {
-    if (busyRef.current) return;
+    if (busyRef.current || voiceBusy) return;
     busyRef.current = true; setBusy(true); setError(null);
     const controller = new AbortController(); abort.current = controller;
     try {
@@ -134,11 +142,17 @@ export default function ImportRecipeScreen() {
       <Text style={styles.title}>Ingredients found</Text>
       <Text style={styles.body}>No cooking directions were visible. Your ingredients are preserved; this partial read did not use a recipe import.</Text>
       <Text style={styles.warning}>{partial.reviewNotes}</Text>
-      <Field accessibilityLabel="Imported title" value={partial.title} onChangeText={title => setPartial({ ...partial, title })} />
-      <Field accessibilityLabel="Imported ingredients" multiline style={styles.multiline} value={partial.ingredients} onChangeText={ingredients => setPartial({ ...partial, ingredients })} />
+      <Field accessibilityLabel="Imported title" editable={!voiceBusy} value={partial.title} onChangeText={title => setPartial({ ...partial, title })} />
+      <Field accessibilityLabel="Imported ingredients" editable={!voiceBusy} multiline style={styles.multiline} value={partial.ingredients} onChangeText={ingredients => setPartial({ ...partial, ingredients })} />
       <Text style={styles.label}>Add your directions</Text>
-      <Field accessibilityLabel="Missing directions" multiline style={styles.multiline} placeholder="Paste or type the cooking steps" value={directions} onChangeText={setDirections} />
-      <Button label="Review recipe" disabled={!directions.trim() || !partial.title.trim() || !partial.ingredients.trim()} onPress={() => {
+      <Field accessibilityLabel="Missing directions" editable={!voiceBusy} maxLength={50000} multiline style={styles.multiline} placeholder="Type, paste, or speak the cooking steps" value={directions} onChangeText={setDirections} />
+      <Text style={styles.body}>Each line becomes one step. Review spoken steps before continuing.</Text>
+      <VoiceInput label="Speak my directions" disabled={busy} onBusyChange={setVoiceBusy} onTranscript={text => {
+        const next = [directionsRef.current.trim(), text].filter(Boolean).join('\n');
+        if (next.length > 50000) { setError('Those directions are too long. Shorten them, then speak again.'); return; }
+        setDirections(next); setError(null);
+      }} />
+      <Button label="Review recipe" disabled={voiceBusy || !directions.trim() || !partial.title.trim() || !partial.ingredients.trim()} onPress={() => {
         try {
           const completed = importDraft({ title: partial.title, freshIngredients: partial.ingredients, instructions: directions, reviewNotes: 'Directions added during review; they were not visible in the source.' });
           importSnapshot(completed);
@@ -147,11 +161,11 @@ export default function ImportRecipeScreen() {
         } catch (value) { setError(value instanceof Error ? value.message : 'Check the recipe details.'); }
       }} />
       <Text style={styles.body}>Or create a new recipe with AI-written steps. This uses one recipe generation.</Text>
-      <Button label="Create recipe with AI" secondary disabled={!partial.ingredients.trim()} onPress={() => {
+      <Button label="Create recipe with AI" secondary disabled={voiceBusy || !partial.ingredients.trim()} onPress={() => {
         stageScanRecipeHandoff({ source: 'pantry', origin: 'import-ingredients', pantryTargetTitle: partial.title.trim() !== 'Imported recipe' ? partial.title.trim().slice(0, 100) || undefined : undefined, ingredients: partial.ingredients, context: 'Imported ingredients — AI will write a new recipe' });
         router.push('/generate');
       }} />
-      <Button label="Choose another source" secondary onPress={() => setPartial(null)} />
+      <Button label="Choose another source" secondary disabled={voiceBusy} onPress={() => setPartial(null)} />
       <InlineError message={error} />
     </Card></ScrollView>
   </Screen>;
@@ -176,15 +190,20 @@ export default function ImportRecipeScreen() {
       <>
         <Text style={styles.title}>Bring your recipes with you</Text>
         <Text style={styles.body}>Read a cookbook photo, recipe file, or website. Review and edit the result before saving.</Text>
-        <View style={styles.sources}>{(['photo', 'file', 'url', 'text'] as const).map(value => <View key={value} style={styles.source}><Button label={{ photo: 'Photo', file: 'File', url: 'Website', text: 'Text' }[value]} secondary={source !== value} disabled={busy} onPress={() => selectSource(value)} /></View>)}</View>
+        <View style={styles.sources}>{(['photo', 'file', 'url', 'text'] as const).map(value => <View key={value} style={styles.source}><Button label={{ photo: 'Photo', file: 'File', url: 'Website', text: 'Text' }[value]} secondary={source !== value} disabled={busy || voiceBusy} onPress={() => selectSource(value)} /></View>)}</View>
         <InlineError message={error} />
         <Card>
-          {source === 'text' ? <><Text style={styles.label}>Recipe text</Text><Field accessibilityLabel="Recipe text" value={recipeText} onChangeText={setRecipeText} multiline style={styles.multiline} editable={!busy} maxLength={100000} placeholder="Paste the ingredients and cooking directions" /></> : source === 'url' ? <><Text style={styles.label}>Recipe website link</Text><Field accessibilityLabel="Recipe website link" value={url} onChangeText={setUrl} autoCapitalize="none" autoCorrect={false} keyboardType="url" editable={!busy} placeholder="https://example.com/recipe" /><Text style={styles.body}>If the website blocks import, copy its recipe into Text.</Text></> : source === 'photo' ? <><Text style={styles.body}>Choose a recipe photo or screenshot. Include the ingredients and any cooking directions.</Text><Button label="Take recipe photo" onPress={() => choosePhoto(true)} disabled={busy} /><Button label="Choose recipe photo" secondary onPress={() => choosePhoto(false)} disabled={busy} /></> : <><Text style={styles.body}>JPG, PNG, WebP, or PDF up to 3 MB; UTF-8 TXT or Markdown up to 100 KB. Word files are not supported.</Text><Button label="Choose recipe file" onPress={chooseFile} disabled={busy} /></>}
+          {source === 'text' ? <><Text style={styles.label}>Recipe text</Text><Field accessibilityLabel="Recipe text" value={recipeText} onChangeText={setRecipeText} multiline style={styles.multiline} editable={!busy && !voiceBusy} maxLength={100000} placeholder="Type, paste, or speak your ingredients and directions" /><VoiceInput label="Speak my recipe" disabled={busy} onBusyChange={setVoiceBusy} onTranscript={text => { const next = [recipeTextRef.current.trim(), text].filter(Boolean).join('\n'); if (next.length > 100000) { setError('That recipe text is too long. Shorten it, then speak again.'); return; } setRecipeText(next); setError(null); }} /></> : source === 'url' ? <><Text style={styles.label}>Recipe website link</Text><Field accessibilityLabel="Recipe website link" value={url} onChangeText={setUrl} autoCapitalize="none" autoCorrect={false} keyboardType="url" editable={!busy} placeholder="https://example.com/recipe" /><Text style={styles.body}>If automatic import is blocked, open the website below and choose Use page recipe.</Text></> : source === 'photo' ? <><Text style={styles.body}>Choose a recipe photo or screenshot. Include the ingredients and any cooking directions.</Text><Button label="Take recipe photo" onPress={() => choosePhoto(true)} disabled={busy} /><Button label="Choose recipe photo" secondary onPress={() => choosePhoto(false)} disabled={busy} /></> : <><Text style={styles.body}>JPG, PNG, WebP, or PDF up to 3 MB; UTF-8 TXT or Markdown up to 100 KB. Word files are not supported.</Text><Button label="Choose recipe file" onPress={chooseFile} disabled={busy} /></>}
           {attachment ? <><Text style={styles.body}>{attachment.name}</Text>{attachment.image ? <><Image accessibilityLabel="Selected recipe source" source={{ uri: attachment.uri }} style={styles.preview} resizeMode="contain" /><Button label="Rotate photo" secondary disabled={busy} onPress={rotatePhoto} /></> : null}</> : null}
-          <Button label="Read recipe" onPress={extract} loading={busy} disabled={source === 'text' ? !recipeText.trim() : source === 'url' ? !url.trim() : !attachment} />
+          <Button label="Read recipe" onPress={extract} loading={busy} disabled={voiceBusy || (source === 'text' ? !recipeText.trim() : source === 'url' ? !url.trim() : !attachment)} />
+          {source === 'url' ? <Button label="Open website to import" secondary disabled={busy || !url.trim()} onPress={() => {
+            try { setWebsite(recipeBrowserUrl(url)); setError(null); }
+            catch { setError('Enter a public HTTPS recipe website.'); }
+          }} /> : null}
         </Card>
       </>
     </ScrollView>
+    {website ? <RecipeWebsite url={website} onClose={() => setWebsite(null)} onRead={text => { setWebsite(null); selectSource('text'); setRecipeText(text); }} /> : null}
   </Screen>;
 }
 const styles = StyleSheet.create({

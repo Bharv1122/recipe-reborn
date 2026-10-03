@@ -70,6 +70,10 @@ export async function POST(request: Request) {
       select: { allergies: true, dislikedIngredients: true, likedIngredients: true },
     });
     if (!user) return NextResponse.json({ error: 'Account not found.' }, { status: 404 });
+    if (parsed.data.action.type === 'preferences' && !parsed.data.action.oneRecipeDiet &&
+      !user.allergies.length && !user.dislikedIngredients.length && !user.likedIngredients.length) {
+      return NextResponse.json({ error: 'No saved preferences yet. Add your food preferences in Account, then apply them here.' }, { status: 422 });
+    }
     const aiLimit = await limitAiRequest(userId);
     if (aiLimit) return aiLimit;
     const preferences: AppliedFoodPreferences = {
