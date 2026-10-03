@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { prisma } from '@/lib/db';
 import { getRequestUserId } from '@/lib/request-auth';
 import { AI_API_KEY, AI_CHAT_URL, MODEL_FAST } from '@/lib/ai';
+import { limitAiRequest } from '@/lib/ai-rate-limit';
 
 const messageSchema = z.object({
   role: z.enum(['user', 'assistant']),
@@ -18,6 +19,9 @@ export async function POST(request: Request) {
   try {
     const userId = await getRequestUserId(request);
     if (!userId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+
+    const aiLimited = await limitAiRequest(userId);
+    if (aiLimited) return aiLimited;
     const parsed = requestSchema.safeParse(await request.json().catch(() => null));
     if (!parsed.success) return NextResponse.json({ error: 'Enter a cooking question.' }, { status: 400 });
     if (!AI_API_KEY) return NextResponse.json({ error: 'AI Chef is temporarily unavailable.' }, { status: 503 });

@@ -4,6 +4,7 @@ import { prisma } from '@/lib/db';
 import { getRequestUserId } from '@/lib/request-auth';
 import { AI_API_KEY, AI_CHAT_URL, MODEL_FAST, MODEL_SMART } from '@/lib/ai';
 import { validateMeal, type DayName, type MealType, type ValidatedMeal } from '@/lib/meal-plan-validation';
+import { ENTITLEMENT_SELECT, hasPremiumAccess, premiumRequiredMessage } from '@/lib/entitlement';
 
 function parseMealObject(content: string): unknown {
   let jsonText = content.trim();
@@ -82,7 +83,7 @@ export async function POST(request: Request, props: { params: Promise<{ id: stri
 
     const { id, recipeId } = await props.params;
     const [user, entry, titles] = await Promise.all([
-      prisma.user.findUnique({ where: { id: userId }, select: { subscriptionTier: true, allergies: true, dislikedIngredients: true, likedIngredients: true } }),
+      prisma.user.findUnique({ where: { id: userId }, select: { ...ENTITLEMENT_SELECT, allergies: true, dislikedIngredients: true, likedIngredients: true } }),
       prisma.mealPlanRecipe.findFirst({
         where: { id: recipeId, mealPlan: { id, userId } },
         include: { recipe: true },
@@ -93,8 +94,8 @@ export async function POST(request: Request, props: { params: Promise<{ id: stri
       }),
     ]);
     if (!entry || !user) return NextResponse.json({ error: 'Meal-plan recipe not found.' }, { status: 404 });
-    if (user.subscriptionTier !== 'premium' && user.subscriptionTier !== 'pro') {
-      return NextResponse.json({ error: 'Premium feature', message: 'Meal replacement is available with Premium.' }, { status: 403 });
+    if (!hasPremiumAccess(user)) {
+      return NextResponse.json({ error: 'Premium feature', message: premiumRequiredMessage(user, 'Meal replacement') }, { status: 403 });
     }
 
     const meal = await generateReplacement({

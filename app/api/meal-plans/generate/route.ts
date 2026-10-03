@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto';
 import { NextResponse } from 'next/server';
 import { z } from 'zod';
 import { prisma } from '@/lib/db';
+import { hasPremiumAccess, premiumRequiredMessage } from '@/lib/entitlement';
 import { getRequestUserId } from '@/lib/request-auth';
 import { MODEL_FAST } from '@/lib/ai';
 import { generateValidatedPlan, MealPlanSafetyError, MealPlanProviderError } from '@/lib/meal-plan-generation';
@@ -77,12 +78,13 @@ export async function POST(req: Request) {
       ? `your ${partnerTrial.offer.label} invite includes ${partnerTrial.trialDays} days free`
       : `your first ${partnerTrial?.trialDays ?? DEFAULT_TRIAL_DAYS} days are free`;
 
-    const tier = profile?.subscriptionTier ?? 'free';
-    if (tier !== 'premium' && tier !== 'pro') {
+    if (!hasPremiumAccess(profile)) {
       return NextResponse.json(
         {
           error: 'Premium feature',
-          message: `AI weekly meal plans are a Premium feature. Upgrade for $9.99/mo — ${upgradeTrialCopy}.`,
+          message: profile?.subscriptionStatus === 'past_due'
+            ? premiumRequiredMessage(profile, 'AI weekly meal planning')
+            : `AI weekly meal plans are a Premium feature. Upgrade for $9.99/mo — ${upgradeTrialCopy}.`,
         },
         { status: 403 },
       );

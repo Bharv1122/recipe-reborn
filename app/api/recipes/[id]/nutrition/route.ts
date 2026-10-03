@@ -7,6 +7,7 @@ import { extractJsonPayload } from '@/lib/ai-json';
 import { lookupNutrients } from '@/lib/usda';
 import { nullableNutritionNumber, type FreshNutritionEstimate, type NutritionValues } from '@/lib/nutrition-facts';
 import { recipeComparisonSchema } from '@/lib/recipe-comparison-validation';
+import { limitAiRequest } from '@/lib/ai-rate-limit';
 
 interface ParsedIngredient {
   name: string;
@@ -209,6 +210,9 @@ export async function POST(req: Request, props: { params: Promise<{ id: string }
     if (!session?.user?.id) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
+
+    const aiLimited = await limitAiRequest(session.user.id);
+    if (aiLimited) return aiLimited;
 
     // Fetch the recipe
     const recipe = await prisma.recipe.findFirst({

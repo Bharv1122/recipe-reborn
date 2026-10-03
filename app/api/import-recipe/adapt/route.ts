@@ -4,6 +4,7 @@ import { AI_API_KEY, AI_GENERATE_URL } from '@/lib/ai';
 import { extractJsonPayload } from '@/lib/ai-json';
 import { getRequestUserId } from '@/lib/request-auth';
 import { rateLimit } from '@/lib/rate-limit';
+import { limitAiRequest } from '@/lib/ai-rate-limit';
 import {
   buildImportAdaptationPrompt,
   importAdaptationRequestSchema,
@@ -69,6 +70,8 @@ export async function POST(request: Request) {
       select: { allergies: true, dislikedIngredients: true, likedIngredients: true },
     });
     if (!user) return NextResponse.json({ error: 'Account not found.' }, { status: 404 });
+    const aiLimit = await limitAiRequest(userId);
+    if (aiLimit) return aiLimit;
     const preferences: AppliedFoodPreferences = {
       allergies: user.allergies,
       dislikes: parsed.data.action.type === 'preferences' ? user.dislikedIngredients : [],

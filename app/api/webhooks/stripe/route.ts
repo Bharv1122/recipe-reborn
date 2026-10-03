@@ -77,6 +77,14 @@ export async function POST(req: Request) {
   }
 }
 
+// Cheffo Doggo shares this Stripe account, so its customers' events arrive
+// here too. A customer with no Recipe Reborn user isn't an error: acknowledge
+// the event instead of returning 500, which makes Stripe retry and eventually
+// disable the endpoint.
+function logUnknownCustomer(customerId: string) {
+  console.log(`No Recipe Reborn user for Stripe customer ${customerId}; ignoring event`);
+}
+
 async function handleSubscriptionChange(subscription: Stripe.Subscription) {
   const customerId = subscription.customer as string;
   const subscriptionId = subscription.id;
@@ -116,7 +124,7 @@ async function handleSubscriptionChange(subscription: Stripe.Subscription) {
     : null;
 
   // Update user in database
-  await prisma.user.update({
+  const updated = await prisma.user.updateMany({
     where: { stripeCustomerId: customerId },
     data: {
       subscriptionTier: tier,
@@ -125,6 +133,10 @@ async function handleSubscriptionChange(subscription: Stripe.Subscription) {
       currentPeriodEnd,
     },
   });
+  if (updated.count === 0) {
+    logUnknownCustomer(customerId);
+    return;
+  }
 
   console.log(
     `Updated subscription for customer ${customerId}: ${tier} (${status})`
@@ -134,7 +146,7 @@ async function handleSubscriptionChange(subscription: Stripe.Subscription) {
 async function handleSubscriptionCanceled(subscription: Stripe.Subscription) {
   const customerId = subscription.customer as string;
 
-  await prisma.user.update({
+  const updated = await prisma.user.updateMany({
     where: { stripeCustomerId: customerId },
     data: {
       subscriptionTier: 'free',
@@ -143,6 +155,10 @@ async function handleSubscriptionCanceled(subscription: Stripe.Subscription) {
       currentPeriodEnd: null,
     },
   });
+  if (updated.count === 0) {
+    logUnknownCustomer(customerId);
+    return;
+  }
 
   console.log(`Canceled subscription for customer ${customerId}`);
 }
@@ -158,7 +174,7 @@ async function handlePaymentSuccess(invoice: Stripe.Invoice) {
   }
 
   // Reset generation count on successful payment (monthly billing)
-  await prisma.user.update({
+  const updated = await prisma.user.updateMany({
     where: { stripeCustomerId: customerId },
     data: {
       subscriptionStatus: 'active',
@@ -166,6 +182,10 @@ async function handlePaymentSuccess(invoice: Stripe.Invoice) {
       lastGenerationReset: new Date(),
     },
   });
+  if (updated.count === 0) {
+    logUnknownCustomer(customerId);
+    return;
+  }
 
   console.log(`Payment succeeded for customer ${customerId}`);
 }
@@ -173,12 +193,16 @@ async function handlePaymentSuccess(invoice: Stripe.Invoice) {
 async function handlePaymentFailed(invoice: Stripe.Invoice) {
   const customerId = invoice.customer as string;
 
-  await prisma.user.update({
+  const updated = await prisma.user.updateMany({
     where: { stripeCustomerId: customerId },
     data: {
       subscriptionStatus: 'past_due',
     },
   });
+  if (updated.count === 0) {
+    logUnknownCustomer(customerId);
+    return;
+  }
 
   console.log(`Payment failed for customer ${customerId}`);
 }
