@@ -19,7 +19,10 @@ const allergens: { name: string; explicit: RegExp; possible?: RegExp; alternativ
 export function ingredientAllergens(ingredients: string[]) {
   return ingredients.flatMap(ingredient => allergens.flatMap(rule => {
     // Remove only directly qualified alternatives, not a whole mixed line.
-    const normalized = ingredient.normalize('NFKD').replace(/[\u0300-\u036f]/g, '');
+    const normalized = ingredient.normalize('NFKD').replace(/[\u0300-\u036f]/g, '')
+      // Fresh water's intended use is not an ingredient it contains. Keep
+      // reserved pasta water and any separately listed ingredients intact.
+      .replace(/\bwater\s*,?\s+(?:for|to)\s+(?:cooking|boiling|cook|boil)\s+(?:the\s+)?(?:pasta|noodles|spaghetti|penne|macaroni)\b/gi, 'water');
     const qualified = normalized.replace(rule.alternatives ?? /$^/, '');
     const text = qualified.replace(/\b(?:wheat|gluten|milk|dairy|egg|soy|peanut|nut|sesame|fish|shellfish)[- ]free\b/gi, '');
     const explicit = rule.explicit.test(text);
@@ -77,7 +80,8 @@ export function scaleDetailRecipe(recipe: DetailRecipe, count: number): DetailRe
     if (!match && /\d/.test(normalized)) throw new Error('A quantity is not at the start of an ingredient. Review it in Edit recipe details before changing servings.');
     if (match) {
       const rest = normalized.slice(match[0].length).trim();
-      if (/\d/.test(rest)) throw new Error('An ingredient has multiple quantities. Review them in Edit recipe details before changing servings.');
+      const quantityText = rest.replace(/\b\d+(?:\.\d+)?[ -]*(?:inch(?:es)?|cm|mm)[ -]*(?:pieces?|cubes?|chunks?|slices?|thick)\b/gi, '');
+      if (/\d/.test(quantityText)) throw new Error('An ingredient has multiple quantities. Review them in Edit recipe details before changing servings.');
       if (!new RegExp(`^${units}\\b`, 'i').test(rest)) {
         const noun = rest.replace(/^(?:small|medium|large|whole|fresh)\s+/i, '').match(/^[a-z]+/i)?.[0];
         if (noun && !/^(inch|cm|piece|slice|minute|can|jar|package)s?$/i.test(noun)) countedFoods.add(noun.replace(/s$/, ''));

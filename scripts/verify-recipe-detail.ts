@@ -26,6 +26,10 @@ assert.equal(ingredientAllergens(['buckwheat noodles'])[0].possible, true);
 assert.equal(ingredientAllergens(['breadcrumbs or corn flakes'])[0].possible, true);
 assert.equal(ingredientAllergens(['100 g feta'])[0].name, 'Milk');
 assert.equal(ingredientAllergens(['100 g penne'])[0].possible, true);
+assert.deepEqual(ingredientAllergens(['Water, for cooking pasta']), []);
+assert.equal(ingredientAllergens(['1 litre water to boil durum wheat pasta'])[0].name, 'Wheat', 'Never suppress explicitly named wheat.');
+assert.equal(ingredientAllergens(['Water, for cooking pasta, and cream'])[0].name, 'Milk');
+assert.equal(ingredientAllergens(['Reserved pasta cooking water'])[0].possible, true);
 assert.equal(servingCount('Serves 4'), 4);
 assert.equal(servingCount('4 people'), 4);
 
@@ -36,6 +40,7 @@ assert.equal(doubled.freshIngredients[0], '300 g durum wheat pasta');
 assert.equal(doubled.freshIngredients[2], '1 cup cream (milk, xanthan gum)');
 assert.equal(doubled.instructions[0], 'Boil 300 g pasta for 10 minutes.');
 assert.equal(doubled.instructions[1], recipe.instructions[1], 'Do not scale food-safety temperatures.');
+assert.equal(scaleDetailRecipe({ ...recipe, freshIngredients: ['250 g chicken breast, diced into 1-inch pieces'] }, 4).freshIngredients[0], '500 g chicken breast, diced into 1-inch pieces');
 assert.equal(doubled.instructions[2], 'Add 1 cup cream and 2 tsp olive oil. Divide into 4 bowls.');
 assert.equal(JSON.stringify(recipe), source, 'Scaling must preserve the original recipe for Undo.');
 const eggs = scaleDetailRecipe({ ...recipe, freshIngredients: ['2 large eggs', '1½ cups milk'], instructions: ['Whisk 2 large eggs with 1½ cups milk. Cook for 3 minutes.'] }, 4);
