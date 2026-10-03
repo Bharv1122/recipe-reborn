@@ -6,7 +6,7 @@ export type DetailRecipe = { title: string; freshIngredients: string[]; instruct
 // Ambiguous foods are explicitly marked possible; absence is not an all-clear.
 const allergens: { name: string; explicit: RegExp; possible?: RegExp; alternatives?: RegExp }[] = [
   { name: 'Wheat', explicit: /\b(wheat|semolina|durum|spelt|farina|couscous|bulgur|seitan)\b/i, possible: /\b(pasta|flour|bread|breadcrumbs|noodles|soy sauce|spaghetti|penne|macaroni|lasagn[ae]|orzo|linguine|fettuccine|panko|tortillas?|pita|crackers?|croutons?|soba)\b/i, alternatives: /\b(?:gluten|wheat)[- ]free\s+(?:rice\s+)?(?:pasta|flour|bread|breadcrumbs|noodles|soy sauce|spaghetti|penne|macaroni)\b|\b(?:rice|chickpea|almond|coconut|corn|lentil)\s+(?:flour|noodles|pasta)\b/gi },
-  { name: 'Milk', explicit: /\b(milk|cream|butter|cheese|yogh?urt|whey|casein(?:ate)?|ghee|parmesan|mozzarella|cheddar|buttermilk|ricotta|feta|paneer|mascarpone|kefir|creme fraiche|half[- ]and[- ]half|gouda|gruyere|brie)\b/i, possible: /\bcreamer\b/i, alternatives: /\b(?:coconut|almond|oat|soy|soya|cashew|rice|peanut|cocoa|shea|sunflower)\s+(?:milk|cream|butter|yogh?urt|cheese)\b|\b(?:dairy[- ]free|vegan|plant[- ]based)\s+(?:milk|cream|butter|yogh?urt|cheese|creamer)\b|\bcream of tartar\b/gi },
+  { name: 'Milk', explicit: /\b(milk|cream|butter|cheese|yogh?urt|whey|casein(?:ate)?|ghee|parmesan|mozzarella|cheddar|buttermilk|ricotta|feta|paneer|mascarpone|kefir|creme fraiche|half[- ]and[- ]half|gouda|gruyere|brie)\b/i, possible: /\bcreamer\b/i, alternatives: /\b(?:coconut|almond|oat|soy|soya|cashew|rice|peanut|cocoa|shea|sunflower)\s+(?:milk|cream|butter|yogh?urt|cheese)\b|\b(?:dairy[- ]free|vegan|plant[- ]based)\s+(?:(?:cooking|heavy|whipping|double|single|sour)\s+)?(?:milk|cream|butter|yogh?urt|cheese|creamer)\b|\b(?:dairy[- ]free|vegan|plant[- ]based)\s+(?:parmesan|mozzarella|cheddar|ricotta|feta|paneer|mascarpone|gouda|gruyere|brie)(?:[- ]style)?(?:\s+cheese)?\b|\bcream of tartar\b/gi },
   { name: 'Egg', explicit: /\b(eggs?|albumin|meringue|mayonnaise)\b/i, alternatives: /\b(?:egg[- ]free|vegan)\s+(?:mayonnaise|eggs?)\b|\b(?:flax|chia)\s+eggs?\b|\begg\s+(?:replacer|substitute)\b/gi },
   { name: 'Soy', explicit: /\b(soy|soya|soybeans?|tofu|tempeh|edamame|miso|tamari)\b/i },
   { name: 'Peanut', explicit: /\b(peanuts?|groundnuts?)\b/i },
@@ -26,7 +26,10 @@ export function ingredientAllergens(ingredients: string[]) {
     const qualified = normalized.replace(rule.alternatives ?? /$^/, '');
     const text = qualified.replace(/\b(?:wheat|gluten|milk|dairy|egg|soy|peanut|nut|sesame|fish|shellfish)[- ]free\b/gi, '');
     const explicit = rule.explicit.test(text);
-    const possible = !explicit && Boolean(rule.possible?.test(text));
+    // A brand/base mentioned only as an example does not establish its use.
+    // Keep definite matches outside examples, even with words like "fresh or frozen".
+    const withoutExamples = text.replace(/\(\s*e\.g\.[^)]*\)|\be\.g\..*$/gi, '');
+    const possible = explicit ? !rule.explicit.test(withoutExamples) : Boolean(rule.possible?.test(text));
     return explicit || possible ? [{ name: rule.name, ingredient, possible }] : [];
   }));
 }

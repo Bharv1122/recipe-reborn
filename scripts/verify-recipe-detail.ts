@@ -30,6 +30,15 @@ assert.deepEqual(ingredientAllergens(['Water, for cooking pasta']), []);
 assert.equal(ingredientAllergens(['1 litre water to boil durum wheat pasta'])[0].name, 'Wheat', 'Never suppress explicitly named wheat.');
 assert.equal(ingredientAllergens(['Water, for cooking pasta, and cream'])[0].name, 'Milk');
 assert.equal(ingredientAllergens(['Reserved pasta cooking water'])[0].possible, true);
+const veganCream = ingredientAllergens(['120 ml vegan cooking cream (e.g., oat or soy-based)']);
+assert.deepEqual(veganCream.map(({ name, possible }) => ({ name, possible })), [{ name: 'Soy', possible: true }]);
+assert.equal(ingredientAllergens(['2 tbsp vegan Parmesan cheese, grated (if you have it, optional)']).length, 0);
+assert.equal(ingredientAllergens(['Extra vegan Parmesan cheese, grated, for garnish (if you have it, optional)']).length, 0);
+assert.equal(ingredientAllergens(['vegan Parmesan cheese and 1 tbsp butter']).some(item => item.name === 'Milk' && !item.possible), true);
+assert.equal(ingredientAllergens(['vegan cooking cream and milk']).some(item => item.name === 'Milk' && !item.possible), true);
+for (const line of ['200 g shrimp, fresh or frozen', '1 cup milk, warm or room temperature', '2 tbsp salted or unsalted butter', 'cheddar or gouda', 'almonds or walnuts', '2 large eggs (e.g., free-range)']) {
+  assert.equal(ingredientAllergens([line])[0].possible, false, `Retain definite allergens outside product examples: ${line}`);
+}
 assert.equal(servingCount('Serves 4'), 4);
 assert.equal(servingCount('4 people'), 4);
 
