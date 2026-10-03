@@ -20,6 +20,7 @@ export function importSnapshot(draft: ImportDraft) {
   const instructions = draft.instructions.split(/\r?\n/).map(item => item.trim()).filter(Boolean);
   const dietaryTags = draft.dietaryTags.split(',').map(item => item.trim()).filter(Boolean);
   if (!draft.title.trim() || !ingredients.length || !instructions.length) throw new Error('Add a title, ingredients, and instructions before saving.');
+  if ([draft.prepTime, draft.cookTime, draft.servings].some(value => value.trim().length > 100)) throw new Error('Keep times and servings under 100 characters.');
   if (draft.title.trim().length > 200 || ingredients.length > 150 || ingredients.some(item => item.length > 500) || instructions.length > 100 || instructions.some(item => item.length > 3000) || dietaryTags.length > 30 || dietaryTags.some(item => item.length > 80)) throw new Error('This recipe is too long. Keep ingredients on separate lines and shorten lengthy steps or tags.');
   return { title: draft.title.trim(), freshIngredients: ingredients, instructions, dietaryTags, prepTime: draft.prepTime.trim(), cookTime: draft.cookTime.trim(), servings: draft.servings.trim() };
 }

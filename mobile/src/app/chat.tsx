@@ -1,6 +1,9 @@
 import { useEffect, useRef, useState } from 'react';
 import { Alert, KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
-import { Stack } from 'expo-router';
+import { Stack, useRouter } from 'expo-router';
+import * as Crypto from 'expo-crypto';
+import { File, Paths } from 'expo-file-system';
+import { stageChefRecipe } from '@/services/chef-recipe-handoff';
 import { useSQLiteContext } from 'expo-sqlite';
 import { Button, Card, Field, InlineError, Screen } from '@/components/ui';
 import { apiRequest } from '@/services/api';
@@ -19,6 +22,7 @@ const starterQuestions = [
 
 export default function ChatScreen() {
   const db = useSQLiteContext();
+  const router = useRouter();
   const { user } = useAuth();
   const scrollRef = useRef<ScrollView>(null);
   const saveQueueRef = useRef(Promise.resolve());
@@ -62,6 +66,20 @@ export default function ChatScreen() {
     } finally { setBusy(false); }
   };
 
+  const openRecipe = async (content: string) => {
+    if (busy) return;
+    setBusy(true); setError(null);
+    const file = new File(Paths.cache, 'chef-recipe-' + Crypto.randomUUID() + '.txt');
+    try {
+      file.write(content);
+      const body = new FormData(); body.append('file', file, 'chef-recipe.txt');
+      const result = await apiRequest<{ recipe: unknown }>('/api/import-recipe', { method: 'POST', body });
+      stageChefRecipe(result.recipe);
+      router.push('/import-recipe');
+    } catch (value) { setError(value instanceof Error ? value.message : 'This answer does not contain a complete recipe.'); }
+    finally { if (file.exists) file.delete(); setBusy(false); }
+  };
+
   const confirmClear = () => {
     if (!user?.id || !messages.length) return;
     Alert.alert('Clear AI Chef history?', 'This removes the saved conversation from this phone.', [
@@ -96,7 +114,7 @@ export default function ChatScreen() {
         {messages.map((message, index) => <View key={`${message.role}-${index}`} style={[styles.bubble, message.role === 'user' ? styles.userBubble : styles.chefBubble]}>
           <Text style={styles.label}>{message.role === 'user' ? 'You' : 'AI Chef'}</Text>
           <Text style={styles.message}>{message.content}</Text>
-          {message.role === 'assistant' ? <ReportContentAction target={{ source: 'chat', message: message.content }} /> : null}
+          {message.role === 'assistant' ? <><Button label="Review as a recipe" secondary disabled={busy} onPress={() => Alert.alert('Open recipe review?', 'If this answer contains a complete recipe, it will open with ingredients, nutrition and dietary options. This uses one recipe import from your monthly allowance.', [{ text: 'Cancel', style: 'cancel' }, { text: 'Open recipe', onPress: () => void openRecipe(message.content) }])} /><ReportContentAction target={{ source: 'chat', message: message.content }} /></> : null}
         </View>)}
         {messages.length ? <Pressable accessibilityRole="button" accessibilityLabel="Clear AI Chef history" onPress={confirmClear} style={styles.clear}><Text style={styles.clearText}>Clear chat history</Text></Pressable> : null}
       </ScrollView>

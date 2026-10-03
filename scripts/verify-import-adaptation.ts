@@ -78,20 +78,25 @@ async function main() {
   assert.match(route, /request\.signal/);
   assert.match(route, /quotaUsed:\s*false/);
   assert.doesNotMatch(route, /generationCount|prisma\.recipe\.(?:create|update|delete)/, 'Adaptation must not charge quota or save a partial draft.');
-  for (const client of [webDraft, mobileDraft]) {
+  for (const client of [webDraft]) {
     assert.match(client, /Substitute/);
     assert.match(client, /Remove/);
     assert.match(client, /Apply my preferences/);
     assert.match(client, /Revert to imported source/);
     assert.match(client, /Cancel adaptation/);
   }
-  for (const savedClient of [webSaved, mobileSaved]) {
+  for (const savedClient of [webSaved]) {
     assert.match(savedClient, /Save Adapted Copy|Save adapted copy/);
     assert.match(savedClient, /original.*unchanged|original recipe.*unchanged/is);
     assert.match(savedClient, /source revert is unavailable/);
   }
   assert.match(webSaved, /storedImportSourceSnapshot \?/);
-  assert.match(mobileSaved, /storedSourceDraft \?/);
+  const nativeDetail = await source('mobile/src/components/recipe-detail.tsx');
+  assert.match(mobileDraft, /RecipeDetail/);
+  assert.match(mobileSaved, /RecipeDetail/);
+  for (const label of ['Substitute', 'Remove', 'Apply my saved food preferences', 'Restore imported source', 'Cancel change', 'Save recipe']) assert.ok(nativeDetail.includes(label));
+  assert.match(nativeDetail, /original stays unchanged/);
+  assert.match(mobileSaved, /sourceRecipe=\{recipe.importSourceSnapshot\}/);
   assert.match(webNutrition, /estimate is unavailable right now/);
   assert.match(webPresentation, /typeof recipe\?\.estimatedCostPerServing === 'number'/);
   assert.match(mobileComparison, /— means unavailable/);

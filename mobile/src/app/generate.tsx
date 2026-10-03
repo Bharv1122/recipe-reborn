@@ -7,10 +7,11 @@ import { cancelRecipeGeneration, generateRecipe, saveGeneratedRecipe } from '@/s
 import { takeScanRecipeHandoff } from '@/services/scan-recipe-handoff';
 import type { GeneratedRecipe } from '@/types';
 import { colors } from '@/theme';
-import { PackageNutritionReview, RecipeComparison, type NutritionEstimateStatus } from '@/components/recipe-comparison';
+import { PackageNutritionReview } from '@/components/recipe-comparison';
+import { RecipeDetail, type DetailSave } from '@/components/recipe-detail';
 import { VoiceInput } from '@/components/voice-input';
 import { ReportContentAction } from '@/components/report-content';
-import type { FreshNutritionEstimate, OriginalNutrition } from '../../../shared/nutrition-facts';
+import type { OriginalNutrition } from '../../../shared/nutrition-facts';
 
 type Source = 'label' | 'pantry' | 'dish';
 export default function GenerateScreen() {
@@ -23,12 +24,9 @@ export default function GenerateScreen() {
   const [recipe, setRecipe] = useState<GeneratedRecipe | null>(null);
   const [busy, setBusy] = useState(false);
   const [voiceBusy, setVoiceBusy] = useState(false);
-  const [saving, setSaving] = useState(false);
   const [generatedFrom, setGeneratedFrom] = useState('');
   const [scanContext, setScanContext] = useState('');
   const [originalNutrition, setOriginalNutrition] = useState<OriginalNutrition | null>(null);
-  const [freshNutrition, setFreshNutrition] = useState<FreshNutritionEstimate | null>(null);
-  const [nutritionStatus, setNutritionStatus] = useState<NutritionEstimateStatus>('pending');
   const [error, setError] = useState<string | null>(null);
   const abortRef = useRef<AbortController | null>(null);
   const generationIdRef = useRef<string | null>(null);
@@ -41,7 +39,7 @@ export default function GenerateScreen() {
     setIngredients(handoff.ingredients);
     setScanContext(handoff.context || 'Your reviewed ingredients');
     setOriginalNutrition(handoff.originalNutrition ?? null);
-    setRecipe(null); setFreshNutrition(null); setNutritionStatus('pending'); setGeneratedFrom(''); setError(null);
+    setRecipe(null); setGeneratedFrom(''); setError(null);
   }, []));
 
   const run = async () => {
@@ -50,7 +48,7 @@ export default function GenerateScreen() {
     const controller = new AbortController();
     const generationId = Crypto.randomUUID();
     abortRef.current = controller; generationIdRef.current = generationId;
-    setGeneratedFrom(input); setBusy(true); setError(null); setRecipe(null); setFreshNutrition(null); setNutritionStatus('pending');
+    setGeneratedFrom(input); setBusy(true); setError(null); setRecipe(null);
     try {
       const result = await generateRecipe(input, { source, dietaryRestriction: dietaryRestriction.trim() || undefined, signal: controller.signal, generationId });
       setRecipe(result.recipe);
@@ -66,21 +64,25 @@ export default function GenerateScreen() {
     catch (value) { setError(value instanceof Error ? value.message : 'Cancellation could not be confirmed.'); }
     finally { abortRef.current?.abort(); }
   };
-  const save = async () => {
-    if (!recipe || !source || savingRef.current || nutritionStatus === 'pending') return;
-    savingRef.current = true; setSaving(true); setError(null);
+  const save = async ({ recipe: shown, nutrition, allowLeave }: DetailSave) => {
+    if (!source || savingRef.current) return;
+    savingRef.current = true;
     try {
-      const result = await saveGeneratedRecipe(generatedFrom, recipe, {
+      const result = await saveGeneratedRecipe(generatedFrom, shown, {
         version: 1, source,
         originalNutrition: source === 'label' ? originalNutrition : null,
-        freshNutrition,
+        freshNutrition: nutrition,
       });
+      allowLeave();
       router.replace({ pathname: '/recipes/[id]', params: { id: result.recipe.id, justSaved: '1' } });
-    } catch (value) { setError(value instanceof Error ? value.message : 'Could not save recipe. Please try again.'); }
-    finally { savingRef.current = false; setSaving(false); }
+    } finally { savingRef.current = false; }
   };
   const title = scanContext ? 'Check your ingredients' : source === 'label' ? 'Enter the label ingredients' : source === 'pantry' ? 'What ingredients do you have?' : 'What would you like to make?';
-  const saveLabel = nutritionStatus === 'pending' ? 'Finishing nutrition estimate…' : nutritionStatus === 'failed' ? 'Save without nutrition estimate' : 'Save to My recipes';
+  if (recipe) return <>
+    <Stack.Screen options={{ headerShown: true, title: 'Your recipe', headerTintColor: colors.white, headerStyle: { backgroundColor: colors.green } }} />
+    <RecipeDetail initial={recipe} originalIngredients={generatedFrom} packageNutrition={originalNutrition} isPackage={source === 'label'} onSave={save}
+      extra={<ReportContentAction target={{ source: 'generated', recipe: { title: recipe.title, freshIngredients: recipe.freshIngredients, instructions: recipe.instructions } }} />} />
+  </>;
   return <Screen>
     <Stack.Screen options={{ headerShown: true, title: recipe ? 'Your recipe' : source === 'pantry' ? 'Use my ingredients' : source === 'dish' ? 'Choose a dish' : 'Make a recipe', headerTintColor: colors.green }} />
     <ScrollView key={recipe ? 'result' : busy ? 'working' : 'input'} contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
@@ -89,25 +91,7 @@ export default function GenerateScreen() {
         <Text style={styles.title}>Making your recipe…</Text>
         <Text style={styles.body}>This can take a moment. Your recipe will appear here when it is ready.</Text>
         <Button label="Cancel" secondary onPress={cancel} />
-      </Card> : recipe ? <>
-        <Card>
-          <Text style={styles.eyebrow}>READY TO COOK</Text>
-          <Text style={styles.recipeTitle}>{recipe.title}</Text>
-          <Text style={styles.body}>{recipe.prepTime} prep · {recipe.cookTime} cook · {recipe.servings} servings</Text>
-          <Text style={styles.body}>Save it to keep it in My recipes and add it to a meal plan.</Text>
-          <Button label={saveLabel} onPress={save} loading={saving} disabled={nutritionStatus === 'pending'} />
-        </Card>
-        <RecipeComparison recipe={recipe} originalIngredients={generatedFrom} original={originalNutrition} isPackage={source === 'label'} onNutrition={setFreshNutrition} onStatusChange={setNutritionStatus} />
-        <Card>
-          <Text style={styles.heading}>Ingredients</Text>
-          {recipe.freshIngredients.map((item, index) => <Text key={`${index}-${item}`} style={styles.body}>• {item}</Text>)}
-          <Text style={styles.heading}>Cooking steps</Text>
-          {recipe.instructions.map((item, index) => <Text key={`${index}-${item}`} style={styles.body}>{index + 1}. {item}</Text>)}
-          <Button label={saveLabel} onPress={save} loading={saving} disabled={nutritionStatus === 'pending'} />
-          <Button label="Change ingredients" secondary disabled={saving} onPress={() => { setRecipe(null); setError(null); }} />
-          <ReportContentAction target={{ source: 'generated', recipe: { title: recipe.title, freshIngredients: recipe.freshIngredients, instructions: recipe.instructions } }} />
-        </Card>
-      </> : !source ? <Card>
+      </Card> : !source ? <Card>
         <Text style={styles.title}>Where would you like to start?</Text>
         <Button label="Scan a package" onPress={() => router.replace('/(tabs)/scan')} />
         <Button label="Use my ingredients" secondary onPress={() => setSource('pantry')} />

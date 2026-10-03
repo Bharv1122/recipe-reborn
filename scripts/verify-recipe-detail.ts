@@ -1,0 +1,55 @@
+import assert from 'node:assert/strict';
+import { ingredientAdditives, ingredientAllergens, nutritionKey, recipeKey, scaleDetailRecipe, servingCount, type DetailRecipe } from '../shared/recipe-detail';
+
+const actualLines = ['150 g durum wheat pasta', '250 g chicken breast', '½ cup cream (milk, xanthan gum)', '1 tsp olive oil'];
+const matches = ingredientAllergens(actualLines);
+assert.deepEqual(matches.map(({ name, ingredient }) => [name, ingredient]), [['Wheat', actualLines[0]], ['Milk', actualLines[2]]]);
+assert.equal(ingredientAllergens(['150 g pasta'])[0].possible, true, 'Unspecified pasta is not proof of wheat.');
+assert.equal(ingredientAllergens(['150 g gluten-free rice pasta']).length, 0);
+assert.equal(ingredientAllergens(['1 cup coconut cream']).length, 0, 'Coconut cream must not be reported as dairy.');
+assert.equal(ingredientAllergens(['1 tbsp peanut butter']).some(item => item.name === 'Milk'), false);
+assert.equal(ingredientAllergens(['1 cup oat milk and 1 tbsp butter']).some(item => item.name === 'Milk'), true, 'Alternative milk cannot hide a separate dairy ingredient.');
+assert.equal(ingredientAllergens(['1 cup almond milk'])[0].name, 'Tree nuts');
+assert.deepEqual(ingredientAllergens(['250 g chicken', '1 tsp olive oil']), []);
+const additive = ingredientAdditives(actualLines);
+assert.equal(additive.length, 1);
+assert.equal(additive[0].ingredient, actualLines[2]);
+assert.equal(additive[0].name, 'Xanthan gum');
+assert.equal(ingredientAdditives(['½ cup cream']).length, 0, 'Never infer xanthan gum from generic cream.');
+assert.equal(ingredientAdditives(actualLines.filter(line => !line.includes('cream'))).length, 0);
+
+for (const line of ['wheat-free flour', 'soy-free spread', 'egg-free pasta', 'peanut-free spread', 'flax egg']) {
+  assert.equal(ingredientAllergens([line]).some(item => !item.possible), false, line);
+}
+assert.equal(ingredientAllergens(['flour and rice'])[0].possible, true);
+assert.equal(ingredientAllergens(['buckwheat noodles'])[0].possible, true);
+assert.equal(ingredientAllergens(['breadcrumbs or corn flakes'])[0].possible, true);
+assert.equal(ingredientAllergens(['100 g feta'])[0].name, 'Milk');
+assert.equal(ingredientAllergens(['100 g penne'])[0].possible, true);
+assert.equal(servingCount('Serves 4'), 4);
+assert.equal(servingCount('4 people'), 4);
+
+const recipe: DetailRecipe = { title: 'Chicken and pasta', freshIngredients: actualLines, instructions: ['Boil 150 g pasta for 10 minutes.', 'Cook chicken to 165°F / 74°C over medium heat.', 'Add ½ cup cream and 1 tsp olive oil. Divide into 2 bowls.'], prepTime: '5 min', cookTime: '15 min', servings: '2' };
+const source = JSON.stringify(recipe);
+const doubled = scaleDetailRecipe(recipe, 4);
+assert.equal(doubled.freshIngredients[0], '300 g durum wheat pasta');
+assert.equal(doubled.freshIngredients[2], '1 cup cream (milk, xanthan gum)');
+assert.equal(doubled.instructions[0], 'Boil 300 g pasta for 10 minutes.');
+assert.equal(doubled.instructions[1], recipe.instructions[1], 'Do not scale food-safety temperatures.');
+assert.equal(doubled.instructions[2], 'Add 1 cup cream and 2 tsp olive oil. Divide into 4 bowls.');
+assert.equal(JSON.stringify(recipe), source, 'Scaling must preserve the original recipe for Undo.');
+const eggs = scaleDetailRecipe({ ...recipe, freshIngredients: ['2 large eggs', '1½ cups milk'], instructions: ['Whisk 2 large eggs with 1½ cups milk. Cook for 3 minutes.'] }, 4);
+assert.equal(eggs.instructions[0], 'Whisk 4 large eggs with 3 cups milk. Cook for 3 minutes.');
+assert.throws(() => scaleDetailRecipe({ ...recipe, freshIngredients: ['1 (14 oz) can tomatoes'] }, 4));
+assert.throws(() => scaleDetailRecipe({ ...recipe, freshIngredients: ['1–2 tbsp oil'] }, 4));
+assert.equal(servingCount('4 servings'), 4);
+assert.equal(servingCount('4-6'), null);
+assert.equal(servingCount('Not specified'), null);
+assert.notEqual(recipeKey(recipe), recipeKey({ ...recipe, cookTime: '20 min' }));
+assert.equal(nutritionKey(recipe), nutritionKey({ ...recipe, cookTime: '20 min' }), 'Metadata-only edits retain settled nutrition status.');
+assert.notEqual(recipeKey(recipe), recipeKey({ ...recipe, dietaryTags: ['vegetarian'] }));
+assert.notEqual(recipeKey(recipe), recipeKey(doubled));
+assert.notEqual(recipeKey(recipe), recipeKey({ ...recipe, freshIngredients: ['150 g rice'] }));
+assert.notEqual(recipeKey(recipe), recipeKey({ ...recipe, instructions: ['New steps'] }));
+assert.equal(recipeKey(recipe), recipeKey(JSON.parse(source)), 'Undo recovers the exact nutrition identity.');
+console.log('Recipe detail regressions passed: ingredient-attributed allergens/additives, no invented label additives, alternatives, quantities, cooking temperatures/times, immutable originals, and nutrition identity.');
