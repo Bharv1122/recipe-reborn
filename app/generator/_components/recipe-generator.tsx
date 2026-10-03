@@ -309,7 +309,7 @@ export function RecipeGenerator({ savedRecipeCount = 0, recentIngredients = [], 
         });
         const data = await response.json().catch(() => null);
         if (!response.ok) {
-          if ([400, 403, 409, 410].includes(response.status)) {
+          if ([400, 403, 409, 410, 422].includes(response.status)) {
             window.sessionStorage.removeItem('rr_guest_handoff_token');
             window.sessionStorage.removeItem('rr_guest_ingredients');
           }
