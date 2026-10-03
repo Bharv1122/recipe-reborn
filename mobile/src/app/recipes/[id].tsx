@@ -58,7 +58,7 @@ export default function RecipeDetailScreen() {
       extra={<Card>
         {recipe.librarySource === 'imported' && !recipe.importSourceSnapshot ? <Text style={{ color: colors.muted }}>This older import has no preserved source; source revert is unavailable.</Text> : null}
         <View style={styles.actions}>
-          <Pressable accessibilityRole="button" accessibilityLabel="Add to a meal plan" disabled={changed} style={[styles.action, changed && styles.disabled]} onPress={() => router.push({ pathname: '/meal-plans', params: { recipeId: recipe.id } })}><Text style={styles.actionIcon}>▦</Text><Text style={styles.actionLabel}>Meal plan</Text></Pressable>
+          <Pressable accessibilityRole="button" accessibilityLabel="Add to meal plan" disabled={changed} style={[styles.action, changed && styles.disabled]} onPress={() => router.push({ pathname: '/meal-plans', params: { recipeId: recipe.id } })}><Text style={styles.actionIcon}>▦</Text><Text style={styles.actionLabel}>Add to meal plan</Text></Pressable>
           <Pressable accessibilityRole="button" accessibilityLabel="Shop for these ingredients" disabled={changed} style={[styles.action, changed && styles.disabled]} onPress={() => { stageShoppingDraft({ title: recipe.title, ingredients: initial.freshIngredients }); router.push('/(tabs)/shopping'); }}><Text style={styles.actionIcon}>🛒</Text><Text style={styles.actionLabel}>Shop</Text></Pressable>
           <Pressable accessibilityRole="button" accessibilityLabel="Ask AI Chef" style={styles.action} onPress={() => router.push('/chat')}><Text style={styles.actionIcon}>✦</Text><Text style={styles.actionLabel}>Ask Chef</Text></Pressable>
         </View>
@@ -77,7 +77,7 @@ export default function RecipeDetailScreen() {
 }
 const styles = StyleSheet.create({
   actions: { flexDirection: 'row', gap: 8 }, action: { flex: 1, minHeight: 60, alignItems: 'center', justifyContent: 'center', gap: 6 },
-  actionIcon: { color: colors.green, fontSize: 24 }, actionLabel: { color: colors.green, fontWeight: '700' }, disabled: { opacity: 0.4 },
+  actionIcon: { color: colors.green, fontSize: 24 }, actionLabel: { color: colors.green, fontWeight: '700', textAlign: 'center' }, disabled: { opacity: 0.4 },
   menuTrigger: { minWidth: 48, minHeight: 48, alignItems: 'center', justifyContent: 'center' }, menuIcon: { color: colors.white, fontSize: 28 },
   backdrop: { flex: 1, backgroundColor: '#0006', padding: 24, justifyContent: 'center' }, modal: { maxHeight: '80%', backgroundColor: colors.white, borderRadius: 20 }, menu: { padding: 20, gap: 14 }, heading: { color: colors.greenDark, fontSize: 21, fontWeight: '800' },
 });

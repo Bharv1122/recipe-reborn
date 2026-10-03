@@ -9,6 +9,8 @@ import { Plus, Calendar as CalendarIcon, Crown } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { MealPlanCard } from './_components/meal-plan-card';
 import { GenerateMealPlanDialog } from './_components/generate-meal-plan-dialog';
+import { MealPlanDraftPreview } from './_components/meal-plan-draft-preview';
+import type { MealPlanPreview, MealPlanPreviewSummary } from '@/lib/meal-plan-preview';
 import { MealPlanCalendar } from './_components/meal-plan-calendar';
 import { AuthenticatedPageLoading, SessionRequiredState } from '@/components/authenticated-page-state';
 import { usePartnerOffer } from '@/app/_components/partner-offer-banner';
@@ -39,7 +41,20 @@ interface MealPlan {
 }
 
 export default function MealPlannerPage() {
-  const { status } = useSession();
+  const { data: session, status } = useSession();
+  const ownerId = session?.user?.id;
+  const [previews, setPreviews] = useState<MealPlanPreviewSummary[]>([]);
+  const [previewId, setPreviewId] = useState<string | null>(null);
+  useEffect(() => { setPreviewId(null); setPreviews([]); setMealPlans([]); setSelectedPlan(null); }, [ownerId]);
+  useEffect(() => {
+    if (status !== 'authenticated') return;
+    const controller = new AbortController();
+    fetch('/api/meal-plans/drafts', { signal: controller.signal, cache: 'no-store' }).then(async response => {
+      if (!response.ok) throw new Error('Could not load unsaved previews.');
+      setPreviews((await response.json()).drafts);
+    }).catch(error => { if (!controller.signal.aborted) toast.error(error.message); });
+    return () => controller.abort();
+  }, [status, ownerId]);
   const [mealPlans, setMealPlans] = useState<MealPlan[]>([]);
   const [loading, setLoading] = useState(true);
   const [generateDialogOpen, setGenerateDialogOpen] = useState(false);
@@ -85,11 +100,11 @@ export default function MealPlannerPage() {
     setGenerateDialogOpen(true);
   };
 
-  const handlePlanGenerated = (newPlan: MealPlan) => {
-    setMealPlans([newPlan, ...mealPlans]);
-    setSelectedPlan(newPlan);
+  const handlePlanGenerated = (draft: MealPlanPreview) => {
+    setPreviewId(draft.id);
+    setPreviews(current => [draft, ...current.filter(item => item.id !== draft.id)]);
     setGenerateDialogOpen(false);
-    toast.success('Meal plan generated successfully!');
+    toast.success('Preview ready. Choose which meals to save.');
   };
 
   const handleDeletePlan = async (planId: string) => {
@@ -165,6 +180,8 @@ export default function MealPlannerPage() {
           </Card>
         )}
 
+        {previews.length > 0 && <Card><CardContent className="pt-6 space-y-3"><h2 className="font-bold">Not saved — meal previews</h2>{previews.map(preview => <Button key={preview.id} variant="outline" onClick={() => setPreviewId(preview.id)}>Review week of {preview.weekStartDate.slice(0, 10)} · expires {new Date(preview.expiresAt).toLocaleString()}</Button>)}</CardContent></Card>}
+        {previewId && <MealPlanDraftPreview key={`${ownerId}:${previewId}`} id={previewId} onSaved={() => { setPreviews(current => current.filter(item => item.id !== previewId)); setPreviewId(null); void fetchMealPlans(); toast.success('Meal plan saved'); }} />}
         {mealPlans.length === 0 ? (
           <Card>
             <CardHeader>
@@ -212,6 +229,7 @@ export default function MealPlannerPage() {
 
         {/* Generate Dialog */}
         <GenerateMealPlanDialog
+          key={ownerId}
           open={generateDialogOpen}
           onOpenChange={setGenerateDialogOpen}
           onPlanGenerated={handlePlanGenerated}

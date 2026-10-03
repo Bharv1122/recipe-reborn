@@ -58,31 +58,31 @@ async function main() {
     assert.equal(session.user?.id, userId, 'Website session identity mismatch');
 
     const started = Date.now();
-    const response = await request('/api/meal-plans/generate', {
+    const response = await request('/api/meal-plans/drafts', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(options),
     });
     assert.equal(response.status, 201, `Full weekly generation failed (HTTP ${response.status})`);
-    const body = await response.json();
-    assert.equal(body.userId, userId);
-    assert.equal(body.mealPlanRecipes.length, 21);
-    const rawPlan = DAYS.map(day => {
-      const entries = body.mealPlanRecipes.filter((entry: { day: string }) => entry.day === day);
-      return { day, ...Object.fromEntries(entries.map((entry: {
-        mealType: string; servings: number;
-        recipe: { title: string; freshIngredients: string; instructions: string; prepTime: string;
-          cookTime: string; servings: string; dietaryTags: string[]; calories: number | null };
-      }) => {
-        assert.equal(entry.servings, options.servings);
-        return [entry.mealType, { ...entry.recipe,
-          ingredients: entry.recipe.freshIngredients.split('\n'),
-          estimatedCalories: entry.recipe.calories,
-        }];
-      })) };
-    });
-    const validation = validateMealPlan(rawPlan, options);
-    assert.equal(validation.success, true, 'Persisted recipes failed independent safety validation');
+    const { draft } = await response.json();
+    assert.equal(draft.days.length, 7);
+    assert.equal(await prisma.recipe.count({ where: { userId } }), 0, 'Generation must not save recipes');
+    assert.equal(await prisma.mealPlan.count({ where: { userId } }), 0, 'Generation must not save a plan');
+    const rawPlan = draft.days.map((day: any) => ({ day: day.day, ...day.meals }));
+    assert.equal(validateMealPlan(rawPlan, options).success, true, 'Preview failed safety validation');
+    const savePath = '/api/meal-plans/drafts/' + draft.id + '/save';
+    const selection = { kind: 'meal', day: 'monday', mealType: 'dinner' };
+    const saveOne = () => request(savePath, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(selection) });
+    const first = await saveOne(); const repeat = await saveOne();
+    assert.equal(first.status, 200); assert.equal(repeat.status, 200);
+    assert.equal((await first.json()).recipeId, (await repeat.json()).recipeId);
+    assert.equal(await prisma.recipe.count({ where: { userId } }), 1);
+    assert.equal(await prisma.mealPlan.count({ where: { userId } }), 0);
+    const whole = await request(savePath, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ kind: 'plan' }) });
+    assert.equal(whole.status, 200);
+    const { planId } = await whole.json();
+    const body = { id: planId };
     assert.equal(await prisma.recipe.count({ where: { userId } }), 21);
+    assert.equal(await prisma.recipe.count({ where: { userId, savedAt: { not: null } } }), 1);
     const saved = await prisma.mealPlan.findUnique({
       where: { id: body.id }, include: { _count: { select: { mealPlanRecipes: true } } },
     });

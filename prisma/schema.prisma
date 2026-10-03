@@ -79,6 +79,7 @@ model User {
   folders                     Folder[]
   collections                 Collection[]
   mealPlans                   MealPlan[]
+  mealPlanDrafts              MealPlanDraft[]
   shoppingLists               ShoppingList[]
   pantryInventory             PantryInventory?
   generationCancellations     GenerationCancellation[]
@@ -405,4 +406,22 @@ model FunnelEvent {
   createdAt DateTime @default(now())
 
   @@index([eventName, createdAt])
+}
+
+// Temporary previews and durable generation receipts. No Recipe/MealPlan is
+// created until the owner explicitly saves. Expired payloads can be erased while
+// status and savedPlanId retain quota accounting.
+model MealPlanDraft {
+  id          String   @id @default(cuid())
+  userId      String
+  settings    Json
+  meals       Json?
+  status      String   @default("pending")
+  recipeIds   Json     @default("{}")
+  savedPlanId String?  @unique
+  createdAt   DateTime @default(now())
+  expiresAt   DateTime
+  user        User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  @@index([userId, createdAt])
+  @@index([expiresAt])
 }

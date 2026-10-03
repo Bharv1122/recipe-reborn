@@ -163,7 +163,7 @@ async function main() {
       ? completion(invalidSlots('wednesday'))
       : contentCompletion('{"title":'),
     async (calls) => {
-      await assert.rejects(() => generateValidatedPlan(options), (error: unknown) => error instanceof MealPlanSafetyError);
+      await assert.rejects(() => generateValidatedPlan(options), (error: unknown) => error instanceof MealPlanProviderError);
       assert.equal(calls.filter((call) => call.kind === 'plan').length, 2);
       assert.ok(calls.length <= 6);
     },
@@ -294,6 +294,66 @@ async function main() {
     assert.equal(calls.filter((call) => call.kind === 'repair').length, 7);
     assert.ok(peakInFlight <= 4, `Observed ${peakInFlight} concurrent repair requests.`);
     assert.equal(inFlight, 0);
+  }));
+
+  await test('Safety diagnostics expose slots and codes without recipe content', () => withModel((call) => {
+    const unsafe = { ...meal('Private rejected title'), ingredients: ['2 cups salmon'] };
+    return completion(call.kind === 'plan' ? DAYS.map(day => ({ day, dinner: unsafe })) : unsafe);
+  }, async () => {
+    await assert.rejects(generateValidatedPlan(options), error => {
+      assert.ok(error instanceof MealPlanSafetyError);
+      assert.equal(error.phase, 'smart_repair');
+      assert.equal(error.failures.length, 7);
+      assert.ok(error.failures.every(failure => failure.code === 'allergen_detected' && failure.mealType === 'dinner'));
+      assert.doesNotMatch(JSON.stringify(error), /salmon|Private rejected title/);
+      return true;
+    });
+  }));
+
+  await test('Missing day diagnostics survive without unnecessary slot repairs', () => withModel(() => completion(validPlan().slice(0, 6)), async calls => {
+    await assert.rejects(generateValidatedPlan(options), error => {
+      assert.ok(error instanceof MealPlanSafetyError);
+      assert.equal(error.phase, 'initial');
+      assert.ok(error.failures.some(failure => failure.code === 'wrong_day_count'));
+      assert.ok(error.failures.some(failure => failure.code === 'missing_day'));
+      return true;
+    });
+    assert.equal(calls.length, 2);
+    assert.ok(calls.every(call => call.kind === 'plan'));
+  }));
+
+  await test('Repair HTTP failures are counted separately from content rejection', () => withModel(call => call.kind === 'plan'
+    ? completion(invalidSlots('wednesday')) : new Response(null, { status: 502 }), async () => {
+    await assert.rejects(generateValidatedPlan(options), error => {
+      assert.ok(error instanceof MealPlanProviderError);
+      assert.equal(error.failureKind, 'repair_unavailable');
+      return true;
+    });
+  }));
+
+  await test('Replacement instructions identify only that slot rejection', () => withModel(call => {
+    if (call.kind === 'plan') {
+      const plan = validPlan();
+      plan[0].dinner.ingredients = ['2 cups salmon'];
+      plan[2].dinner = meal(titles[1]);
+      return completion(plan);
+    }
+    const codes = call.prompt.match(/Rejected checks for this slot: ([^.]+)\./)?.[1];
+    if (call.day === 'monday') { assert.equal(codes, 'allergen_detected'); return completion(meal('Quinoa pumpkin bake')); }
+    assert.equal(call.day, 'wednesday');
+    assert.equal(codes, 'duplicate_meal');
+    return completion(meal('White bean cabbage skillet'));
+  }, async () => { validateResult(await generateValidatedPlan(options)); }));
+
+  await test('Unreadable final plan clears stale validation diagnostics', () => withModel(call => {
+    if (call.kind === 'plan' && call.prompt.includes('Your previous response was rejected')) return contentCompletion('[{"day":"monday"');
+    return completion(validPlan().slice(0, 6));
+  }, async () => {
+    await assert.rejects(generateValidatedPlan(options), error => {
+      assert.ok(error instanceof MealPlanProviderError);
+      assert.equal(error.failureKind, 'malformed');
+      return true;
+    });
   }));
 
   console.log(`Meal-plan generation: ${cases} isolated cases passed; mocked provider only, no database or live API.`);

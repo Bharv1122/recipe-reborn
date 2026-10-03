@@ -3,6 +3,7 @@ import { prisma } from '@/lib/db';
 import { sendEmail, trialEndingEmail, appUrl, isEmailConfigured } from '@/lib/email';
 import { findPartnerOffer, PARTNER_OFFERS } from '@/lib/partner-offers';
 import { SUPPORT_EMAIL } from '@/lib/support';
+import { purgeExpiredMealPlanDrafts } from '@/lib/meal-plan-drafts';
 
 export const dynamic = 'force-dynamic';
 export const maxDuration = 60;
@@ -37,6 +38,10 @@ export async function GET(request: NextRequest) {
   if (request.headers.get('authorization') !== `Bearer ${secret}`) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
+
+  // Payload cleanup is independent of email configuration or delivery.
+  try { await purgeExpiredMealPlanDrafts(); }
+  catch { console.error('[meal-plan] expired preview cleanup failed'); }
 
   if (!isEmailConfigured()) {
     console.error('[trial-nudge] Email is not configured — nothing sent.');

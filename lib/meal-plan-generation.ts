@@ -13,6 +13,7 @@ export interface GeneratePlanOptions {
   allergies: string[];
   dislikedIngredients: string[];
   preferredIngredients?: string[];
+  deadlineAt?: number;
 }
 
 const mealJsonSchema = {
@@ -41,21 +42,31 @@ function blockedIngredientInstruction(options: GeneratePlanOptions): string {
 }
 
 export class MealPlanSafetyError extends Error {
-  constructor() {
+  readonly failures: Array<Pick<MealPlanValidationError, 'code' | 'day' | 'mealType'>>;
+  constructor(
+    failures: MealPlanValidationError[] = [],
+    readonly phase = 'initial',
+    readonly repairFailures: Record<string, number> = {},
+  ) {
     super('The generated meal plan failed safety validation twice.');
     this.name = 'MealPlanSafetyError';
+    // Validation messages can contain recipe titles. Diagnostics retain only
+    // bounded validator codes and slots, never recipe or profile content.
+    this.failures = failures.map(({ code, day, mealType }) => ({ code, day, mealType }));
   }
 }
 
 export class MealPlanProviderError extends Error {
-  constructor(message: string, readonly retryable = true) {
+  constructor(message: string, readonly retryable = true, readonly failureKind = 'malformed') {
     super(message);
     this.name = 'MealPlanProviderError';
   }
 }
 
 // Never log provider bodies: they can contain the user's food preferences.
-async function requestContent(body: Record<string, unknown>): Promise<string> {
+async function requestContent(body: Record<string, unknown>, deadlineAt?: number): Promise<string> {
+  const remaining = deadlineAt === undefined ? 45000 : deadlineAt - Date.now();
+  if (remaining <= 0) throw new MealPlanProviderError('Meal-plan deadline reached', false, 'deadline');
   let response: Response;
   try {
     response = await fetch(AI_CHAT_URL, {
@@ -64,16 +75,17 @@ async function requestContent(body: Record<string, unknown>): Promise<string> {
         'Content-Type': 'application/json',
         Authorization: `Bearer ${AI_API_KEY}`,
       },
-      signal: AbortSignal.timeout(45_000),
+      signal: AbortSignal.timeout(Math.min(45_000, remaining)),
       body: JSON.stringify({ ...body, reasoning_effort: 'none' }),
     });
   } catch {
-    throw new MealPlanProviderError('Meal-plan provider request timed out or failed to connect');
+    throw new MealPlanProviderError('Meal-plan provider request timed out or failed to connect', true, 'transport');
   }
   if (!response.ok) {
     throw new MealPlanProviderError(
       `Meal-plan provider returned status ${response.status}`,
       response.status === 408 || response.status === 429 || response.status >= 500,
+      `http_${response.status}`,
     );
   }
   let data;
@@ -84,11 +96,11 @@ async function requestContent(body: Record<string, unknown>): Promise<string> {
   }
   const choice = data?.choices?.[0];
   if (choice?.finish_reason === 'length') {
-    throw new MealPlanProviderError('Meal-plan provider response was truncated');
+    throw new MealPlanProviderError('Meal-plan provider response was truncated', true, 'truncated');
   }
   const content = choice?.message?.content;
   if (typeof content !== 'string' || !content.trim()) {
-    throw new MealPlanProviderError('Meal-plan provider returned no content');
+    throw new MealPlanProviderError('Meal-plan provider returned no content', true, 'empty');
   }
   return content;
 }
@@ -157,6 +169,7 @@ async function requestMealPlan(
   maxTokens: number,
   mealTypes: MealType[],
   model = MODEL_FAST,
+  deadlineAt?: number,
 ): Promise<string> {
   return requestContent({
       model,
@@ -182,7 +195,7 @@ async function requestMealPlan(
           required: ['day', ...mealTypes], additionalProperties: false,
         },
       }),
-  });
+  }, deadlineAt);
 }
 
 function parseMealObject(content: string): unknown {
@@ -207,6 +220,7 @@ async function requestReplacementMeal(
   mealType: MealType,
   model: string,
   excludedTitles: string[],
+  failureCodes: MealPlanValidationError['code'][],
 ): Promise<unknown> {
   const allergies = options.allergies.length > 0
     ? `Blocked food allergies: ${options.allergies.join(', ')}. Never use them, their derivatives, sauces, stocks, or seasonings. Do not mention a blocked allergen even in a free-from label.`
@@ -219,6 +233,8 @@ async function requestReplacementMeal(
 Day: ${day}
 Meal type: ${mealType}
 Exact servings: ${options.servings}
+Rejected checks for this slot: ${[...new Set(failureCodes)].join(', ')}.
+Correct those checks in the replacement. If a food exclusion failed, choose genuinely different permitted ingredients; do not keep the excluded food under a different name, in a free-from label, or as an optional suggestion. If uniqueness failed, choose a different dish from the excluded titles below. If fields or servings failed, include every required field and the exact serving count.
 ${allergies}
 ${dislikes}
 ${blockedIngredientInstruction(options)}
@@ -247,7 +263,7 @@ Return only one JSON object in this exact shape:
       temperature: 0.2,
       max_tokens: 3000,
       response_format: structuredFormat('replacement_meal', mealJsonSchema),
-  });
+  }, options.deadlineAt);
   return parseMealObject(content);
 }
 
@@ -256,6 +272,7 @@ async function repairInvalidMeals(
   errors: MealPlanValidationError[],
   options: GeneratePlanOptions,
   model: string,
+  repairFailures: Record<string, number>,
 ): Promise<unknown | null> {
   if (!Array.isArray(value)) return null;
   const repairableCodes = new Set(['missing_meal', 'unexpected_meal', 'invalid_meal', 'serving_mismatch', 'allergen_detected', 'disliked_ingredient', 'prepared_shortcut', 'duplicate_meal']);
@@ -306,6 +323,7 @@ async function repairInvalidMeals(
         Array.from(titlesBySlot.entries())
           .filter(([key]) => key !== `${slot.day}:${slot.mealType}`)
           .map(([, title]) => title),
+        errors.filter(error => error.day === slot.day && error.mealType === slot.mealType).map(error => error.code),
         );
         day[slot.mealType] = meal;
         if (meal && typeof meal === 'object' && 'title' in meal && typeof meal.title === 'string') {
@@ -313,6 +331,7 @@ async function repairInvalidMeals(
         }
       } catch (error) {
         if (!(error instanceof MealPlanProviderError) || !error.retryable) throw error;
+        repairFailures[error.failureKind] = (repairFailures[error.failureKind] ?? 0) + 1;
       }
     }));
   }
@@ -323,21 +342,28 @@ async function repairInvalidMeals(
 export async function generateValidatedPlan(
   options: GeneratePlanOptions,
 ): Promise<{ plan: ValidatedDayPlan[]; attempts: number }> {
+  options = { ...options, deadlineAt: options.deadlineAt ?? Date.now() + 250_000 };
   const basePrompt = buildPrompt(options);
   const maxTokens = DAYS.length * options.mealTypes.length * 350;
   let retryReasons: string[] = [];
+  let lastFailures: MealPlanValidationError[] = [];
+  let lastPhase = 'initial';
+  let finalRepairUnavailable = false;
+  const repairFailures: Record<string, number> = {};
 
   for (let attempt = 1; attempt <= 2; attempt += 1) {
+    finalRepairUnavailable = false;
     const retryInstruction = retryReasons.length > 0
       ? `\n\nYour previous response was rejected. Correct every issue and generate the full plan again:\n${retryReasons.slice(0, 12).map((reason) => `- ${reason}`).join('\n')}`
       : '';
     let parsed: unknown;
     try {
-      const content = await requestMealPlan(`${basePrompt}${retryInstruction}`, maxTokens * attempt, options.mealTypes);
+      const content = await requestMealPlan(`${basePrompt}${retryInstruction}`, maxTokens * attempt, options.mealTypes, MODEL_FAST, options.deadlineAt);
       parsed = parseMealPlanContent(content);
     } catch (error) {
       if (error instanceof MealPlanProviderError && (!error.retryable || attempt === 2)) throw error;
       if (!(error instanceof MealPlanProviderError) && !(error instanceof SyntaxError)) throw error;
+      lastPhase = 'parse'; lastFailures = [];
       retryReasons = ['Return parseable JSON with one complete array and no surrounding text.'];
       continue;
     }
@@ -349,8 +375,9 @@ export async function generateValidatedPlan(
       dislikedIngredients: options.dislikedIngredients,
     });
     if (validation.success) return { plan: validation.plan, attempts: attempt };
+    lastFailures = validation.errors; lastPhase = 'initial';
 
-    let repaired = await repairInvalidMeals(parsed, validation.errors, options, MODEL_FAST);
+    let repaired = await repairInvalidMeals(parsed, validation.errors, options, MODEL_FAST, repairFailures);
     if (repaired) {
       const repairedValidation = validateMealPlan(repaired, {
         mealTypes: options.mealTypes,
@@ -361,8 +388,11 @@ export async function generateValidatedPlan(
       if (repairedValidation.success) {
         return { plan: repairedValidation.plan, attempts: attempt + 1 };
       }
+      lastFailures = repairedValidation.errors; lastPhase = 'fast_repair';
 
-      repaired = await repairInvalidMeals(repaired, repairedValidation.errors, options, MODEL_SMART);
+      const failuresBeforeSmart = Object.values(repairFailures).reduce((sum, count) => sum + count, 0);
+      repaired = await repairInvalidMeals(repaired, repairedValidation.errors, options, MODEL_SMART, repairFailures);
+      finalRepairUnavailable = Object.values(repairFailures).reduce((sum, count) => sum + count, 0) > failuresBeforeSmart;
       if (repaired) {
         const finalValidation = validateMealPlan(repaired, {
           mealTypes: options.mealTypes,
@@ -373,6 +403,7 @@ export async function generateValidatedPlan(
         if (finalValidation.success) {
           return { plan: finalValidation.plan, attempts: attempt + 2 };
         }
+        lastFailures = finalValidation.errors; lastPhase = 'smart_repair';
         retryReasons = finalValidation.errors.map((error) => error.message);
         continue;
       }
@@ -385,5 +416,8 @@ export async function generateValidatedPlan(
     );
   }
 
-  throw new MealPlanSafetyError();
+  if (lastPhase === 'parse' || finalRepairUnavailable) {
+    throw new MealPlanProviderError('The service could not complete a readable plan.', true, lastPhase === 'parse' ? 'malformed' : 'repair_unavailable');
+  }
+  throw new MealPlanSafetyError(lastFailures, lastPhase, repairFailures);
 }

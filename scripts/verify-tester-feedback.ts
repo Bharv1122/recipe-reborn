@@ -57,7 +57,7 @@ async function main() {
   assert.deepEqual(graph.collectionRecipeIds, ['r1']);
 
   const [planRoute, replacementRoute, webList, mobileList, mobileSave, bulkRoute, prefsRoute, webAccount, mobileAccount, mobilePlans, authProvider, webCollectionAdd, mobileCollectionAdd, guestHandoff] = await Promise.all([
-    source('app/api/meal-plans/generate/route.ts'),
+    source('app/api/meal-plans/drafts/route.ts'),
     source('app/api/meal-plans/[id]/recipes/[recipeId]/replace/route.ts'),
     source('app/api/recipes/route.ts'),
     source('app/api/mobile/recipes/route.ts'),
@@ -72,7 +72,9 @@ async function main() {
     source('app/api/mobile/collections/[id]/recipes/route.ts'),
     source('lib/guest-recipe-handoff.ts'),
   ]);
-  for (const route of [planRoute, replacementRoute]) {
+  assert.doesNotMatch(planRoute, /(?:recipe|mealPlan|mealPlanRecipe)\.create/);
+  assert.match(planRoute, /completeMealPlanDraft/);
+  for (const route of [replacementRoute]) {
     assert.match(route, /savedAt:\s*null/);
     assert.match(route, /librarySource:\s*'meal_plan'/);
   }

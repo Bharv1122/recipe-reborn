@@ -220,8 +220,8 @@ export function RecipeDetail({ initial, originalIngredients = '', packageNutriti
       {extra}
     </ScrollView>
     <View style={[styles.footer, { paddingBottom: Math.max(8, insets.bottom) }]}>
-      <Button label="Save recipe" loading={saving} disabled={busy || currentNutrition.status === 'pending'} onPress={() => void save()} />
-      <Text style={styles.footerNote}>{currentNutrition.status === 'pending' ? 'Finishing nutrition…' : saved && changed ? 'Saves a new copy. Your original stays unchanged.' : 'Saves the recipe shown.'}</Text>
+      <Button label={saved && !changed ? 'Saved in My recipes' : saved ? 'Save new copy' : 'Save recipe'} loading={saving} disabled={busy || (saved && !changed) || currentNutrition.status === 'pending'} onPress={() => void save()} />
+      <Text style={styles.footerNote}>{saved && !changed ? 'Change the recipe to save a new copy.' : currentNutrition.status === 'pending' ? 'Finishing nutrition…' : saved ? 'Saves a new copy. Your original stays unchanged.' : 'Saves the recipe shown.'}</Text>
       <View style={styles.nav}>{([{ label: 'Home', icon: '⌂', path: '/(tabs)' }, { label: 'Recipes', icon: '▤', path: '/(tabs)/library' }, { label: 'Shopping', icon: '🛒', path: '/(tabs)/shopping' }, { label: 'Account', icon: '○', path: '/(tabs)/account' }] as const).map(item => <Pressable key={item.label} accessibilityRole="tab" accessibilityLabel={item.label} accessibilityState={{ selected: item.label === 'Recipes' }} disabled={busy || saving} onPress={() => navigate(item.path)} style={[styles.navItem, item.label === 'Recipes' && styles.navSelected]}><Text style={item.label === 'Recipes' ? styles.link : styles.muted}>{item.icon}</Text><Text style={item.label === 'Recipes' ? styles.link : styles.note}>{item.label}</Text></Pressable>)}</View>
     </View>
     <Modal visible={Boolean(menu) || dialog === 'edit'} transparent animationType="fade" onRequestClose={() => { setMenu(null); setDialog(null); }}>

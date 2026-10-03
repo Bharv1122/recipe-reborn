@@ -54,6 +54,8 @@ export function GenerateMealPlanDialog({ open, onOpenChange, onPlanGenerated }: 
   const [prefsLoaded, setPrefsLoaded] = useState(false);
   const [elapsedSeconds, setElapsedSeconds] = useState(0);
   const prefsDirty = useRef(false);
+  const active = useRef(true);
+  useEffect(() => { active.current = true; return () => { active.current = false; }; }, []);
 
   // Pre-fill from the profile's saved food preferences (editable per plan)
   useEffect(() => {
@@ -131,7 +133,7 @@ export function GenerateMealPlanDialog({ open, onOpenChange, onPlanGenerated }: 
 
     try {
       setLoading(true);
-      const response = await fetch('/api/meal-plans/generate', {
+      const response = await fetch('/api/meal-plans/drafts', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -146,9 +148,10 @@ export function GenerateMealPlanDialog({ open, onOpenChange, onPlanGenerated }: 
         }),
       });
 
+      if (!active.current) return;
       if (response.ok) {
         const plan = await response.json();
-        onPlanGenerated(plan);
+        if (active.current) onPlanGenerated(plan.draft);
       } else {
         const error = await response.json();
         // 403 carries the Premium upsell message — show it, not a generic failure
@@ -173,7 +176,7 @@ export function GenerateMealPlanDialog({ open, onOpenChange, onPlanGenerated }: 
             Generate AI Meal Plan
           </DialogTitle>
           <DialogDescription>
-            Create a balanced weekly meal plan tailored to your preferences
+            Preview a week of meals. Save each meal you want; the plan is not saved automatically.
           </DialogDescription>
         </DialogHeader>
 
@@ -293,7 +296,7 @@ export function GenerateMealPlanDialog({ open, onOpenChange, onPlanGenerated }: 
               Creating {selectedMealTypes.length * 7} meals · {elapsedSeconds}s elapsed
             </p>
             <p className="mt-1 text-xs text-emerald-800">
-              The plan is checked for exact meal types, servings, and allergens before it is saved.
+              The plan is checked for exact meal types, servings, and allergens before you choose what to save.
             </p>
           </div>
         )}
