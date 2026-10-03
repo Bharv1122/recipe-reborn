@@ -26,10 +26,12 @@ export default function ScanScreen() {
   const [product, setProduct] = useState<Product | null>(null);
   const [photoUri, setPhotoUri] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [labelProductName, setLabelProductName] = useState('');
 
-  const chooseMode = (nextMode: Mode) => {
+  const chooseMode = (nextMode: Mode, productName = '') => {
     if (mode === nextMode) return;
     setMode(nextMode);
+    setLabelProductName(productName.slice(0, 100));
     setScanned(false);
     setProduct(null);
     setPhotoUri(null);
@@ -56,6 +58,7 @@ export default function ScanScreen() {
     stageScanRecipeHandoff({
       source: 'label',
       origin: 'barcode',
+      productName: product.name.slice(0, 100),
       originalNutrition: product.originalNutrition,
       ingredients: product.ingredients_text,
       context: product.name ? `Barcode product: ${product.name}` : 'Ingredients loaded from the scanned barcode',
@@ -82,9 +85,10 @@ export default function ScanScreen() {
       stageScanRecipeHandoff({
         source: 'label',
         origin: 'label-photo',
+        productName: labelProductName,
         originalNutrition: data.originalNutrition ?? null,
         ingredients,
-        context: data.title ? String(data.title) : 'Ingredients extracted from your package-label photo',
+        context: labelProductName || (data.title ? String(data.title) : 'Ingredients extracted from your package-label photo'),
       });
       router.push('/generate');
     } catch (value) {
@@ -184,9 +188,9 @@ export default function ScanScreen() {
       <InlineError message={error} />
       {product ? <Card>
         <Text style={styles.title}>{product.found ? (product.name || 'Product found') : 'Barcode not found'}</Text>
-        <Text style={styles.body}>{product.found && product.ingredients_text.trim() ? 'We found the ingredients. Check them next, then make your homemade version.' : 'We could not find ingredients for this barcode. Take a photo of the ingredient list instead.'}</Text>
+        <Text style={styles.body}>{product.found && product.ingredients_text.trim() ? 'We found the ingredients. Check them next, then make your homemade version.' : product.found ? `We found ${product.name || 'this product'}, but its ingredient list is not available. Take a photo of the label.` : 'This barcode is not in the database. Take a photo of the ingredient label.'}</Text>
         {product.found && product.ingredients_text.trim() ? <Button label="Review ingredients" onPress={generateFromBarcode} /> : null}
-        {(!product.found || !product.ingredients_text.trim()) ? <Button label="Photograph ingredient label" onPress={() => chooseMode('label')} /> : null}
+        {(!product.found || !product.ingredients_text.trim()) ? <Button label="Photograph ingredient label" onPress={() => chooseMode('label', product.name)} /> : null}
         <Button label="Scan another" secondary onPress={() => { setScanned(false); setProduct(null); }} />
       </Card> : null}
       {busy && mode === 'barcode' ? <Text style={styles.status}>Looking up product…</Text> : null}

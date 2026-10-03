@@ -7,7 +7,6 @@ import { cancelRecipeGeneration, generateRecipe, saveGeneratedRecipe } from '@/s
 import { takeScanRecipeHandoff } from '@/services/scan-recipe-handoff';
 import type { GeneratedRecipe } from '@/types';
 import { colors } from '@/theme';
-import { PackageNutritionReview } from '@/components/recipe-comparison';
 import { RecipeDetail, type DetailSave } from '@/components/recipe-detail';
 import { VoiceInput } from '@/components/voice-input';
 import { ReportContentAction } from '@/components/report-content';
@@ -19,13 +18,14 @@ export default function GenerateScreen() {
   const router = useRouter();
   const [source, setSource] = useState<Source | null>(() => ['label', 'pantry', 'dish'].includes(params.source || '') ? params.source as Source : null);
   const [ingredients, setIngredients] = useState('');
-  const [dietaryRestriction, setDietaryRestriction] = useState('');
-  const [showPreferences, setShowPreferences] = useState(false);
   const [recipe, setRecipe] = useState<GeneratedRecipe | null>(null);
   const [busy, setBusy] = useState(false);
   const [voiceBusy, setVoiceBusy] = useState(false);
   const [generatedFrom, setGeneratedFrom] = useState('');
   const [scanContext, setScanContext] = useState('');
+  const [productName, setProductName] = useState('');
+  const [pantryTargetTitle, setPantryTargetTitle] = useState('');
+  const [fromIngredientImport, setFromIngredientImport] = useState(false);
   const [originalNutrition, setOriginalNutrition] = useState<OriginalNutrition | null>(null);
   const [error, setError] = useState<string | null>(null);
   const abortRef = useRef<AbortController | null>(null);
@@ -36,6 +36,9 @@ export default function GenerateScreen() {
     const handoff = takeScanRecipeHandoff();
     if (!handoff) return;
     setSource(handoff.source);
+    setProductName(handoff.productName || '');
+    setPantryTargetTitle(handoff.pantryTargetTitle || '');
+    setFromIngredientImport(handoff.origin === 'import-ingredients');
     setIngredients(handoff.ingredients);
     setScanContext(handoff.context || 'Your reviewed ingredients');
     setOriginalNutrition(handoff.originalNutrition ?? null);
@@ -50,7 +53,7 @@ export default function GenerateScreen() {
     abortRef.current = controller; generationIdRef.current = generationId;
     setGeneratedFrom(input); setBusy(true); setError(null); setRecipe(null);
     try {
-      const result = await generateRecipe(input, { source, dietaryRestriction: dietaryRestriction.trim() || undefined, signal: controller.signal, generationId });
+      const result = await generateRecipe(input, { source, productName: productName || undefined, pantryTargetTitle: pantryTargetTitle || undefined, signal: controller.signal, generationId });
       setRecipe(result.recipe);
     } catch (value) {
       setError(controller.signal.aborted ? 'Canceled. Your ingredients are still here.' : value instanceof Error ? value.message : 'Could not create your recipe. Please try again.');
@@ -80,7 +83,8 @@ export default function GenerateScreen() {
   const title = scanContext ? 'Check your ingredients' : source === 'label' ? 'Enter the label ingredients' : source === 'pantry' ? 'What ingredients do you have?' : 'What would you like to make?';
   if (recipe) return <>
     <Stack.Screen options={{ headerShown: true, title: 'Your recipe', headerTintColor: colors.white, headerStyle: { backgroundColor: colors.green } }} />
-    <RecipeDetail initial={recipe} originalIngredients={generatedFrom} packageNutrition={originalNutrition} isPackage={source === 'label'} onSave={save}
+    <RecipeDetail initial={recipe} originalIngredients={generatedFrom} packageNutrition={originalNutrition} onPackageNutritionChange={setOriginalNutrition} isPackage={source === 'label'} onSave={save}
+      intro={fromIngredientImport ? <Card><Text style={styles.body}>AI-created recipe from your imported ingredients. The cooking steps were not present in your source.</Text></Card> : undefined}
       extra={<ReportContentAction target={{ source: 'generated', recipe: { title: recipe.title, freshIngredients: recipe.freshIngredients, instructions: recipe.instructions } }} />} />
   </>;
   return <Screen>
@@ -99,15 +103,12 @@ export default function GenerateScreen() {
       </Card> : <Card>
         <Text style={styles.title}>{title}</Text>
         {scanContext ? <Text style={styles.body}>{scanContext}</Text> : null}
+        {fromIngredientImport ? <Text style={styles.note}>This creates a new recipe with AI-written steps and uses one recipe generation. Your source is not rewritten.</Text> : null}
         <Text style={styles.body}>{source === 'label' ? 'Check the ingredient list below. You can correct it before we make a homemade version.' : source === 'pantry' ? 'List a few things in your kitchen, such as eggs, spinach and rice.' : 'Type a dish you love, such as chicken enchiladas.'}</Text>
         {source === 'pantry' && !scanContext ? <Button label="Photograph my fridge or pantry" secondary disabled={voiceBusy} onPress={() => router.push('/pantry-review')} /> : null}
-        <Field accessibilityLabel={source === 'dish' ? 'Dish name' : 'Ingredients'} editable={!voiceBusy} multiline textAlignVertical="top" placeholder={source === 'dish' ? 'What would you like to cook?' : 'Enter ingredients here'} value={ingredients} onChangeText={setIngredients} style={styles.multiline} />
+        <Field accessibilityLabel={source === 'dish' ? 'Dish name' : 'Ingredients'} editable={!voiceBusy} multiline textAlignVertical="top" placeholder={source === 'dish' ? 'What would you like to cook?' : 'Enter ingredients here'} value={ingredients} onChangeText={value => { setIngredients(value); if (!value.trim()) { setPantryTargetTitle(''); setFromIngredientImport(false); setProductName(''); } }} style={styles.multiline} />
         <VoiceInput label={source === 'dish' ? 'Speak my recipe request' : 'Speak my ingredients'} onBusyChange={setVoiceBusy} onTranscript={(text) => setIngredients((current) => [current.trim(), text].filter(Boolean).join('\n'))} />
-        {source === 'label' && originalNutrition ? <PackageNutritionReview value={originalNutrition} onChange={setOriginalNutrition} /> : null}
         <Text style={styles.note}>Your saved allergies and food preferences apply.</Text>
-        <Text style={styles.note}>Recipes use cups, tablespoons and teaspoons, with ounces or pounds where needed.</Text>
-        <Button label={showPreferences ? 'Hide optional requests' : 'Add a dietary request (optional)'} secondary onPress={() => setShowPreferences(!showPreferences)} />
-        {showPreferences ? <Field accessibilityLabel="Dietary request" placeholder="For example, vegetarian" value={dietaryRestriction} onChangeText={setDietaryRestriction} /> : null}
         <Button label="Make my recipe" onPress={run} disabled={!ingredients.trim() || voiceBusy} />
       </Card>}
     </ScrollView>

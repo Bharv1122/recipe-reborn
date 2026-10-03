@@ -1,11 +1,10 @@
+import { extractRecipe } from '@/lib/recipe-extraction';
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
-import { AI_API_KEY, AI_GENERATE_URL } from '@/lib/ai';
-import { extractJsonPayload } from '@/lib/ai-json';
 import { getRequestUserId } from '@/lib/request-auth';
 import { rateLimit } from '@/lib/rate-limit';
 import { limitAiRequest } from '@/lib/ai-rate-limit';
-import { ImportInputError, importFile, normalizeImportedRecipe, recipePage, type ImportPart } from '@/lib/recipe-import';
+import { ImportInputError, importFile, recipePage, type ImportPart } from '@/lib/recipe-import';
 import { resolvePartnerTrial } from '@/lib/partner-offer-server';
 import { findBlockedFoodInRecipe } from '@/lib/food-preferences';
 import { hasPremiumAccess } from '@/lib/entitlement';
@@ -15,23 +14,6 @@ export const dynamic = 'force-dynamic';
 export const maxDuration = 60;
 
 const TIER_LIMITS = { free: 3, premium: 100, pro: Infinity };
-
-function extractionPrompt() {
-  return `Transcribe the first complete recipe in this source faithfully. This is an import, not a request to invent, modernize, simplify, or adapt a recipe.
-
-Return JSON only with this structure:
-{
-  "title": "title exactly as shown",
-  "ingredients": ["every ingredient with its printed quantity"],
-  "instructions": ["every instruction in source order"],
-  "prepTime": "shown value or empty string",
-  "cookTime": "shown value or empty string",
-  "servings": "shown value or empty string",
-  "reviewNotes": ["short note for any illegible, cropped, or uncertain text"]
-}
-
-Do not silently fix or substitute ingredients because of food preferences. Do not add ingredients or steps that are not visible. Preserve handwritten wording when readable. Put [unclear] exactly where text cannot be read and explain it in reviewNotes. If a title, ingredient list, or instructions cannot be recovered, return empty values instead of inventing certainty.`;
-}
 
 async function readSource(req: NextRequest, signal: AbortSignal): Promise<ImportPart> {
   const contentType = req.headers.get('content-type') ?? '';
@@ -44,37 +26,14 @@ async function readSource(req: NextRequest, signal: AbortSignal): Promise<Import
   if (!contentType.includes('application/json')) {
     throw new ImportInputError('Send a recipe website link, photo, or supported file.', 415);
   }
-  const body = await req.json().catch(() => null) as { url?: unknown } | null;
+  const body = await req.json().catch(() => null) as { url?: unknown; text?: unknown } | null;
+  if (typeof body?.text === 'string') {
+    const text = body.text.trim();
+    if (!text || Buffer.byteLength(text) > 100 * 1024) throw new ImportInputError('Paste recipe text under 100 KB.');
+    return { text };
+  }
   if (typeof body?.url !== 'string' || !body.url.trim()) throw new ImportInputError('Enter a valid HTTPS recipe link.');
   return { text: await recipePage(body.url.trim(), 0, signal) };
-}
-
-async function extractRecipe(source: ImportPart, requestSignal: AbortSignal) {
-  if (!AI_API_KEY) throw new Error('AI API key not configured');
-  const parts = 'inlineData' in source
-    ? [source, { text: extractionPrompt() }]
-    : [{ text: `${extractionPrompt()}\n\nRECIPE SOURCE:\n${source.text}` }];
-  return withRequestDeadline(requestSignal, 40_000, async (signal) => {
-    const response = await fetch(AI_GENERATE_URL, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'x-goog-api-key': AI_API_KEY },
-      signal,
-      body: JSON.stringify({
-        contents: [{ role: 'user', parts }],
-        generationConfig: { temperature: 0, maxOutputTokens: 8000, responseMimeType: 'application/json' },
-      }),
-    });
-    if (!response.ok) {
-      console.error('[recipe-import] provider status', response.status);
-      throw new Error('Recipe extraction failed');
-    }
-    const data = await response.json();
-    const candidate = data.candidates?.[0];
-    if (candidate?.finishReason && candidate.finishReason !== 'STOP') throw new Error('Recipe extraction was incomplete');
-    const content = candidate?.content?.parts?.map((part: { text?: unknown }) => typeof part.text === 'string' ? part.text : '').join('');
-    if (!content) throw new Error('Recipe extraction returned no content');
-    return normalizeImportedRecipe(JSON.parse(extractJsonPayload(content)));
-  });
 }
 
 export async function POST(req: NextRequest) {
@@ -117,7 +76,7 @@ export async function POST(req: NextRequest) {
     const aiLimit = await limitAiRequest(userId);
     if (aiLimit) return aiLimit;
     const recipe = await withRequestDeadline(req.signal, 55_000, async (signal) =>
-      extractRecipe(await readSource(req, signal), signal));
+      extractRecipe(await readSource(req, signal), signal, req.headers.get('x-recipe-partial-review') === '1'));
     const importedContent = {
       title: recipe.title,
       ingredients: recipe.freshIngredients.split('\n').filter(Boolean),
@@ -131,6 +90,9 @@ export async function POST(req: NextRequest) {
       dislikeConflict ? `Review: the source appears to include an ingredient matching your saved dislike (${dislikeConflict}). The import was kept faithful and was not rewritten.` : '',
     ].filter(Boolean).join('\n');
     if (req.signal.aborted) throw new DOMException('Recipe import canceled', 'AbortError');
+    // A recoverable partial read is not a completed import. Keep rate/AI limits,
+    // but don't charge recipe quota or pass it off as a saveable source recipe.
+    if (recipe.needsDirections) return NextResponse.json({ status: 'partial', recipe, quotaUsed: false });
     const charged = Number.isFinite(limit)
       ? await prisma.user.updateMany({ where: { id: user.id, generationCount: { lt: limit } }, data: { generationCount: { increment: 1 } } })
       : await prisma.user.update({ where: { id: user.id }, data: { generationCount: { increment: 1 } } }).then(() => ({ count: 1 }));

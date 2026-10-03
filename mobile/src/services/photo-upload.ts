@@ -8,6 +8,25 @@ export function removeUploadCopy(file: File) {
   try { if (file.exists) file.delete(); } catch { /* Only a temporary upload copy; the OS can reclaim it. */ }
 }
 
+// Recipe screenshots contain small text. Preserve their pixels, unlike the
+// smaller pantry-photo uploads. Rendering also honors the image orientation.
+export async function prepareRecipePhotoUpload(uri: string, rotation = 0): Promise<File> {
+  const context = ImageManipulator.manipulate(uri);
+  if (rotation) context.rotate(rotation);
+  try {
+    const image = await context.renderAsync();
+    try {
+      for (const compress of [0.95, 0.85, 0.75]) {
+        const result = await image.saveAsync({ format: SaveFormat.JPEG, compress });
+        const file = new File(result.uri);
+        if (file.size > 0 && file.size <= 3 * 1024 * 1024) return file;
+        removeUploadCopy(file);
+      }
+    } finally { image.release(); }
+  } finally { context.release(); }
+  throw new Error('This photo is too large to read clearly. Crop to one recipe or use a PDF under 3 MB.');
+}
+
 export async function preparePhotoUpload(uri: string): Promise<File> {
   for (const [width, compress] of [[1600, 0.72], [1200, 0.6], [900, 0.5]]) {
     const context = ImageManipulator.manipulate(uri);

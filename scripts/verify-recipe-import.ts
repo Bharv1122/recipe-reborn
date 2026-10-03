@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { importFile, normalizeImportedRecipe, publicIPv4, recipePage, MAX_IMPORT_FILE_BYTES } from '../lib/recipe-import';
 import { RequestDeadlineError, withRequestDeadline } from '../lib/request-deadline';
-import { importedRecipeLines } from '../shared/recipe-import';
+import { importedRecipeLines, MISSING_SOURCE_DIRECTIONS, sourceHasDirections } from '../shared/recipe-import';
 import { importedRecipeSnapshotSchema, importAdaptationRequestSchema } from '../lib/import-recipe-adaptation';
 
 async function main() {
@@ -32,6 +32,18 @@ async function main() {
   assert.equal(importAdaptationRequestSchema.safeParse({ recipe: webSnapshot, action: { type: 'remove', original: webSnapshot.freshIngredients[1] } }).success, true, 'The web import must be adaptable.');
   assert.equal(normalizeImportedRecipe({ title: 'Soup', ingredients: ['water'], instructions: ['Boil'], reviewNotes: ['Line 2 is unclear'] }).reviewNotes, 'Line 2 is unclear');
   assert.throws(() => normalizeImportedRecipe({ title: 'Soup', ingredients: [] }));
+  const untitled = normalizeImportedRecipe({ ingredients: ['1 cup flour'], instructions: ['Mix with water.'] });
+  assert.equal(untitled.title, 'Imported recipe');
+  assert.match(untitled.reviewNotes, /title/i);
+  assert.equal(untitled.instructions, 'Mix with water.');
+  const partial = normalizeImportedRecipe({ title: 'Corn fritters', ingredients: ['1 cup flour', '1 egg'], instructions: [] }, true);
+  assert.equal(partial.needsDirections, true);
+  assert.equal(partial.instructions, '', 'An ingredient-only source must not acquire invented directions.');
+  assert.equal(sourceHasDirections([MISSING_SOURCE_DIRECTIONS]), false, 'A partial source cannot overwrite user-added directions on restore.');
+  assert.equal(sourceHasDirections(['Mix and fry.']), true);
+  assert.equal(partial.freshIngredients, '1 cup flour\n1 egg');
+  assert.throws(() => normalizeImportedRecipe({ title: 'Corn fritters', ingredients: ['1 cup flour'] }), /directions/i, 'Older clients must not receive an unusable partial recipe.');
+  assert.throws(() => normalizeImportedRecipe({ instructions: ['Fry.'] }, true), /ingredient/i);
   assert.throws(() => normalizeImportedRecipe({ title: 'Soup', ingredients: ['x'.repeat(501)], instructions: ['Boil.'] }), /supported length/);
   assert.throws(() => normalizeImportedRecipe({ title: 'Soup', ingredients: ['water'], instructions: ['x'.repeat(3001)] }), /supported length/);
   assert.throws(() => normalizeImportedRecipe({ title: 'Soup', ingredients: ['water'], instructions: ['Boil'], prepTime: 'x'.repeat(101) }), /supported length/);
@@ -58,7 +70,7 @@ async function main() {
   const route = await import('node:fs/promises').then(({ readFile }) => readFile(new URL('../app/api/import-recipe/route.ts', import.meta.url), 'utf8'));
   assert.match(route, /getRequestUserId/);
   assert.match(route, /req\.formData\(\)/);
-  assert.match(route, /AI_GENERATE_URL/);
+  assert.match(route, /extractRecipe/);
   assert.match(route, /findBlockedFoodInRecipe/);
   assert.match(route, /import was kept faithful and was not rewritten/);
   assert.doesNotMatch(route, /prisma\.recipe\.create/, 'Import extraction must not auto-save a recipe.');

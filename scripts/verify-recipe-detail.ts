@@ -11,6 +11,12 @@ assert.equal(ingredientAllergens(['1 tbsp peanut butter']).some(item => item.nam
 assert.equal(ingredientAllergens(['1 cup oat milk and 1 tbsp butter']).some(item => item.name === 'Milk'), true, 'Alternative milk cannot hide a separate dairy ingredient.');
 assert.equal(ingredientAllergens(['1 cup almond milk'])[0].name, 'Tree nuts');
 assert.deepEqual(ingredientAllergens(['250 g chicken', '1 tsp olive oil']), []);
+for (const line of ['1/4 cup vegan Parmesan-style shredded cheese (optional)', 'vegan shredded mozzarella', 'vegan shredded cheese', 'dairy-free grated cheddar cheese']) {
+  assert.equal(ingredientAllergens([line]).some(item => item.name === 'Milk'), false, line);
+}
+for (const line of ['shredded cheese', 'vegan Parmesan-style shredded cheese and butter', 'vegan shredded mozzarella, milk', 'vegan cheese with whey']) {
+  assert.equal(ingredientAllergens([line]).some(item => item.name === 'Milk'), true, line);
+}
 const additive = ingredientAdditives(actualLines);
 assert.equal(additive.length, 1);
 assert.equal(additive[0].ingredient, actualLines[2]);

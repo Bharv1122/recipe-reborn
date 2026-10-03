@@ -90,11 +90,11 @@ async function main() {
     assert.match(savedClient, /original.*unchanged|original recipe.*unchanged/is);
     assert.match(savedClient, /source revert is unavailable/);
   }
-  assert.match(webSaved, /storedImportSourceSnapshot \?/);
+  assert.match(webSaved, /sourceHasDirections\(storedImportSourceSnapshot.instructions\)/);
   const nativeDetail = await source('mobile/src/components/recipe-detail.tsx');
   assert.match(mobileDraft, /RecipeDetail/);
   assert.match(mobileSaved, /RecipeDetail/);
-  for (const label of ['Substitute', 'Remove', 'Apply my saved food preferences', 'Restore imported source', 'Cancel change', 'Save recipe']) assert.ok(nativeDetail.includes(label));
+  for (const label of ['Substitute', 'Remove', 'Keto', 'Restore imported source', 'Cancel change', 'Save recipe']) assert.ok(nativeDetail.includes(label));
   assert.match(nativeDetail, /original stays unchanged/);
   assert.match(mobileSaved, /sourceRecipe=\{recipe.importSourceSnapshot\}/);
   assert.match(webNutrition, /estimate is unavailable right now/);

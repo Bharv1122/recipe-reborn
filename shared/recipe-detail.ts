@@ -26,7 +26,10 @@ export function ingredientAllergens(ingredients: string[]) {
       // Salt intended for pasta water is still salt. Do not suppress pasta
       // water itself, explicit wheat, or separately named foods on the line.
       .replace(/\bsalt\s*,?\s+(?:(?:plus|and)\s+(?:more|extra)\s+)?for\s+(?:the\s+)?pasta\s+(?:cooking\s+)?water\b/gi, 'salt');
-    const qualified = normalized.replace(rule.alternatives ?? /$^/, '');
+    // Strip only a directly qualified dairy alternative, including its form.
+    // A separate milk/butter ingredient after a comma or 'and' still matches.
+    const dairyAlternative = /\b(?:dairy[- ]free|vegan|plant[- ]based)\s+(?:(?:shredded|grated|sliced|block|soft|hard)\s+)?(?:parmesan|mozzarella|cheddar|ricotta|feta|paneer|mascarpone|gouda|gruyere|brie)(?:[- ]style)?(?:\s+(?:shredded|grated|sliced|block|soft|hard))?(?:\s+cheese)?\b|\b(?:dairy[- ]free|vegan|plant[- ]based)\s+(?:shredded|grated|sliced|block|soft|hard)\s+cheese\b/gi;
+    const qualified = (rule.name === 'Milk' ? normalized.replace(dairyAlternative, '') : normalized).replace(rule.alternatives ?? /$^/, '');
     const text = qualified.replace(/\b(?:wheat|gluten|milk|dairy|egg|soy|peanut|nut|sesame|fish|shellfish)[- ]free\b/gi, '');
     const explicit = rule.explicit.test(text);
     // A brand/base mentioned only as an example does not establish its use.

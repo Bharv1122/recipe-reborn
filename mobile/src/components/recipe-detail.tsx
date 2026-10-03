@@ -1,3 +1,4 @@
+import { sourceHasDirections } from '../../../shared/recipe-import';
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { Alert, Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useNavigation, useRouter } from 'expo-router';
@@ -12,6 +13,7 @@ import { ingredientAdditives, ingredientAllergens, nutritionKey, recipeKey, scal
 import { NUTRIENT_FIELDS, type FreshNutritionEstimate, type OriginalNutrition } from '../../../shared/nutrition-facts';
 import { detectAdditives } from '../../../shared/additives';
 import { hasMetricCookingMeasures } from '../../../shared/cooking-measurements';
+import { PackageNutritionReview } from './recipe-comparison';
 
 type NutritionState = { key: string; value: FreshNutritionEstimate | null; status: 'pending' | 'ready' | 'failed' };
 export type DetailSave = { recipe: DetailRecipe; nutrition: FreshNutritionEstimate | null; changed: boolean; allowLeave(): void };
@@ -19,6 +21,7 @@ type Props = {
   initial: DetailRecipe;
   originalIngredients?: string;
   packageNutrition?: OriginalNutrition | null;
+  onPackageNutritionChange?: (value: OriginalNutrition) => void;
   isPackage?: boolean;
   savedNutrition?: FreshNutritionEstimate | null;
   saved?: boolean;
@@ -29,7 +32,7 @@ type Props = {
   sourceRecipe?: DetailRecipe | null;
 };
 
-export function RecipeDetail({ initial, originalIngredients = '', packageNutrition, isPackage = false, savedNutrition, saved = false, intro, extra, onSave, onChange, sourceRecipe }: Props) {
+export function RecipeDetail({ initial, originalIngredients = '', packageNutrition, onPackageNutritionChange, isPackage = false, savedNutrition, saved = false, intro, extra, onSave, onChange, sourceRecipe }: Props) {
   const router = useRouter();
   const navigation = useNavigation();
   const insets = useSafeAreaInsets();
@@ -40,13 +43,12 @@ export function RecipeDetail({ initial, originalIngredients = '', packageNutriti
   const [busy, setBusy] = useState(false);
   const [saving, setSaving] = useState(false);
   const [menu, setMenu] = useState<string | null>(null);
-  const [dialog, setDialog] = useState<'substitute' | 'info' | 'custom' | 'edit' | null>(null);
+  const [dialog, setDialog] = useState<'substitute' | 'info' | 'edit' | null>(null);
   const [editDraft, setEditDraft] = useState<ImportDraft | null>(null);
   const [editError, setEditError] = useState<string | null>(null);
   const [input, setInput] = useState('');
   const [attempt, setAttempt] = useState(0);
   const [showPackage, setShowPackage] = useState(false);
-  const [showMoreDiets, setShowMoreDiets] = useState(false);
   const [showSource, setShowSource] = useState(false);
   const scaleBase = useRef(initial);
   const [nutritionCache, setNutritionCache] = useState<Record<string, FreshNutritionEstimate>>({});
@@ -186,6 +188,7 @@ export function RecipeDetail({ initial, originalIngredients = '', packageNutriti
       <Card>
         <View style={styles.row}><Text style={styles.heading}>Nutrition</Text>{key !== originalKey && currentNutrition.status === 'ready' ? <Text accessibilityLiveRegion="polite" style={styles.badge}>✓ Updated</Text> : null}</View>
         <Text style={styles.note}>Estimated per serving · based on these ingredients</Text>
+        <Text style={styles.note}>These estimates do not copy nutrition values from a source or package label.</Text>
         {currentNutrition.status === 'pending' ? <Text accessibilityLiveRegion="polite" style={styles.body}>Updating nutrition…</Text> : null}
         <View style={styles.metrics}>{NUTRIENT_FIELDS.slice(0, 4).map(({ key: field, label, unit }) => <View key={field} style={styles.metric}><Text style={styles.metricNumber}>{currentNutrition.value?.[field] ?? '—'}</Text><Text style={styles.note}>{unit} {label === 'Calories' ? '' : label.toLowerCase()}</Text></View>)}</View>
         <Text style={styles.note}>Fiber: {currentNutrition.value?.fiber ?? '—'} g · Sugar: unavailable · Sodium: {currentNutrition.value?.sodium ?? '—'} mg</Text>
@@ -198,6 +201,7 @@ export function RecipeDetail({ initial, originalIngredients = '', packageNutriti
         {!additives.length ? <Text style={styles.body}>No listed additives matched in these ingredients. Packaged ingredients may contain others; check their labels.</Text> : null}
         {isPackage && originalIngredients ? <><Button label={showPackage ? 'Hide original package label' : 'View original package label'} secondary onPress={() => setShowPackage(value => !value)} />{showPackage ? <View style={styles.detail}><Text style={styles.label}>Original package — source for the homemade recipe</Text><Text style={styles.body}>{originalIngredients}</Text>{detectAdditives(originalIngredients).map(item => <Text key={item.name} style={styles.note}>{item.name} · {item.category} · From original package label</Text>)}<Text style={styles.note}>These label ingredients are not automatically ingredients in your homemade recipe.</Text>{packageNutrition && !packageNutrition.reviewRequired ? <><Text style={styles.label}>{packageNutrition.basisLabel} · {packageNutrition.sourceLabel}</Text>{NUTRIENT_FIELDS.map(({ key: field, label, unit }) => <Text key={field} style={styles.note}>{label}: {packageNutrition.values[field] ?? '—'} {unit}</Text>)}</> : null}</View> : null}</> : null}
       </Card>
+      {isPackage && packageNutrition && onPackageNutritionChange ? <PackageNutritionReview value={packageNutrition} onChange={onPackageNutritionChange} /> : null}
       <View accessibilityRole="summary" style={styles.allergens}>
         <Text style={styles.allergenHeading}>⚠ Recipe allergens</Text>
         {contains.length ? <><Text style={styles.allergenHeading}>This recipe contains:</Text>{contains.map((match, index) => <Text key={index} style={styles.allergenText}>{match.name} — {match.ingredient}</Text>)}</> : <Text style={styles.allergenText}>No explicit major-allergen names matched.</Text>}
@@ -207,13 +211,11 @@ export function RecipeDetail({ initial, originalIngredients = '', packageNutriti
       <Card>
         <Text style={styles.heading}>Make it your way</Text><Text style={styles.note}>Updates ingredients, steps & nutrition.</Text>
         <View style={styles.row}><ScrollView horizontal ref={chipScroll} showsHorizontalScrollIndicator={false} onScroll={event => { chipOffset.current = event.nativeEvent.contentOffset.x; setChipEnd(event.nativeEvent.contentOffset.x + event.nativeEvent.layoutMeasurement.width >= event.nativeEvent.contentSize.width - 5); }} scrollEventThrottle={32} contentContainerStyle={styles.chips}>
-          {['Vegan', 'Vegetarian', 'Low-carb', 'Gluten-free', 'Dairy-free'].map(diet => <Pressable key={diet} accessibilityRole="button" accessibilityLabel={`Make recipe ${diet.toLowerCase()}`} disabled={busy || saving} onPress={() => void adapt({ type: 'preferences', oneRecipeDiet: diet }, `Made recipe ${diet.toLowerCase()}`)} style={styles.chip}><Text style={styles.link}>{diet}</Text></Pressable>)}
-        </ScrollView><Pressable accessibilityRole="button" accessibilityLabel={chipEnd ? 'Scroll dietary options to start' : 'Show more dietary options'} onPress={() => chipScroll.current?.scrollTo({ x: chipEnd ? 0 : chipOffset.current + 180, animated: true })} style={styles.touch}><Text style={styles.symbol}>{chipEnd ? '‹' : '›'}</Text></Pressable></View>
-        <Button label={showMoreDiets ? 'Fewer options' : 'More options'} secondary disabled={busy || saving} onPress={() => setShowMoreDiets(value => !value)} />
-        {showMoreDiets ? <><Button label="Keto" secondary disabled={busy || saving} onPress={() => void adapt({ type: 'preferences', oneRecipeDiet: 'Keto' }, 'Applied keto request')} /><Button label="Other changes" secondary onPress={() => { setInput(''); setDialog('custom'); }} /><Button label="Apply my saved food preferences" secondary onPress={() => void adapt({ type: 'preferences', oneRecipeDiet: '' }, 'Applied saved food preferences')} /></> : null}
+          {['Vegan', 'Vegetarian', 'Low-carb', 'Keto', 'Gluten-free', 'Dairy-free'].map(diet => <Pressable key={diet} accessibilityRole="button" accessibilityLabel={`Make recipe ${diet.toLowerCase()}`} disabled={busy || saving} onPress={() => void adapt({ type: 'preferences', oneRecipeDiet: diet }, `Made recipe ${diet.toLowerCase()}`)} style={styles.chip}><Text style={styles.link}>{diet}</Text></Pressable>)}
+        </ScrollView><Pressable accessibilityRole="button" accessibilityLabel={chipEnd ? 'Show dietary options from the beginning' : 'Show more dietary options'} onPress={() => chipScroll.current?.scrollTo({ x: chipEnd ? 0 : chipOffset.current + 180, animated: true })} style={styles.touch}><Text style={styles.symbol}>›</Text></Pressable></View>
         {busy ? <><Text accessibilityLiveRegion="polite" style={styles.body}>Updating the complete recipe…</Text><Button label="Cancel change" secondary onPress={() => request.current?.abort()} /></> : null}
       </Card>
-      {sourceRecipe ? <Card><Button label={showSource ? 'Hide imported source' : 'Review imported source'} secondary onPress={() => setShowSource(value => !value)} />{showSource ? <><Text style={styles.heading}>{sourceRecipe.title}</Text>{sourceRecipe.freshIngredients.map((line, index) => <Text key={`i-${index}`} style={styles.body}>{line}</Text>)}{sourceRecipe.instructions.map((line, index) => <Text key={`s-${index}`} style={styles.body}>{index + 1}. {line}</Text>)}</> : null}<Button label="Restore imported source" secondary disabled={busy || saving} onPress={() => replace(sourceRecipe, 'Restored imported source')} /></Card> : null}
+      {sourceRecipe ? <Card><Button label={showSource ? 'Hide imported source' : 'Review imported source'} secondary onPress={() => setShowSource(value => !value)} />{showSource ? <><Text style={styles.heading}>{sourceRecipe.title}</Text>{sourceRecipe.freshIngredients.map((line, index) => <Text key={`i-${index}`} style={styles.body}>{line}</Text>)}{sourceHasDirections(sourceRecipe.instructions) ? sourceRecipe.instructions.map((line, index) => <Text key={`s-${index}`} style={styles.body}>{index + 1}. {line}</Text>) : <Text style={styles.note}>No directions in source. Your added directions are kept in the recipe above.</Text>}</> : null}{sourceHasDirections(sourceRecipe.instructions) ? <Button label="Restore imported source" secondary disabled={busy || saving} onPress={() => replace(sourceRecipe, 'Restored imported source')} /> : null}</Card> : null}
       {extra}
     </ScrollView>
     <View style={[styles.footer, { paddingBottom: Math.max(8, insets.bottom) }]}>
@@ -221,13 +223,13 @@ export function RecipeDetail({ initial, originalIngredients = '', packageNutriti
       <Text style={styles.footerNote}>{currentNutrition.status === 'pending' ? 'Finishing nutrition…' : saved && changed ? 'Saves a new copy. Your original stays unchanged.' : 'Saves the recipe shown.'}</Text>
       <View style={styles.nav}>{([{ label: 'Home', icon: '⌂', path: '/(tabs)' }, { label: 'Recipes', icon: '▤', path: '/(tabs)/library' }, { label: 'Shopping', icon: '🛒', path: '/(tabs)/shopping' }, { label: 'Account', icon: '○', path: '/(tabs)/account' }] as const).map(item => <Pressable key={item.label} accessibilityRole="tab" accessibilityLabel={item.label} accessibilityState={{ selected: item.label === 'Recipes' }} disabled={busy || saving} onPress={() => navigate(item.path)} style={[styles.navItem, item.label === 'Recipes' && styles.navSelected]}><Text style={item.label === 'Recipes' ? styles.link : styles.muted}>{item.icon}</Text><Text style={item.label === 'Recipes' ? styles.link : styles.note}>{item.label}</Text></Pressable>)}</View>
     </View>
-    <Modal visible={Boolean(menu) || dialog === 'custom' || dialog === 'edit'} transparent animationType="fade" onRequestClose={() => { setMenu(null); setDialog(null); }}>
+    <Modal visible={Boolean(menu) || dialog === 'edit'} transparent animationType="fade" onRequestClose={() => { setMenu(null); setDialog(null); }}>
       <View style={styles.backdrop}><View accessibilityViewIsModal style={styles.modal}><ScrollView contentContainerStyle={styles.modalContent} keyboardShouldPersistTaps="handled">
-        <Text style={styles.heading}>{dialog === 'edit' ? 'Edit recipe details' : dialog === 'custom' ? 'Other changes' : menu}</Text>
+        <Text style={styles.heading}>{dialog === 'edit' ? 'Edit recipe details' : menu}</Text>
         {dialog === 'edit' && editDraft ? <><Text style={styles.note}>Review ingredients and instructions together. Nutrition and allergens refresh after you apply your edits.</Text>{(['title', 'ingredients', 'instructions', 'prepTime', 'cookTime', 'servings', 'dietaryTags'] as const).map(field => <View key={field} style={{ gap: 6 }}><Text style={styles.label}>{{ title: 'Title', ingredients: 'Ingredients (one per line)', instructions: 'Instructions (one step per line)', prepTime: 'Prep time', cookTime: 'Cook time', servings: 'Servings', dietaryTags: 'Dietary tags (comma separated)' }[field]}</Text><Field accessibilityLabel={`Edit ${field}`} value={editDraft[field]} multiline={field === 'ingredients' || field === 'instructions'} style={field === 'ingredients' || field === 'instructions' ? { minHeight: 130, textAlignVertical: 'top' } : undefined} onChangeText={value => setEditDraft({ ...editDraft, [field]: value })} /></View>)}<InlineError message={editError} /><Button label="Apply edits" onPress={() => { try { const next = importSnapshot(editDraft); replace(next, 'Updated recipe details'); setDialog(null); } catch (value) { setEditError(value instanceof Error ? value.message : 'Check your recipe.'); } }} /></> : null}
         {!dialog ? <><Button label="Ingredient info" secondary onPress={() => setDialog('info')} /><Button label="Substitute" secondary onPress={() => setDialog('substitute')} /><Button label="Remove" secondary onPress={() => menu && void adapt({ type: 'remove', original: menu }, `Removed ${menu}`)} /><Button label="Add to shopping list" secondary onPress={shop} /></> : null}
         {dialog === 'info' ? <><Text style={styles.body}>Allergen matches: {selectedMatches.map(item => `${item.name}${item.possible ? ' (check label)' : ''}`).join(', ') || 'none identified from this ingredient name'}</Text>{selectedAdditives.map(item => <Text key={item.name} style={styles.body}>{item.name}: {item.category}. Source: {item.ingredient}</Text>)}<Text style={styles.note}>The recipe nutrition panel estimates the quantities used. Brand-specific nutrition and unlisted additives need the actual package label.</Text></> : null}
-        {dialog === 'substitute' || dialog === 'custom' ? <><Field maxLength={dialog === 'substitute' ? 500 : 300} accessibilityLabel={dialog === 'substitute' ? 'Replacement ingredient' : 'Recipe change request'} placeholder={dialog === 'substitute' ? 'For example, unsweetened oat cream' : 'Describe your changes'} value={input} onChangeText={setInput} multiline /><Text style={styles.note}>{input.length}/{dialog === 'substitute' ? 500 : 300}</Text><Button label="Update recipe" disabled={!input.trim()} onPress={() => dialog === 'substitute' && menu ? void adapt({ type: 'substitute', original: menu, substitute: input.trim() }, `Replaced ${menu}`) : void adapt({ type: 'preferences', oneRecipeDiet: input.trim() }, 'Applied your changes')} /></> : null}
+        {dialog === 'substitute' ? <><Field maxLength={500} accessibilityLabel="Replacement ingredient" placeholder="For example, unsweetened oat cream" value={input} onChangeText={setInput} multiline /><Text style={styles.note}>{input.length}/500</Text><Button label="Update recipe" disabled={!input.trim()} onPress={() => menu && void adapt({ type: 'substitute', original: menu, substitute: input.trim() }, `Replaced ${menu}`)} /></> : null}
         <Button label="Close" secondary onPress={() => { setMenu(null); setDialog(null); }} />
       </ScrollView></View></View>
     </Modal>

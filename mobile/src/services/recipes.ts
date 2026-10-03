@@ -19,7 +19,7 @@ export async function saveGeneratedRecipe(originalIngredients: string, recipe: G
 
 export async function generateRecipe(
   ingredients: string,
-  options: { source: 'label' | 'pantry' | 'dish' | 'random'; dietaryRestriction?: string; signal?: AbortSignal; generationId: string },
+  options: { source: 'label' | 'pantry' | 'dish' | 'random'; productName?: string; pantryTargetTitle?: string; dietaryRestriction?: string; signal?: AbortSignal; generationId: string },
 ): Promise<{ generationId: string; recipe: GeneratedRecipe }> {
   const generationId = options.generationId;
   const response = await apiResponse('/api/generate-recipe', {
@@ -28,6 +28,8 @@ export async function generateRecipe(
       ingredients,
       measurementSystem: 'us',
       source: options.source,
+      productName: options.productName,
+      pantryTargetTitle: options.pantryTargetTitle,
       dietaryRestriction: options.dietaryRestriction || undefined,
       generationId,
     }),

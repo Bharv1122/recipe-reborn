@@ -18,6 +18,7 @@ import type { FreshNutritionEstimate } from '@/shared/nutrition-facts';
 import { VoiceReader } from '@/components/voice-reader';
 import { RecipeChat } from '@/components/recipe-chat';
 import { parseStoredRecipeList } from '@/lib/recipe-list';
+import { sourceHasDirections } from '@/shared/recipe-import';
 
 interface Recipe {
   id: string;
@@ -501,7 +502,7 @@ export function RecipeDetailModal({ recipe, onClose, onUpdate }: RecipeDetailMod
                   <div className="flex flex-wrap gap-2">
                     <Button type="button" disabled={isAdaptingImport || !foodPreferences} onClick={() => void adaptImportedRecipe({ type: 'preferences', oneRecipeDiet })}>{isAdaptingImport ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Adapting…</> : 'Apply my preferences — this recipe only'}</Button>
                     {isAdaptingImport ? <Button type="button" variant="outline" onClick={() => adaptationAbort.current?.abort()}>Cancel adaptation</Button> : null}
-                    {storedImportSourceSnapshot ? <Button type="button" variant="outline" disabled={isAdaptingImport} onClick={() => {
+                    {storedImportSourceSnapshot && sourceHasDirections(storedImportSourceSnapshot.instructions) ? <Button type="button" variant="outline" disabled={isAdaptingImport} onClick={() => {
                       setDraftTitle(storedImportSourceSnapshot.title); setFreshIngredients([...storedImportSourceSnapshot.freshIngredients]); setCurrentInstructions([...storedImportSourceSnapshot.instructions]);
                       setDraftPrepTime(storedImportSourceSnapshot.prepTime); setDraftCookTime(storedImportSourceSnapshot.cookTime); setDraftServings(storedImportSourceSnapshot.servings);
                       setDraftDietaryTags([...storedImportSourceSnapshot.dietaryTags]); setHasImportedAdaptation(true); setCostsInvalidated(true);

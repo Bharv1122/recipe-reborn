@@ -48,7 +48,10 @@ export async function recipePage(raw: string, hop = 0, signal?: AbortSignal): Pr
         res.resume(); resolve({ redirect: new URL(res.headers.location, url).href }); return;
       }
       if (res.statusCode !== 200 || !String(res.headers['content-type']).includes('text/html')) {
-        res.resume(); reject(new ImportInputError('The website did not return a readable recipe page. Try a photo or file.')); return;
+        console.warn('[recipe-import] website response', { status: res.statusCode, html: String(res.headers['content-type']).includes('text/html') });
+        res.resume(); reject(new ImportInputError([401, 403, 429].includes(res.statusCode ?? 0)
+          ? 'This website is blocking automatic import. Copy the recipe into Text, or use a screenshot or PDF with the ingredients and directions.'
+          : 'The website did not return a recipe page. Check the link, paste the recipe into Text, or use Photo or File.')); return;
       }
       const chunks: Buffer[] = []; let size = 0;
       res.on('data', (chunk: Buffer) => {
@@ -96,22 +99,22 @@ export async function importFile(file: File): Promise<ImportPart> {
   return { inlineData: { mimeType: detected, data: bytes.toString('base64') } };
 }
 
-export function normalizeImportedRecipe(value: unknown) {
+export function normalizeImportedRecipe(value: unknown, allowPartial = false) {
   const raw = value as Record<string, unknown> | null;
   const text = (v: unknown) => typeof v === 'string' ? v.trim() : Array.isArray(v) && v.every(x => typeof x === 'string') ? v.join('\n').trim() : '';
-  const title = text(raw?.title), ingredients = text(raw?.ingredients), instructions = text(raw?.instructions);
-  if (!title || !ingredients || !instructions || title.length > 300 || ingredients.length > 30000 || instructions.length > 50000) {
-    throw new ImportInputError('No complete recipe could be read. Use a clearer photo or a file containing one recipe.', 422);
-  }
-  const reviewNotes = text(raw?.reviewNotes);
+  const sourceTitle = text(raw?.title), title = sourceTitle || 'Imported recipe', ingredients = text(raw?.ingredients), instructions = text(raw?.instructions);
+  if (!ingredients) throw new ImportInputError('No ingredient list could be read. Include the ingredients and their amounts in a closer photo, or paste them into Text.', 422);
+  if (!instructions && !allowPartial) throw new ImportInputError('The ingredients were readable, but no directions were found. Include the directions or use the ingredients to create a new recipe.', 422);
+  if (title.length > 300 || ingredients.length > 30000 || instructions.length > 50000) throw new ImportInputError('This recipe exceeds the supported length.', 422);
+  const reviewNotes = [text(raw?.reviewNotes), !sourceTitle ? 'No title was visible. Imported recipe is a temporary name; you can edit it.' : '', !instructions ? 'No cooking directions were visible. No steps have been invented.' : ''].filter(Boolean).join('\n');
   const snapshot = importedRecipeSnapshotSchema.safeParse({
     title, freshIngredients: ingredients.split('\n').map(line => line.trim()).filter(Boolean),
-    instructions: instructions.split('\n').map(line => line.trim()).filter(Boolean),
+    instructions: instructions ? instructions.split('\n').map(line => line.trim()).filter(Boolean) : ['Directions missing from source'],
     prepTime: text(raw?.prepTime) || 'Not specified', cookTime: text(raw?.cookTime) || 'Not specified',
     servings: text(raw?.servings) || 'Not specified', dietaryTags: [],
   });
   if (!snapshot.success) throw new ImportInputError('This recipe exceeds the supported length. Import a file or photo containing one shorter recipe.', 422);
   return { title, originalIngredients: ingredients, freshIngredients: ingredients, instructions,
     prepTime: text(raw?.prepTime) || 'Not specified', cookTime: text(raw?.cookTime) || 'Not specified',
-    servings: text(raw?.servings) || 'Not specified', dietaryTags: [] as string[], reviewNotes };
+    servings: text(raw?.servings) || 'Not specified', dietaryTags: [] as string[], reviewNotes, needsDirections: !instructions };
 }
