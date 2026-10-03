@@ -22,7 +22,10 @@ export function ingredientAllergens(ingredients: string[]) {
     const normalized = ingredient.normalize('NFKD').replace(/[\u0300-\u036f]/g, '')
       // Fresh water's intended use is not an ingredient it contains. Keep
       // reserved pasta water and any separately listed ingredients intact.
-      .replace(/\bwater\s*,?\s+(?:for|to)\s+(?:cooking|boiling|cook|boil)\s+(?:the\s+)?(?:pasta|noodles|spaghetti|penne|macaroni)\b/gi, 'water');
+      .replace(/\bwater\s*,?\s+(?:for|to)\s+(?:cooking|boiling|cook|boil)\s+(?:the\s+)?(?:pasta|noodles|spaghetti|penne|macaroni)\b/gi, 'water')
+      // Salt intended for pasta water is still salt. Do not suppress pasta
+      // water itself, explicit wheat, or separately named foods on the line.
+      .replace(/\bsalt\s*,?\s+(?:(?:plus|and)\s+(?:more|extra)\s+)?for\s+(?:the\s+)?pasta\s+(?:cooking\s+)?water\b/gi, 'salt');
     const qualified = normalized.replace(rule.alternatives ?? /$^/, '');
     const text = qualified.replace(/\b(?:wheat|gluten|milk|dairy|egg|soy|peanut|nut|sesame|fish|shellfish)[- ]free\b/gi, '');
     const explicit = rule.explicit.test(text);
