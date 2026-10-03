@@ -6,6 +6,7 @@ export interface MobileUser {
   name: string | null;
   allergies?: string[];
   dislikedIngredients?: string[];
+  likedIngredients?: string[];
 }
 
 export interface TokenPair {
@@ -44,6 +45,8 @@ export interface RecipeSummary {
   rating: number | null;
   calories: number | null;
   createdAt: string;
+  savedAt?: string | null;
+  usedInMealPlans?: boolean;
 }
 
 export interface Recipe extends RecipeSummary {
@@ -54,6 +57,11 @@ export interface Recipe extends RecipeSummary {
   notes: string | null;
   estimatedCostPerServing?: number | null;
   storeBoughtCost?: number | null;
+  librarySource?: string;
+  importSourceSnapshot?: {
+    title: string; freshIngredients: string[]; instructions: string[];
+    prepTime: string; cookTime: string; servings: string; dietaryTags: string[];
+  } | null;
 }
 
 export interface GeneratedRecipe {

@@ -25,6 +25,7 @@ export default function HomeScreen() {
       <Pressable accessibilityRole="button" accessibilityLabel="Choose a dish" onPress={() => router.push({ pathname: '/generate', params: { source: 'dish' } })} style={styles.choice}>
         <View style={styles.choiceText}><Text style={styles.cardTitle}>Choose a dish</Text><Text style={styles.body}>Tell us what you want to cook.</Text></View><Text accessible={false} style={styles.arrow}>›</Text>
       </Pressable>
+      <Button label="Import a recipe" secondary onPress={() => router.push('/import-recipe')} />
       <Button label="Need cooking help? Ask AI Chef" secondary onPress={() => router.push('/chat')} />
     </ScrollView>
   </Screen>;

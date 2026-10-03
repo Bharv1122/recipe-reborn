@@ -1,5 +1,5 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
-import { Platform } from 'react-native';
+import { AppState, Platform } from 'react-native';
 import * as Device from 'expo-device';
 import { useSQLiteContext } from 'expo-sqlite';
 import { apiRequest, publicRequest } from '@/services/api';
@@ -43,6 +43,20 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       }
     })();
   }, []);
+
+  useEffect(() => {
+    if (!user?.id) return;
+    let previous = AppState.currentState;
+    const subscription = AppState.addEventListener('change', (next) => {
+      if (previous !== 'active' && next === 'active') {
+        // Refresh the shared account snapshot after the app resumes. Screens
+        // keep their own dirty-edit guards, so an in-progress edit is not lost.
+        refreshAccount().catch(() => undefined);
+      }
+      previous = next;
+    });
+    return () => subscription.remove();
+  }, [user?.id, refreshAccount]);
 
   const signIn = useCallback(async (email: string, password: string) => {
     const data = await publicRequest<{ tokens: TokenPair; user: MobileUser }>('/api/mobile/auth/login', {

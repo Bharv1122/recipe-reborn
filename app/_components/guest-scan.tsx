@@ -33,6 +33,7 @@ export function GuestScan() {
   const [ingredients, setIngredients] = useState('');
   const [loading, setLoading] = useState(false);
   const [recipe, setRecipe] = useState<GuestRecipe | null>(null);
+  const [handoffToken, setHandoffToken] = useState<string | null>(null);
   const [additives, setAdditives] = useState<DetectedAdditive[]>([]);
   const [wallMessage, setWallMessage] = useState<string | null>(null);
   const [scanning, setScanning] = useState(false);
@@ -87,6 +88,7 @@ export function GuestScan() {
     if (!ingredients.trim()) return;
     setLoading(true);
     setRecipe(null);
+    setHandoffToken(null);
     setWallMessage(null);
     setAdditives(detectAdditives(ingredients));
     try {
@@ -102,7 +104,12 @@ export function GuestScan() {
         setWallMessage(data?.message || data?.error || 'Something went wrong — please try again.');
         return;
       }
+      if (typeof data.handoffToken !== 'string' || !data.handoffToken) {
+        setWallMessage('Your preview was made, but it could not be secured for signup. Please try again.');
+        return;
+      }
       setRecipe(data.recipe);
+      setHandoffToken(data.handoffToken);
       void trackFunnelEvent('preview_started');
     } catch {
       setWallMessage('Something went wrong — please try again.');
@@ -111,11 +118,12 @@ export function GuestScan() {
     }
   };
 
-  // Carry the visitor's typed ingredients across signup so the generator can
-  // hand them the recipe they were promised instead of a blank form. (conversion)
+  // Carry only the opaque server token and the recoverable input across
+  // signup. The full recipe remains server-authoritative and single-use.
   const stashIngredientsForSignup = () => {
     try {
       sessionStorage.setItem('rr_guest_ingredients', ingredients);
+      if (handoffToken) sessionStorage.setItem('rr_guest_handoff_token', handoffToken);
     } catch {
       // sessionStorage unavailable (private mode) — signup still works
     }
@@ -352,6 +360,7 @@ export function GuestScan() {
             type="button"
             onClick={() => {
               setRecipe(null);
+              setHandoffToken(null);
               setIngredients('');
               setScannedProduct(null);
               setScanError(null);

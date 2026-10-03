@@ -33,7 +33,7 @@ function currentWeekMonday() {
 export default function MealPlansScreen() {
   const { recipeId } = useLocalSearchParams<{ recipeId?: string }>();
   const router = useRouter();
-  const { user } = useAuth();
+  const { user, refreshAccount } = useAuth();
   const [plans, setPlans] = useState<Plan[]>([]);
   const [view, setView] = useState<'plans' | 'create'>('plans');
   const [showPreferences, setShowPreferences] = useState(false);
@@ -55,12 +55,22 @@ export default function MealPlansScreen() {
   const [message, setMessage] = useState<string | null>(null);
   const [addingPlanId, setAddingPlanId] = useState<string | null>(null);
   const addingRecipe = useRef(false);
+  const preferencesDirty = useRef(false);
+
+  useEffect(() => {
+    if (!user || preferencesDirty.current) return;
+    setAllergies((user.allergies ?? []).join(', '));
+    setDislikes((user.dislikedIngredients ?? []).join(', '));
+  }, [user]);
 
   const load = useCallback(async () => {
     try { setPlans((await apiRequest<{ mealPlans: Plan[] }>('/api/mobile/meal-plans')).mealPlans); }
     catch (value) { setError(value instanceof Error ? value.message : 'Could not load meal plans.'); }
   }, []);
-  useFocusEffect(useCallback(() => { load(); }, [load]));
+  useFocusEffect(useCallback(() => {
+    load();
+    refreshAccount().catch((value) => setError(value instanceof Error ? value.message : 'Could not refresh food preferences.'));
+  }, [load, refreshAccount]));
 
   useEffect(() => {
     if (!generating) return;
@@ -74,6 +84,15 @@ export default function MealPlansScreen() {
   };
   const toggleDietary = (value: string) => {
     setSelectedDietary((current) => current.includes(value) ? current.filter((item) => item !== value) : [...current, value]);
+  };
+  const savePreferenceDefaults = async () => {
+    setError(null); setMessage(null);
+    try {
+      await apiRequest('/api/user/preferences', { method: 'PUT', body: JSON.stringify({ allergies: splitPreferenceList(allergies), dislikedIngredients: splitPreferenceList(dislikes) }) });
+      preferencesDirty.current = false;
+      await refreshAccount();
+      setMessage('Saved as your Account defaults. New recipes and meal plans will use them.');
+    } catch (value) { setError(value instanceof Error ? value.message : 'Could not save Account preferences.'); }
   };
 
   const generate = async () => {
@@ -150,11 +169,13 @@ export default function MealPlansScreen() {
         {showPreferences ? <>
         <Text style={styles.label}>Daily calorie target (optional)</Text>
         <Field accessibilityLabel="Daily calorie target" value={calorieTarget} onChangeText={setCalorieTarget} keyboardType="number-pad" placeholder="For example, 2000" />
-        <Text style={styles.label}>Allergies — never included</Text>
-        <Field accessibilityLabel="Allergies" value={allergies} onChangeText={setAllergies} placeholder="Shellfish, peanuts" multiline />
+        <Text style={styles.label}>Allergies to avoid</Text>
+        <Field accessibilityLabel="Allergies" value={allergies} onChangeText={(value) => { preferencesDirty.current = true; setAllergies(value); }} placeholder="Shellfish, peanuts" multiline />
         <Text style={styles.label}>Disliked ingredients — avoided</Text>
-        <Field accessibilityLabel="Disliked ingredients" value={dislikes} onChangeText={setDislikes} placeholder="Cilantro, olives" multiline />
-        <Text style={styles.note}>These start with your Account preferences. Changes here apply only to this plan.</Text>
+        <Field accessibilityLabel="Disliked ingredients" value={dislikes} onChangeText={(value) => { preferencesDirty.current = true; setDislikes(value); }} placeholder="Cilantro, olives" multiline />
+        <Text style={styles.note}>These start with your Account preferences. Changes here apply only to this plan unless you save them below. Account allergies always remain active.</Text>
+        <Text style={styles.note}>Always review generated recipes and product labels. These checks are not medical advice or a guarantee.</Text>
+        <Button label="Save these as Account defaults" secondary onPress={savePreferenceDefaults} />
         <Text style={styles.label}>Dietary preferences</Text>
         <View style={styles.wrap}>{dietaryOptions.map((value) => <Pressable accessibilityRole="checkbox" accessibilityState={{ checked: selectedDietary.includes(value) }} key={value} onPress={() => toggleDietary(value)} style={[styles.chip, selectedDietary.includes(value) && styles.active]}><Text style={selectedDietary.includes(value) ? styles.activeText : styles.chipText}>{value}</Text></Pressable>)}</View>
         </> : null}

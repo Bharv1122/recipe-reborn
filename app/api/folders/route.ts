@@ -30,7 +30,7 @@ export async function GET(req: NextRequest) {
       where: { userId: user.id },
       include: {
         _count: {
-          select: { recipes: true },
+          select: { recipes: { where: { savedAt: { not: null } } } },
         },
       },
       orderBy: { order: 'asc' },

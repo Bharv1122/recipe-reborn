@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/button';
 import { SearchInput } from '@/components/ui/search-input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { StarRating } from '@/components/ui/star-rating';
-import { Loader2, Trash2, Clock, Users, ChefHat, Filter, Share2, FolderInput, Camera } from 'lucide-react';
+import { Loader2, Trash2, Clock, Users, ChefHat, Filter, Share2, FolderInput, Camera, CheckSquare, Square } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { RecipeDetailModal } from './recipe-detail-modal';
 import { FolderSidebar } from './folder-sidebar';
@@ -43,6 +43,7 @@ interface Recipe {
   isPublic?: boolean;
   shareToken?: string | null;
   createdAt: string;
+  usedInMealPlans?: boolean;
 }
 
 interface Folder {
@@ -64,6 +65,8 @@ export function RecipesList() {
   const [searchQuery, setSearchQuery] = useState('');
   const [filterTag, setFilterTag] = useState('all');
   const [selectedFolderId, setSelectedFolderId] = useState<string | null>(null);
+  const [managing, setManaging] = useState(false);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
 
   const sensors = useSensors(
     useSensor(PointerSensor, {
@@ -120,14 +123,31 @@ export function RecipesList() {
       }
 
       setRecipes((prev) => prev?.filter?.((r) => r?.id !== id) ?? []);
-      toast.success('Recipe deleted successfully');
+      toast.success('Removed from My Saved Recipes');
       fetchFolders(); // Refresh folder counts
     } catch (error) {
       console.error('Delete recipe error:', error);
-      toast.error('Failed to delete recipe');
+      toast.error('Failed to remove saved recipe');
     } finally {
       setDeletingId(null);
     }
+  };
+
+  const removeSelected = async () => {
+    if (!selectedIds.size || !window.confirm(`Remove ${selectedIds.size} selected recipe${selectedIds.size === 1 ? '' : 's'} from My Saved Recipes? Meal plans and collections keep their copies.`)) return;
+    setDeletingId('bulk');
+    try {
+      const response = await fetch('/api/recipes/library', {
+        method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ recipeIds: [...selectedIds], action: 'remove' }),
+      });
+      const body = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(body.error || 'Failed to remove selected recipes');
+      setRecipes((current) => current.filter((recipe) => !selectedIds.has(recipe.id)));
+      setSelectedIds(new Set()); setManaging(false); fetchFolders();
+      toast.success(`Removed ${body.removed} recipe${body.removed === 1 ? '' : 's'} from My Saved Recipes`);
+    } catch (error) { toast.error(error instanceof Error ? error.message : 'Failed to remove selected recipes'); }
+    finally { setDeletingId(null); }
   };
 
   const moveRecipeToFolder = async (recipeId: string, folderId: string | null) => {
@@ -217,7 +237,9 @@ export function RecipesList() {
     }
 
     // Filter by dietary tag
-    if (filterTag !== 'all') {
+    if (filterTag === 'used-in-plans') {
+      filtered = filtered.filter(recipe => recipe.usedInMealPlans);
+    } else if (filterTag !== 'all') {
       filtered = filtered.filter(recipe => 
         recipe?.dietaryTags?.includes?.(filterTag)
       );
@@ -286,6 +308,15 @@ export function RecipesList() {
         <div className="flex-1">
           {/* Search and Filter Bar */}
           <div className="mb-6 space-y-4">
+            <div className="flex flex-wrap gap-2">
+              <Button variant="outline" onClick={() => { setManaging((value) => !value); setSelectedIds(new Set()); }}>
+                {managing ? 'Done managing' : 'Select recipes to remove'}
+              </Button>
+              {managing ? <Button variant="destructive" disabled={!selectedIds.size || deletingId === 'bulk'} onClick={removeSelected}>
+                {deletingId === 'bulk' ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Trash2 className="mr-2 h-4 w-4" />}Remove selected ({selectedIds.size})
+              </Button> : null}
+            </div>
+            {managing ? <p className="text-sm text-gray-700">Removing from this library does not remove recipes from meal plans or collections.</p> : null}
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <div className="md:col-span-2">
                 <SearchInput
@@ -302,6 +333,7 @@ export function RecipesList() {
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="all">All Recipes</SelectItem>
+                    <SelectItem value="used-in-plans">Used in meal plans</SelectItem>
                     {allTags.map(tag => (
                       <SelectItem key={tag} value={tag}>{tag}</SelectItem>
                     ))}
@@ -337,6 +369,9 @@ export function RecipesList() {
                   onMoveToFolder={moveRecipeToFolder}
                   onToggleSharing={toggleRecipeSharing}
                   isDeleting={deletingId === recipe?.id}
+                  managing={managing}
+                  selected={selectedIds.has(recipe.id)}
+                  onToggleSelected={(id) => setSelectedIds((current) => { const next = new Set(current); if (next.has(id)) next.delete(id); else next.add(id); return next; })}
                 />
               ))}
             </div>
@@ -369,6 +404,9 @@ function RecipeCard({
   onMoveToFolder,
   onToggleSharing,
   isDeleting,
+  managing,
+  selected,
+  onToggleSelected,
 }: {
   recipe: Recipe;
   index: number;
@@ -378,6 +416,9 @@ function RecipeCard({
   onMoveToFolder: (recipeId: string, folderId: string | null) => void;
   onToggleSharing: (recipeId: string, isPublic: boolean) => void;
   isDeleting: boolean;
+  managing: boolean;
+  selected: boolean;
+  onToggleSelected: (id: string) => void;
 }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: recipe.id,
@@ -393,7 +434,7 @@ function RecipeCard({
     <Card
       ref={setNodeRef}
       style={style}
-      className="shadow-lg border-0 bg-white hover:shadow-xl transition-all-smooth hover-lift cursor-pointer animate-fadeIn relative"
+      className={`shadow-lg bg-white hover:shadow-xl transition-all-smooth hover-lift cursor-pointer animate-fadeIn relative ${selected ? 'border-2 border-emerald-600' : 'border-0'}`}
       {...attributes}
     >
       {/* Drag Handle */}
@@ -417,11 +458,12 @@ function RecipeCard({
         </svg>
       </div>
 
-      <div onClick={() => onSelect(recipe)}>
+      <div onClick={() => managing ? onToggleSelected(recipe.id) : onSelect(recipe)}>
         <CardHeader className="bg-gradient-to-r from-emerald-50 to-orange-50 pr-12">
           <CardTitle className="text-xl text-gray-900 line-clamp-2">
             {recipe?.title}
           </CardTitle>
+          {managing ? <div className="mt-2 flex items-center gap-2 text-sm font-medium text-emerald-700">{selected ? <CheckSquare className="h-5 w-5" /> : <Square className="h-5 w-5" />}{selected ? 'Selected' : 'Select'}</div> : null}
           {recipe?.isPublic && (
             <div className="flex items-center gap-1 text-xs text-emerald-600 mt-1">
               <Share2 className="h-3 w-3" />
@@ -431,6 +473,7 @@ function RecipeCard({
         </CardHeader>
         <CardContent className="pt-4 space-y-4">
           {/* Rating */}
+          {recipe.usedInMealPlans ? <div className="text-xs font-medium text-emerald-700">Used in a meal plan</div> : null}
           {(recipe?.rating ?? 0) > 0 && (
             <div className="flex items-center gap-2">
               <StarRating value={recipe?.rating ?? 0} readonly size="sm" />
@@ -485,7 +528,7 @@ function RecipeCard({
           </p>
 
           {/* Action Buttons */}
-          <div className="flex gap-2">
+          {!managing ? <div className="flex gap-2">
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Button
@@ -539,7 +582,7 @@ function RecipeCard({
                 <Trash2 className="h-4 w-4" />
               )}
             </Button>
-          </div>
+          </div> : null}
         </CardContent>
       </div>
     </Card>

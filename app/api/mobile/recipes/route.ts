@@ -4,6 +4,8 @@ import { prisma } from '@/lib/db';
 import { MobileAuthError, requireMobileUserId } from '@/lib/mobile-auth';
 import { optionalRecipeMetadataSchema } from '@/lib/recipe-metadata-validation';
 import { recipeComparisonSchema } from '@/lib/recipe-comparison-validation';
+import { LIBRARY_SOURCES } from '@/lib/recipe-library';
+import { importedRecipeSnapshotSchema } from '@/lib/import-recipe-adaptation';
 
 export const dynamic = 'force-dynamic';
 
@@ -19,20 +21,23 @@ const saveSchema = z.object({
   estimatedCostPerServing: z.number().nonnegative().finite().optional(),
   storeBoughtCost: z.number().nonnegative().finite().optional(),
   comparisonSnapshot: recipeComparisonSchema.optional(),
+  librarySource: z.enum(LIBRARY_SOURCES).exclude(['meal_plan']).default('generated'),
+  importSourceSnapshot: importedRecipeSnapshotSchema.optional(),
 });
 
 export async function GET(request: Request) {
   try {
     const userId = requireMobileUserId(request);
     const recipes = await prisma.recipe.findMany({
-      where: { userId },
+      where: { userId, savedAt: { not: null } },
       select: {
         id: true, title: true, dietaryTags: true, prepTime: true, cookTime: true,
-        servings: true, rating: true, calories: true, createdAt: true, updatedAt: true,
+        servings: true, rating: true, calories: true, savedAt: true, createdAt: true, updatedAt: true,
+        _count: { select: { mealPlanRecipes: true } },
       },
       orderBy: { createdAt: 'desc' },
     });
-    return NextResponse.json({ recipes });
+    return NextResponse.json({ recipes: recipes.map(({ _count, ...recipe }) => ({ ...recipe, usedInMealPlans: _count.mealPlanRecipes > 0 })) });
   } catch (error) {
     if (error instanceof MobileAuthError) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     console.error('Mobile recipes error:', error);
@@ -49,6 +54,7 @@ export async function POST(request: Request) {
       data: {
         userId,
         ...parsed.data,
+        savedAt: new Date(),
         freshIngredients: JSON.stringify(parsed.data.freshIngredients),
         instructions: JSON.stringify(parsed.data.instructions),
         prepTime: parsed.data.prepTime || null,

@@ -2,7 +2,7 @@
 
 import { useSession } from 'next-auth/react';
 import { useRouter } from 'next/navigation';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -67,7 +67,9 @@ export default function AccountPage() {
   const [managingSubscription, setManagingSubscription] = useState(false);
   const [allergies, setAllergies] = useState('');
   const [dislikes, setDislikes] = useState('');
+  const [likes, setLikes] = useState('');
   const [savingPrefs, setSavingPrefs] = useState(false);
+  const prefsDirty = useRef(false);
 
   useEffect(() => {
     if (status === 'authenticated') {
@@ -81,8 +83,13 @@ export default function AccountPage() {
       const response = await fetch('/api/user/preferences');
       if (response.ok) {
         const prefs = await response.json();
-        setAllergies((prefs.allergies || []).join(', '));
-        setDislikes((prefs.dislikedIngredients || []).join(', '));
+        if (!prefsDirty.current) {
+          setAllergies((prefs.allergies || []).join(', '));
+          setDislikes((prefs.dislikedIngredients || []).join(', '));
+          setLikes((prefs.likedIngredients || []).join(', '));
+        }
+      } else {
+        toast.error('Food preferences could not be loaded');
       }
     } catch (error) {
       console.error('Error fetching preferences:', error);
@@ -100,12 +107,15 @@ export default function AccountPage() {
         body: JSON.stringify({
           allergies: splitList(allergies),
           dislikedIngredients: splitList(dislikes),
+          likedIngredients: splitList(likes),
         }),
       });
       if (response.ok) {
         const prefs = await response.json();
         setAllergies((prefs.allergies || []).join(', '));
         setDislikes((prefs.dislikedIngredients || []).join(', '));
+        setLikes((prefs.likedIngredients || []).join(', '));
+        prefsDirty.current = false;
         // Confirm the saved preferences even if analytics is slow or unavailable.
         void trackFunnelEvent('profile_completed');
         toast.success('Food preferences saved — all new recipes will respect them');
@@ -350,24 +360,29 @@ export default function AccountPage() {
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="space-y-2">
-              <Label htmlFor="account-allergies">Allergies — never included, no exceptions</Label>
+              <Label htmlFor="account-allergies">Allergies to avoid</Label>
               <Input
                 id="account-allergies"
                 placeholder="e.g., shellfish, peanuts, eggs"
                 value={allergies}
-                onChange={(e) => setAllergies(e.target.value)}
+                onChange={(e) => { prefsDirty.current = true; setAllergies(e.target.value); }}
               />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="account-dislikes">Disliked ingredients — avoided when possible</Label>
+              <Label htmlFor="account-dislikes">Disliked ingredients — excluded from generated recipes</Label>
               <Input
                 id="account-dislikes"
                 placeholder="e.g., cilantro, olives, mushrooms"
                 value={dislikes}
-                onChange={(e) => setDislikes(e.target.value)}
+                onChange={(e) => { prefsDirty.current = true; setDislikes(e.target.value); }}
               />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="account-likes">Ingredients you like — favored when they fit</Label>
+              <Input id="account-likes" placeholder="e.g., spinach, salmon, lemon" value={likes} onChange={(e) => { prefsDirty.current = true; setLikes(e.target.value); }} />
               <p className="text-xs text-muted-foreground">
-                Separate items with commas. You can still tweak these per meal plan.
+                Separate items with commas. Likes never override allergies or dislikes. You can still adjust exclusions for one meal plan.
+                Always review generated recipes and product labels; these checks are not medical advice or a guarantee.
               </p>
             </div>
             <Button onClick={handleSavePreferences} disabled={savingPrefs}>

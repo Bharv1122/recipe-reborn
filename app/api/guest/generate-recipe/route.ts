@@ -3,6 +3,10 @@ import { AI_CHAT_URL, AI_API_KEY, MODEL_SMART } from '@/lib/ai';
 import { extractJsonPayload } from '@/lib/ai-json';
 import { checkGuestLimit } from '@/lib/guest-rate-limit';
 import { getClientIp } from '@/lib/rate-limit';
+import {
+  createGuestRecipeHandoff,
+  guestRecipeHandoffRecipeSchema,
+} from '@/lib/guest-recipe-handoff';
 
 export const dynamic = 'force-dynamic';
 
@@ -46,6 +50,15 @@ function recipeQualityIssues(recipe: GuestRecipe): string[] {
   }
   if (!Array.isArray(recipe.instructions) || recipe.instructions.length < 2) {
     issues.push('The recipe needs complete step-by-step instructions.');
+  }
+  if (typeof recipe.prepTime !== 'string' || !recipe.prepTime.trim()) {
+    issues.push('The recipe needs a preparation time.');
+  }
+  if (typeof recipe.cookTime !== 'string' || !recipe.cookTime.trim()) {
+    issues.push('The recipe needs a cooking time.');
+  }
+  if (typeof recipe.servings !== 'string' || !recipe.servings.trim()) {
+    issues.push('The recipe needs a serving count.');
   }
 
   return issues;
@@ -230,7 +243,25 @@ Respond with raw JSON only. Do not include code blocks, markdown, or any other f
       }
     }
 
-    return NextResponse.json({ recipe, remaining: limit.remaining });
+    const validatedRecipe = guestRecipeHandoffRecipeSchema.safeParse(recipe);
+    if (!validatedRecipe.success) {
+      console.error('Guest generation was complete but not safe to hand off:', validatedRecipe.error.issues);
+      throw new Error('Could not build a complete recipe — try another ingredient list.');
+    }
+
+    const handoff = await createGuestRecipeHandoff({
+      originalIngredients: ingredients,
+      recipe: validatedRecipe.data,
+    });
+
+    return NextResponse.json({
+      recipe: validatedRecipe.data,
+      remaining: limit.remaining,
+      handoffToken: handoff.token,
+      handoffExpiresAt: handoff.expiresAt.toISOString(),
+    }, {
+      headers: { 'Cache-Control': 'no-store' },
+    });
   } catch (error: any) {
     console.error('Guest generate error:', error);
     return NextResponse.json(

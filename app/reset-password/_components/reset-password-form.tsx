@@ -18,6 +18,7 @@ export function ResetPasswordForm({ token }: { token?: string }) {
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -122,7 +123,9 @@ export function ResetPasswordForm({ token }: { token?: string }) {
                 onClick={() => setShowPassword((s) => !s)}
                 className="absolute right-3 top-2.5 text-gray-400 hover:text-gray-600"
                 aria-label={showPassword ? 'Hide password' : 'Show password'}
-                tabIndex={-1}
+                aria-pressed={showPassword}
+                disabled={isLoading}
+                onMouseDown={event => event.preventDefault()}
               >
                 {showPassword ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
               </button>
@@ -134,16 +137,22 @@ export function ResetPasswordForm({ token }: { token?: string }) {
               <Lock className="absolute left-3 top-2.5 h-5 w-5 text-gray-400" />
               <Input
                 id="confirmPassword"
-                type={showPassword ? 'text' : 'password'}
+                type={showConfirmPassword ? 'text' : 'password'}
                 autoComplete="new-password"
                 placeholder="Type it again"
                 value={confirmPassword}
                 onChange={(e) => setConfirmPassword(e?.target?.value ?? '')}
                 required
                 minLength={MIN_PASSWORD_LENGTH}
-                className="pl-10"
+                className="pl-10 pr-12"
                 disabled={isLoading}
               />
+              <button type="button" onClick={() => setShowConfirmPassword(value => !value)}
+                onMouseDown={event => event.preventDefault()} disabled={isLoading}
+                aria-label={showConfirmPassword ? 'Hide confirm password' : 'Show confirm password'} aria-pressed={showConfirmPassword}
+                className="absolute right-0 top-0 flex h-9 w-11 items-center justify-center text-gray-500 focus-visible:outline focus-visible:outline-2">
+                {showConfirmPassword ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
+              </button>
             </div>
           </div>
           <Button

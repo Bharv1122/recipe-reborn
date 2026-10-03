@@ -142,7 +142,9 @@ export function SignupForm() {
                 onClick={() => setShowPassword((s) => !s)}
                 className="absolute right-3 top-2.5 text-gray-400 hover:text-gray-600"
                 aria-label={showPassword ? 'Hide password' : 'Show password'}
-                tabIndex={-1}
+                aria-pressed={showPassword}
+                disabled={isLoading}
+                onMouseDown={event => event.preventDefault()}
               >
                 {showPassword ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
               </button>

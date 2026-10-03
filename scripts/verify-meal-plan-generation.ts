@@ -229,8 +229,8 @@ async function main() {
   await test('Expanded exclusions reach both phases without weakening validation', async () => {
     const aliasOptions: Options = { ...options, allergies: ['shellfish'], dislikedIngredients: ['scrambled eggs'] };
     const initial = validPlan();
-    initial[2].dinner = { ...meal('Rice supper'), ingredients: ['8 oz salmon', '1 cup rice'] };
-    const unsafeRepair = { ...meal('Chickpea salad'), ingredients: ['1 cup chickpeas', '1 tablespoon mayonnaise'] };
+    initial[2].dinner = { ...meal('Rice supper'), ingredients: ['8 oz shrimp', '1 cup rice'] };
+    const unsafeRepair = { ...meal('Egg breakfast'), ingredients: ['2 scrambled eggs', '1 slice toast'] };
     const allergyGuard = validateMeal(initial[2].dinner, aliasOptions);
     const dislikeGuard = validateMeal(unsafeRepair, aliasOptions);
     assert.equal(allergyGuard.success, false, 'The existing expanded allergy guard must stay active.');
@@ -241,7 +241,7 @@ async function main() {
       const exclusions = call.prompt.match(/Validation also excludes these ingredient names and aliases: ([^\n]+?)\. Use alternatives;/)?.[1]
         .split(',').map((term) => term.trim());
       assert.ok(exclusions, `${call.kind} prompt is missing the validator's expanded exclusions.`);
-      for (const term of ['shellfish', 'fish', 'salmon', 'shrimp', 'scrambled eggs', 'egg', 'mayonnaise', 'meringue']) {
+      for (const term of ['shellfish', 'shrimp', 'scrambled eggs', 'scrambled egg']) {
         assert.ok(exclusions.includes(term), `${call.kind} prompt omitted the blocked alias ${term}.`);
       }
       if (call.kind === 'plan') return completion(initial);

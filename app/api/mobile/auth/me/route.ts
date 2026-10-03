@@ -13,7 +13,7 @@ export async function GET(request: Request) {
       select: {
         id: true, name: true, email: true, createdAt: true, signupSource: true,
         subscriptionTier: true, subscriptionStatus: true, currentPeriodEnd: true,
-        allergies: true, dislikedIngredients: true,
+        allergies: true, dislikedIngredients: true, likedIngredients: true,
       },
     });
     if (!user) return NextResponse.json({ error: 'Account not found.' }, { status: 404 });
@@ -26,6 +26,7 @@ export async function GET(request: Request) {
         email: user.email,
         allergies: user.allergies,
         dislikedIngredients: user.dislikedIngredients,
+        likedIngredients: user.likedIngredients,
       },
       entitlement: {
         tier: user.subscriptionTier,

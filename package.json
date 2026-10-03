@@ -17,6 +17,10 @@
     "verify:native-repair": "tsx scripts/verify-native-repair.ts",
     "verify:nutrition-estimate": "node scripts/verify-nutrition-estimate.cjs",
     "verify:web-recipe-snapshot": "node scripts/verify-web-recipe-snapshot.cjs",
+    "verify:guest-handoff": "tsx scripts/verify-guest-recipe-handoff.ts",
+    "verify:recipe-import": "tsx scripts/verify-recipe-import.ts",
+    "verify:tester-feedback": "tsx scripts/verify-tester-feedback.ts",
+    "verify:import-adaptation": "tsx scripts/verify-import-adaptation.ts",
     "verify:recipe-comparison": "tsx scripts/verify-recipe-comparison.ts",
     "postinstall": "prisma generate"
   },

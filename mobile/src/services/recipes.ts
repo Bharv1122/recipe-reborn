@@ -13,7 +13,7 @@ export async function getRecipe(id: string) {
 export async function saveGeneratedRecipe(originalIngredients: string, recipe: GeneratedRecipe, comparisonSnapshot?: RecipeComparisonSnapshot) {
   return apiRequest<{ recipe: Recipe }>('/api/mobile/recipes', {
     method: 'POST',
-    body: JSON.stringify({ originalIngredients, dietaryTags: [], ...recipe, comparisonSnapshot }),
+    body: JSON.stringify({ originalIngredients, dietaryTags: [], ...recipe, comparisonSnapshot, librarySource: 'generated' }),
   });
 }
 
