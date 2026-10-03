@@ -5,6 +5,10 @@ import { getRequestUserId } from '@/lib/request-auth';
 import { AI_API_KEY, AI_CHAT_URL, MODEL_FAST, MODEL_SMART } from '@/lib/ai';
 import { validateMeal, type DayName, type MealType, type ValidatedMeal } from '@/lib/meal-plan-validation';
 import { ENTITLEMENT_SELECT, hasPremiumAccess, premiumRequiredMessage } from '@/lib/entitlement';
+import { limitAiRequest } from '@/lib/ai-rate-limit';
+import { RequestDeadlineError, withRequestDeadline } from '@/lib/request-deadline';
+
+export const maxDuration = 60;
 
 function parseMealObject(content: string): unknown {
   let jsonText = content.trim();
@@ -25,6 +29,7 @@ async function generateReplacement(options: {
   dislikedIngredients: string[];
   excludedTitles: string[];
   preferredIngredients: string[];
+  signal: AbortSignal;
 }): Promise<ValidatedMeal | null> {
   const constraints = [
     options.allergies.length ? `Never use these allergens or their derivatives: ${options.allergies.join(', ')}.` : '',
@@ -40,6 +45,7 @@ Return only one JSON object with title, ingredients (measured string array), ins
 
   for (const model of [MODEL_FAST, MODEL_SMART]) {
     const response = await fetch(AI_CHAT_URL, {
+      signal: options.signal,
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${AI_API_KEY}` },
       body: JSON.stringify({
@@ -98,7 +104,9 @@ export async function POST(request: Request, props: { params: Promise<{ id: stri
       return NextResponse.json({ error: 'Premium feature', message: premiumRequiredMessage(user, 'Meal replacement') }, { status: 403 });
     }
 
-    const meal = await generateReplacement({
+    const aiLimit = await limitAiRequest(userId);
+    if (aiLimit) return aiLimit;
+    const meal = await withRequestDeadline(request.signal, 50_000, (signal) => generateReplacement({
       day: entry.day,
       mealType: entry.mealType,
       servings: entry.servings,
@@ -106,7 +114,8 @@ export async function POST(request: Request, props: { params: Promise<{ id: stri
       dislikedIngredients: user.dislikedIngredients,
       excludedTitles: titles.map(({ recipe }) => recipe.title),
       preferredIngredients: user.likedIngredients,
-    });
+      signal,
+    }));
     if (!meal) {
       return NextResponse.json({ error: 'No safe replacement was produced. Your current meal was kept.' }, { status: 422 });
     }
@@ -140,6 +149,7 @@ export async function POST(request: Request, props: { params: Promise<{ id: stri
 
     return NextResponse.json({ entry: updatedEntry });
   } catch (error) {
+    if (error instanceof RequestDeadlineError) return NextResponse.json({ error: error.message }, { status: 504 });
     console.error('[meal-replacement] failed', error);
     return NextResponse.json({ error: 'Unable to replace this meal. Your current meal was kept.' }, { status: 500 });
   }

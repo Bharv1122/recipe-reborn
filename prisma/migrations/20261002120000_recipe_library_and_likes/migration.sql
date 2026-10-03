@@ -1,4 +1,6 @@
-ALTER TABLE "User" ADD COLUMN "likedIngredients" TEXT[] DEFAULT ARRAY[]::TEXT[];
+BEGIN;
+
+ALTER TABLE "User" ADD COLUMN "likedIngredients" TEXT[] NOT NULL DEFAULT ARRAY[]::TEXT[];
 
 ALTER TABLE "Recipe" ADD COLUMN "savedAt" TIMESTAMP(3);
 ALTER TABLE "Recipe" ADD COLUMN "librarySource" TEXT NOT NULL DEFAULT 'legacy';
@@ -9,3 +11,5 @@ UPDATE "Recipe" SET "savedAt" = "createdAt" WHERE "savedAt" IS NULL;
 ALTER TABLE "Recipe" ALTER COLUMN "savedAt" SET DEFAULT CURRENT_TIMESTAMP;
 
 CREATE INDEX "Recipe_userId_savedAt_idx" ON "Recipe"("userId", "savedAt");
+
+COMMIT;

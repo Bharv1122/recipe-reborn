@@ -4,9 +4,12 @@ import { AI_API_KEY, AI_GENERATE_URL } from '@/lib/ai';
 import { extractJsonPayload } from '@/lib/ai-json';
 import { getRequestUserId } from '@/lib/request-auth';
 import { rateLimit } from '@/lib/rate-limit';
+import { limitAiRequest } from '@/lib/ai-rate-limit';
 import { ImportInputError, importFile, normalizeImportedRecipe, recipePage, type ImportPart } from '@/lib/recipe-import';
 import { resolvePartnerTrial } from '@/lib/partner-offer-server';
 import { findBlockedFoodInRecipe } from '@/lib/food-preferences';
+import { hasPremiumAccess } from '@/lib/entitlement';
+import { RequestDeadlineError, withRequestDeadline } from '@/lib/request-deadline';
 
 export const dynamic = 'force-dynamic';
 export const maxDuration = 60;
@@ -30,7 +33,7 @@ Return JSON only with this structure:
 Do not silently fix or substitute ingredients because of food preferences. Do not add ingredients or steps that are not visible. Preserve handwritten wording when readable. Put [unclear] exactly where text cannot be read and explain it in reviewNotes. If a title, ingredient list, or instructions cannot be recovered, return empty values instead of inventing certainty.`;
 }
 
-async function readSource(req: NextRequest): Promise<ImportPart> {
+async function readSource(req: NextRequest, signal: AbortSignal): Promise<ImportPart> {
   const contentType = req.headers.get('content-type') ?? '';
   if (contentType.includes('multipart/form-data')) {
     const formData = await req.formData().catch(() => null);
@@ -43,7 +46,7 @@ async function readSource(req: NextRequest): Promise<ImportPart> {
   }
   const body = await req.json().catch(() => null) as { url?: unknown } | null;
   if (typeof body?.url !== 'string' || !body.url.trim()) throw new ImportInputError('Enter a valid HTTPS recipe link.');
-  return { text: await recipePage(body.url.trim()) };
+  return { text: await recipePage(body.url.trim(), 0, signal) };
 }
 
 async function extractRecipe(source: ImportPart, requestSignal: AbortSignal) {
@@ -51,36 +54,27 @@ async function extractRecipe(source: ImportPart, requestSignal: AbortSignal) {
   const parts = 'inlineData' in source
     ? [source, { text: extractionPrompt() }]
     : [{ text: `${extractionPrompt()}\n\nRECIPE SOURCE:\n${source.text}` }];
-  const controller = new AbortController();
-  const abort = () => controller.abort();
-  if (requestSignal.aborted) controller.abort();
-  else requestSignal.addEventListener('abort', abort, { once: true });
-  const timeout = setTimeout(abort, 45_000);
-  let response: Response;
-  try {
-    response = await fetch(AI_GENERATE_URL, {
+  return withRequestDeadline(requestSignal, 40_000, async (signal) => {
+    const response = await fetch(AI_GENERATE_URL, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'x-goog-api-key': AI_API_KEY },
-      signal: controller.signal,
+      signal,
       body: JSON.stringify({
         contents: [{ role: 'user', parts }],
         generationConfig: { temperature: 0, maxOutputTokens: 8000, responseMimeType: 'application/json' },
       }),
     });
-  } finally {
-    clearTimeout(timeout);
-    requestSignal.removeEventListener('abort', abort);
-  }
-  if (!response.ok) {
-    console.error('[recipe-import] provider status', response.status);
-    throw new Error('Recipe extraction failed');
-  }
-  const data = await response.json();
-  const candidate = data.candidates?.[0];
-  if (candidate?.finishReason && candidate.finishReason !== 'STOP') throw new Error('Recipe extraction was incomplete');
-  const content = candidate?.content?.parts?.map((part: { text?: unknown }) => typeof part.text === 'string' ? part.text : '').join('');
-  if (!content) throw new Error('Recipe extraction returned no content');
-  return normalizeImportedRecipe(JSON.parse(extractJsonPayload(content)));
+    if (!response.ok) {
+      console.error('[recipe-import] provider status', response.status);
+      throw new Error('Recipe extraction failed');
+    }
+    const data = await response.json();
+    const candidate = data.candidates?.[0];
+    if (candidate?.finishReason && candidate.finishReason !== 'STOP') throw new Error('Recipe extraction was incomplete');
+    const content = candidate?.content?.parts?.map((part: { text?: unknown }) => typeof part.text === 'string' ? part.text : '').join('');
+    if (!content) throw new Error('Recipe extraction returned no content');
+    return normalizeImportedRecipe(JSON.parse(extractJsonPayload(content)));
+  });
 }
 
 export async function POST(req: NextRequest) {
@@ -100,13 +94,17 @@ export async function POST(req: NextRequest) {
     });
     if (!user) return NextResponse.json({ error: 'User not found' }, { status: 404 });
     const now = new Date();
-    if (Math.floor((now.getTime() - new Date(user.lastGenerationReset).getTime()) / 86_400_000) >= 30) {
-      await prisma.user.update({ where: { id: user.id }, data: { generationCount: 0, lastGenerationReset: now } });
-      user.generationCount = 0;
+    const resetBefore = new Date(now.getTime() - 30 * 86_400_000);
+    if (user.lastGenerationReset <= resetBefore) {
+      await prisma.user.updateMany({ where: { id: user.id, lastGenerationReset: { lte: resetBefore } }, data: { generationCount: 0, lastGenerationReset: now } });
+      const refreshed = await prisma.user.findUnique({ where: { id: user.id }, select: { generationCount: true } });
+      if (!refreshed) return NextResponse.json({ error: 'User not found' }, { status: 404 });
+      user.generationCount = refreshed.generationCount;
     }
-    const isTrialing = user.subscriptionTier !== 'free' && user.subscriptionStatus === 'trialing';
+    const tier = hasPremiumAccess(user, now) ? user.subscriptionTier : 'free';
+    const isTrialing = tier !== 'free' && user.subscriptionStatus === 'trialing';
     const { offer, trialRecipeLimit } = await resolvePartnerTrial(user);
-    const limit = isTrialing ? trialRecipeLimit : TIER_LIMITS[user.subscriptionTier as keyof typeof TIER_LIMITS] ?? TIER_LIMITS.free;
+    const limit = isTrialing ? trialRecipeLimit : TIER_LIMITS[tier as keyof typeof TIER_LIMITS] ?? TIER_LIMITS.free;
     if (user.generationCount >= limit) {
       return NextResponse.json({
         error: 'Generation limit reached', limit, current: user.generationCount, tier: user.subscriptionTier,
@@ -116,7 +114,10 @@ export async function POST(req: NextRequest) {
       }, { status: 403 });
     }
 
-    const recipe = await extractRecipe(await readSource(req), req.signal);
+    const aiLimit = await limitAiRequest(userId);
+    if (aiLimit) return aiLimit;
+    const recipe = await withRequestDeadline(req.signal, 55_000, async (signal) =>
+      extractRecipe(await readSource(req, signal), signal));
     const importedContent = {
       title: recipe.title,
       ingredients: recipe.freshIngredients.split('\n').filter(Boolean),
@@ -136,6 +137,7 @@ export async function POST(req: NextRequest) {
     if (charged.count !== 1) return NextResponse.json({ error: 'Generation limit reached' }, { status: 403 });
     return NextResponse.json({ recipe });
   } catch (error) {
+    if (error instanceof RequestDeadlineError) return NextResponse.json({ error: error.message }, { status: 504 });
     if (error instanceof DOMException && error.name === 'AbortError') return NextResponse.json({ error: 'Recipe import canceled. Nothing was saved or charged.' }, { status: 499 });
     if (error instanceof ImportInputError) return NextResponse.json({ error: error.message }, { status: error.status });
     if (error instanceof SyntaxError) return NextResponse.json({ error: 'The source did not contain a readable complete recipe.' }, { status: 422 });

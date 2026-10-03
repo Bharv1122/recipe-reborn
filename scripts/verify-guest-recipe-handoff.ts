@@ -36,7 +36,8 @@ function makeDb(generationCount = 0) {
   const user = {
     id: 'user-1', subscriptionTier: 'free', subscriptionStatus: 'active', generationCount,
     lastGenerationReset: new Date('2026-10-01T00:00:00Z'), signupSource: null,
-    createdAt: new Date('2026-09-01T00:00:00Z'), currentPeriodEnd: null,
+    createdAt: new Date('2026-09-01T00:00:00Z'), currentPeriodEnd: null as Date | null,
+    allergies: [] as string[], dislikedIngredients: [] as string[],
   };
   const otherUser = {
     ...user,
@@ -159,6 +160,33 @@ async function main() {
   ), 'replayed');
   assert.equal(first.otherUser.generationCount, 0, 'A different account must not receive or pay for the claimed recipe.');
 
+  first.user.allergies = ['onion'];
+  await expectCode(redeemGuestRecipeHandoff(
+    { token: created.token, userId: first.user.id },
+    { db: first.client, now: at('2026-10-01T01:04:00Z'), resolveTrial: standardTrial as any },
+  ), 'preferences');
+  assert.equal(first.user.generationCount, 1, 'Retry with changed allergies must not charge again or return the unsafe preview.');
+
+  const allergic = makeDb();
+  allergic.user.allergies = ['onion'];
+  const allergicCreated = await createGuestRecipeHandoff(
+    { originalIngredients: 'carrots, onion, stock', recipe },
+    { db: allergic.client, now: at('2026-10-01T01:00:00Z'), token: () => 'z'.repeat(43) },
+  );
+  await expectCode(redeemGuestRecipeHandoff(
+    { token: allergicCreated.token, userId: allergic.user.id },
+    { db: allergic.client, now: at('2026-10-01T01:01:00Z'), resolveTrial: standardTrial as any },
+  ), 'preferences');
+  assert.equal(allergic.user.generationCount, 0);
+  assert.equal([...allergic.handoffs.values()][0].redeemedAt, null, 'An unsafe preview remains unclaimed.');
+  allergic.user.allergies = [];
+  allergic.user.dislikedIngredients = ['onion'];
+  await expectCode(redeemGuestRecipeHandoff(
+    { token: allergicCreated.token, userId: allergic.user.id },
+    { db: allergic.client, now: at('2026-10-01T01:01:00Z'), resolveTrial: standardTrial as any },
+  ), 'preferences');
+  assert.equal(allergic.user.generationCount, 0);
+
   const parallel = makeDb();
   const parallelCreated = await createGuestRecipeHandoff(
     { originalIngredients: 'carrots, onion, stock', recipe },
@@ -185,6 +213,22 @@ async function main() {
   ), 'quota');
   assert.equal(full.user.generationCount, 3);
   assert.equal([...full.handoffs.values()][0].redeemedAt, null, 'Quota rejection leaves the token unclaimed.');
+
+  for (const status of ['past_due', 'canceled', 'trialing']) {
+    const inactive = makeDb(3);
+    inactive.user.subscriptionTier = 'premium';
+    inactive.user.subscriptionStatus = status;
+    inactive.user.currentPeriodEnd = new Date('2026-09-30T00:00:00Z');
+    const preview = await createGuestRecipeHandoff(
+      { originalIngredients: 'carrots, onion, stock', recipe },
+      { db: inactive.client, now: at('2026-10-01T03:00:00Z'), token: () => 'y'.repeat(43) },
+    );
+    await expectCode(redeemGuestRecipeHandoff(
+      { token: preview.token, userId: inactive.user.id },
+      { db: inactive.client, now: at('2026-10-01T03:01:00Z'), resolveTrial: standardTrial as any },
+    ), 'quota');
+    assert.equal(inactive.user.generationCount, 3, `${status} must use the free allowance.`);
+  }
 
   const expired = makeDb();
   const expiredCreated = await createGuestRecipeHandoff(

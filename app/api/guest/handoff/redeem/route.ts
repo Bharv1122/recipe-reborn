@@ -13,6 +13,7 @@ const STATUS_BY_CODE = {
   expired: 410,
   replayed: 409,
   quota: 403,
+  preferences: 422,
   account: 404,
 } as const;
 

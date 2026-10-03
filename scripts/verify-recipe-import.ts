@@ -1,5 +1,8 @@
 import assert from 'node:assert/strict';
 import { importFile, normalizeImportedRecipe, publicIPv4, recipePage, MAX_IMPORT_FILE_BYTES } from '../lib/recipe-import';
+import { RequestDeadlineError, withRequestDeadline } from '../lib/request-deadline';
+import { importedRecipeLines } from '../shared/recipe-import';
+import { importedRecipeSnapshotSchema, importAdaptationRequestSchema } from '../lib/import-recipe-adaptation';
 
 async function main() {
   for (const ip of ['127.0.0.1', '10.1.1.1', '169.254.169.254', '192.168.0.1', '172.31.0.1', '100.64.0.1', '::1', '::ffff:127.0.0.1']) assert.equal(publicIPv4(ip), false, ip);
@@ -19,8 +22,39 @@ async function main() {
   assert.equal(recipe.instructions, 'Boil.\nServe.');
   assert.equal(recipe.prepTime, 'Not specified');
   assert.deepEqual(recipe.dietaryTags, []);
+  const webSnapshot = {
+    title: recipe.title, freshIngredients: importedRecipeLines(recipe.freshIngredients),
+    instructions: importedRecipeLines(recipe.instructions), prepTime: recipe.prepTime,
+    cookTime: recipe.cookTime, servings: recipe.servings, dietaryTags: recipe.dietaryTags,
+  };
+  assert.equal(webSnapshot.freshIngredients[0], '1 cup water', 'Web ingredient selection must select a line, not a character.');
+  assert.equal(importedRecipeSnapshotSchema.safeParse(webSnapshot).success, true, 'An imported web snapshot must be saveable.');
+  assert.equal(importAdaptationRequestSchema.safeParse({ recipe: webSnapshot, action: { type: 'remove', original: webSnapshot.freshIngredients[1] } }).success, true, 'The web import must be adaptable.');
   assert.equal(normalizeImportedRecipe({ title: 'Soup', ingredients: ['water'], instructions: ['Boil'], reviewNotes: ['Line 2 is unclear'] }).reviewNotes, 'Line 2 is unclear');
   assert.throws(() => normalizeImportedRecipe({ title: 'Soup', ingredients: [] }));
+  assert.throws(() => normalizeImportedRecipe({ title: 'Soup', ingredients: ['x'.repeat(501)], instructions: ['Boil.'] }), /supported length/);
+  assert.throws(() => normalizeImportedRecipe({ title: 'Soup', ingredients: ['water'], instructions: ['x'.repeat(3001)] }), /supported length/);
+  assert.throws(() => normalizeImportedRecipe({ title: 'Soup', ingredients: ['water'], instructions: ['Boil'], prepTime: 'x'.repeat(101) }), /supported length/);
+  let providerSignal: AbortSignal | undefined;
+  await assert.rejects(withRequestDeadline(new AbortController().signal, 20, async signal => {
+    providerSignal = signal;
+    // Headers have arrived, but the body never finishes. The whole operation
+    // must still time out, even if a transport ignores cancellation.
+    await Promise.resolve();
+    return new Promise<never>(() => {});
+  }), RequestDeadlineError);
+  assert.equal(providerSignal?.aborted, true);
+  const canceled = new AbortController();
+  let called = false;
+  canceled.abort();
+  await assert.rejects(withRequestDeadline(canceled.signal, 100, async () => { called = true; }), { name: 'AbortError' });
+  assert.equal(called, false, 'A canceled request must not start a provider call.');
+  const during = new AbortController();
+  const pending = withRequestDeadline(during.signal, 100, async () => new Promise<never>(() => {}));
+  during.abort();
+  await assert.rejects(pending, { name: 'AbortError' });
+  assert.equal(await withRequestDeadline(new AbortController().signal, 100, async () => 'complete'), 'complete');
+  await assert.rejects(recipePage('https://example.com', 0, canceled.signal), { name: 'AbortError' });
   const route = await import('node:fs/promises').then(({ readFile }) => readFile(new URL('../app/api/import-recipe/route.ts', import.meta.url), 'utf8'));
   assert.match(route, /getRequestUserId/);
   assert.match(route, /req\.formData\(\)/);

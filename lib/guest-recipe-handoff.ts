@@ -4,6 +4,8 @@ import { z } from 'zod';
 import { prisma } from '@/lib/db';
 import { resolvePartnerTrial } from '@/lib/partner-offer-server';
 import { requiredRecipeMetadataSchema } from '@/lib/recipe-metadata-validation';
+import { findBlockedFoodInRecipe } from '@/lib/food-preferences';
+import { hasPremiumAccess } from '@/lib/entitlement';
 
 export const GUEST_RECIPE_HANDOFF_TTL_MS = 20 * 60 * 1000;
 
@@ -31,6 +33,7 @@ export type GuestRecipeHandoffErrorCode =
   | 'expired'
   | 'replayed'
   | 'quota'
+  | 'preferences'
   | 'account';
 
 export class GuestRecipeHandoffError extends Error {
@@ -126,10 +129,11 @@ export async function redeemGuestRecipeHandoff(
   }
 
   const trial = await resolveTrial(user);
-  const trialing = user.subscriptionTier !== 'free' && user.subscriptionStatus === 'trialing';
+  const tier = hasPremiumAccess(user, now) ? user.subscriptionTier : 'free';
+  const trialing = tier !== 'free' && user.subscriptionStatus === 'trialing';
   const limit = trialing
     ? trial.trialRecipeLimit
-    : TIER_LIMITS[user.subscriptionTier] ?? TIER_LIMITS.free;
+    : TIER_LIMITS[tier] ?? TIER_LIMITS.free;
   const resetBefore = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
   const tokenHash = hashToken(token);
 
@@ -141,10 +145,23 @@ export async function redeemGuestRecipeHandoff(
         'That recipe preview could not be found. Your ingredients are still ready below.',
       );
     }
+    const preferences = await tx.user.findUnique({
+      where: { id: user.id },
+      select: { allergies: true, dislikedIngredients: true },
+    });
+    if (!preferences) throw new GuestRecipeHandoffError('account', 'Account not found. Please sign in again.');
+    const assertAllowed = (value: GuestRecipeHandoffRecipe) => {
+      const content = { title: value.title, ingredients: value.freshIngredients, instructions: value.instructions };
+      if (findBlockedFoodInRecipe(content, preferences.allergies, 'allergy')
+        || findBlockedFoodInRecipe(content, preferences.dislikedIngredients, 'dislike')) {
+        throw new GuestRecipeHandoffError('preferences', 'That preview conflicts with your saved food preferences. Generate a new recipe after signing in. No additional generation was charged.');
+      }
+    };
     if (handoff.redeemedAt) {
       if (handoff.redeemedByUserId === user.id && handoff.expiresAt.getTime() > now.getTime()) {
         const ownedRecipe = guestRecipeHandoffRecipeSchema.safeParse(handoff.recipe);
         if (ownedRecipe.success && handoff.originalIngredients) {
+          assertAllowed(ownedRecipe.data);
           return { recipe: ownedRecipe.data, originalIngredients: handoff.originalIngredients };
         }
       }
@@ -164,6 +181,7 @@ export async function redeemGuestRecipeHandoff(
         'That recipe preview is incomplete. Your ingredients are still ready below.',
       );
     }
+    assertAllowed(recipe.data);
 
     // Match normal generation accounting: a 30-day rollover happens before
     // the finite allowance check. The conditional reset is safe if another
@@ -210,6 +228,7 @@ export async function redeemGuestRecipeHandoff(
       ) {
         const latestRecipe = guestRecipeHandoffRecipeSchema.safeParse(latest.recipe);
         if (latestRecipe.success && latest.originalIngredients) {
+          assertAllowed(latestRecipe.data);
           return { recipe: latestRecipe.data, originalIngredients: latest.originalIngredients };
         }
       }

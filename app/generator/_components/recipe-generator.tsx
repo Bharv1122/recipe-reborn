@@ -11,6 +11,7 @@ import { Loader2, ChefHat, Sparkles, Save, Link as LinkIcon, Camera, Upload, X, 
 import toast from 'react-hot-toast';
 import { RecipePresentation } from '@/components/recipe-presentation';
 import type { RecipeComparisonSnapshot } from '@/shared/recipe-comparison';
+import { importedRecipeLines } from '@/shared/recipe-import';
 import { VoiceChat } from './voice-chat';
 import { BarcodeScanner } from './barcode-scanner';
 import { PantryCheckDialog } from './pantry-check-dialog';
@@ -618,7 +619,12 @@ export function RecipeGenerator({ savedRecipeCount = 0, recentIngredients = [], 
 
       const data = await response.json();
       setResultContext({ source: 'dish', originalIngredients: data.recipe.originalIngredients || data.recipe.title, originalNutrition: null, detectedAdditives: [] });
-      const imported: Recipe = { ...data.recipe, dietaryTags: data.recipe.dietaryTags ?? [] };
+      const imported: Recipe = {
+        ...data.recipe,
+        freshIngredients: importedRecipeLines(data.recipe.freshIngredients),
+        instructions: importedRecipeLines(data.recipe.instructions),
+        dietaryTags: data.recipe.dietaryTags ?? [],
+      };
       setRecipe(imported);
       setImportSourceSnapshot(structuredClone(imported));
       setIsImportedRecipe(true);

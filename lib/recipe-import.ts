@@ -1,6 +1,7 @@
 import { lookup } from 'node:dns/promises';
 import { request as httpsRequest } from 'node:https';
 import { isIP } from 'node:net';
+import { importedRecipeSnapshotSchema } from '@/lib/import-recipe-adaptation';
 
 export class ImportInputError extends Error {
   constructor(message: string, public status = 400) { super(message); }
@@ -20,7 +21,8 @@ export function publicIPv4(address: string): boolean {
     (a === 198 && [18, 19, 51].includes(b)) || (a === 203 && b === 0));
 }
 
-export async function recipePage(raw: string, hop = 0): Promise<string> {
+export async function recipePage(raw: string, hop = 0, signal?: AbortSignal): Promise<string> {
+  signal?.throwIfAborted();
   let url: URL;
   try { url = new URL(raw); } catch { throw new ImportInputError('Enter a valid HTTPS recipe link.'); }
   if (url.protocol !== 'https:' || url.username || url.password || (url.port && url.port !== '443')) {
@@ -28,11 +30,13 @@ export async function recipePage(raw: string, hop = 0): Promise<string> {
   }
   if (hop > 4) throw new ImportInputError('That link redirects too many times.');
   const addresses = await lookup(url.hostname, { family: 4, all: true });
+  signal?.throwIfAborted();
   if (!addresses.length || addresses.some(({ address }) => !publicIPv4(address))) {
     throw new ImportInputError('Use a public recipe website.');
   }
   const result = await new Promise<{ redirect?: string; text?: string }>((resolve, reject) => {
     const req = httpsRequest(url, {
+      signal,
       family: 4,
       headers: { 'User-Agent': 'RecipeReborn/1.0 recipe importer', Accept: 'text/html', 'Accept-Encoding': 'identity' },
       lookup: (_hostname, options, callback) => {
@@ -59,7 +63,7 @@ export async function recipePage(raw: string, hop = 0): Promise<string> {
     req.on('close', () => clearTimeout(timer));
     req.on('error', reject); req.end();
   });
-  if (result.redirect) return recipePage(result.redirect, hop + 1);
+  if (result.redirect) return recipePage(result.redirect, hop + 1, signal);
   // Keep JSON-LD recipe data; remove styling and executable scripts, never
   // silently clip the remaining source and lose later ingredients or steps.
   const html = result.text ?? '';
@@ -100,6 +104,13 @@ export function normalizeImportedRecipe(value: unknown) {
     throw new ImportInputError('No complete recipe could be read. Use a clearer photo or a file containing one recipe.', 422);
   }
   const reviewNotes = text(raw?.reviewNotes);
+  const snapshot = importedRecipeSnapshotSchema.safeParse({
+    title, freshIngredients: ingredients.split('\n').map(line => line.trim()).filter(Boolean),
+    instructions: instructions.split('\n').map(line => line.trim()).filter(Boolean),
+    prepTime: text(raw?.prepTime) || 'Not specified', cookTime: text(raw?.cookTime) || 'Not specified',
+    servings: text(raw?.servings) || 'Not specified', dietaryTags: [],
+  });
+  if (!snapshot.success) throw new ImportInputError('This recipe exceeds the supported length. Import a file or photo containing one shorter recipe.', 422);
   return { title, originalIngredients: ingredients, freshIngredients: ingredients, instructions,
     prepTime: text(raw?.prepTime) || 'Not specified', cookTime: text(raw?.cookTime) || 'Not specified',
     servings: text(raw?.servings) || 'Not specified', dietaryTags: [] as string[], reviewNotes };
