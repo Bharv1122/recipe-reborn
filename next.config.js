@@ -4,6 +4,7 @@ const nextConfig = {
   // fighting over .next (Windows: concurrent writes corrupt the build).
   distDir: process.env.NEXT_DIST_DIR || '.next',
   turbopack: { root: __dirname },
+  outputFileTracingIncludes: { '/api/plugin/mcp': ['./plugins/recipe-reborn/ui/panel.html'] },
   typescript: {
     ignoreBuildErrors: false,
   },
