@@ -59,7 +59,9 @@ function answer(body) {
   if (/grocery costs/.test(text)) return completion('{"estimatedCostPerServing":1.25,"storeBoughtCost":3}');
   if (/pantry assistant/.test(text)) return completion(JSON.stringify({ makeNow: { title: 'Rice', summary: 'Cook it.' }, upgrade: { title: 'Fried rice', addIngredient: 'egg', summary: 'Add egg.' } }));
   if (/Scale the following/.test(text)) return completion('2 cups rice');
-  if (/ingredient information/.test(text)) return completion(JSON.stringify({ name: 'Kale', category: 'Vegetable' }));
+  if (/ingredient information/.test(text)) return completion(JSON.stringify({ name: 'Kale', category: 'Vegetable',
+    nutrition: { calories: '49 kcal', protein: '4.3 g', carbs: '8.8 g', fat: '0.9 g', fiber: '3.6 g', vitamins: ['K'] },
+    healthBenefits: ['Fiber'], substitutions: [], allergens: [], seasonality: 'Winter', storageType: 'Fridge', shelfLife: '1 week' }));
   if (/parse recipe ingredients/.test(text)) return completion('{"ingredients":[{"name":"rice","grams":200}]}');
   if (/nutritionist|nutrition per serving/.test(text)) return completion(JSON.stringify(nutrition));
   if (/AI Chef/.test(text)) return completion('Toast the rice first.');
