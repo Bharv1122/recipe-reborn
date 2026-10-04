@@ -3,6 +3,7 @@ import type { Prisma } from '@prisma/client';
 import { prisma } from './db';
 import { validateMeal, MEAL_TYPES, type ValidatedDayPlan, type ValidatedMeal, type DayName, type MealType } from './meal-plan-validation';
 import type { GeneratePlanOptions } from './meal-plan-generation';
+import { effectiveDislikes } from './meal-plan-settings';
 
 // Kept outside Recipe/MealPlan: generating a preview never saves either.
 // Raw, parameterized queries allow the additive table to roll out independently
@@ -102,7 +103,7 @@ async function checkedMeals(tx: Tx, draft: DraftRow, userId: string, only?: { da
   for (const entry of entries) {
     const result = validateMeal(entry.meal, { servings: draft.settings.servings,
       allergies: [...draft.settings.allergies, ...profile.allergies],
-      dislikedIngredients: [...draft.settings.dislikedIngredients, ...profile.dislikedIngredients] });
+      dislikedIngredients: effectiveDislikes(draft.settings.dislikedIngredients, profile.dislikedIngredients, draft.settings.accountDislikesAtCreation) });
     if (!result.success) throw new MealPlanDraftError(422, 'Your food preferences changed or this meal could not be validated. Generate a new preview before saving.');
     entry.meal = result.meal;
   }
@@ -157,6 +158,8 @@ export async function saveMealPlanDraft(id: string, userId: string, only?: { day
         allergies: draft.settings.allergies,
         dislikedIngredients: draft.settings.dislikedIngredients,
         dietaryPreferences: draft.settings.dietaryPreferences,
+        // Creation baseline, not save time: dislikes added in between stay enforced on replacement.
+        accountDislikesAtCreation: draft.settings.accountDislikesAtCreation,
       })}::jsonb WHERE id = ${plan.id} AND "userId" = ${userId}`;
     }
     await tx.$executeRaw`UPDATE "MealPlanDraft" SET "recipeIds" = ${JSON.stringify(recipeIds)}::jsonb, "savedPlanId" = ${planId} WHERE id = ${id} AND "userId" = ${userId}`;

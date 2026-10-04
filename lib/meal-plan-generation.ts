@@ -15,6 +15,8 @@ export interface GeneratePlanOptions {
   allergies: string[];
   dislikedIngredients: string[];
   preferredIngredients?: string[];
+  /** Draft-only: account dislikes at generation, so later additions still block saves. Not sent to the model. */
+  accountDislikesAtCreation?: string[];
   /** Newly generated plans default to U.S. measures; legacy saved previews remain readable. */
   usMeasures?: boolean;
   deadlineAt?: number;

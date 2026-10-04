@@ -150,6 +150,41 @@ async function main() {
   assert.equal(f.drafts().get(id)!.meals, null);
   console.log('PASS expiry/payload cleanup preserves saved content and consumed quota');
 
+  // Live regression: account dislikes broccoli; this plan's override dislikes spinach only.
+  const o = fixture();
+  o.profile.dislikedIngredients = ['Broccoli'];
+  const withFood = (food: string): ValidatedDayPlan[] => meals.map(d => ({ ...d, meals: { ...d.meals, dinner: { ...d.meals.dinner!, ingredients: ['1 cup rice', '2 carrots', `1 cup ${food}`] } } }));
+  const overrideSettings: GeneratePlanOptions = { ...settings, dislikedIngredients: ['spinach'], accountDislikesAtCreation: ['broccoli'] };
+  const overrideId = await reserveMealPlanDraft('owner', overrideSettings, null, o.deps);
+  await completeMealPlanDraft(overrideId, 'owner', withFood('broccoli florets'), o.deps);
+  assert.ok((await saveMealPlanDraft(overrideId, 'owner', selection, o.deps)).recipeId);
+  console.log('PASS authorized one-plan dislike override saves a meal the account dislikes');
+
+  o.profile.dislikedIngredients = ['Broccoli', 'carrots'];
+  await assert.rejects(saveMealPlanDraft(overrideId, 'owner', { day: 'tuesday', mealType: 'dinner' }, o.deps), (e: any) => e.status === 422);
+  await assert.rejects(saveMealPlanDraft(overrideId, 'owner', undefined, o.deps), (e: any) => e.status === 422);
+  o.profile.dislikedIngredients = ['Broccoli'];
+  console.log('PASS account dislike added after generation still rejects save');
+
+  o.profile.allergies = ['broccoli'];
+  await assert.rejects(saveMealPlanDraft(overrideId, 'owner', { day: 'tuesday', mealType: 'dinner' }, o.deps), (e: any) => e.status === 422);
+  o.profile.allergies = [];
+  console.log('PASS dislike baseline never weakens account allergies');
+
+  const overridePlan = await saveMealPlanDraft(overrideId, 'owner', undefined, o.deps);
+  assert.deepEqual(o.plans().get(overridePlan.planId!)!.generationSettings, {
+    allergies: [], dislikedIngredients: ['spinach'], dietaryPreferences: [], accountDislikesAtCreation: ['broccoli'],
+  }, 'Saved plan keeps the creation baseline for replacements');
+  console.log('PASS whole override plan saves and stores its dislike baseline');
+
+  const spinachId = await reserveMealPlanDraft('owner', overrideSettings, null, o.deps);
+  await completeMealPlanDraft(spinachId, 'owner', withFood('spinach'), o.deps);
+  await assert.rejects(saveMealPlanDraft(spinachId, 'owner', selection, o.deps), (e: any) => e.status === 422);
+  const legacyId = await reserveMealPlanDraft('owner', { ...settings, dislikedIngredients: ['spinach'] }, null, o.deps);
+  await completeMealPlanDraft(legacyId, 'owner', withFood('broccoli florets'), o.deps);
+  await assert.rejects(saveMealPlanDraft(legacyId, 'owner', selection, o.deps), (e: any) => e.status === 422);
+  console.log('PASS planned dislikes enforced; drafts without a baseline use every current account dislike');
+
   const route = fs.readFileSync('app/api/meal-plans/drafts/route.ts', 'utf8');
   assert.doesNotMatch(route, /(?:recipe|mealPlan|mealPlanRecipe)\.create/);
   assert.match(fs.readFileSync('app/api/meal-plans/generate/route.ts', 'utf8'), /status: 426/);
