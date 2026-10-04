@@ -21,6 +21,7 @@
     "verify:recipe-import": "tsx scripts/verify-recipe-import.ts",
     "verify:tester-feedback": "tsx scripts/verify-tester-feedback.ts",
     "verify:import-adaptation": "tsx scripts/verify-import-adaptation.ts",
+    "verify:recipe-edit-backup": "node scripts/verify-recipe-edit-backup.cjs",
     "verify:recipe-comparison": "tsx scripts/verify-recipe-comparison.ts",
     "postinstall": "prisma generate"
   },

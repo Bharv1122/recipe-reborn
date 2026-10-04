@@ -3,7 +3,8 @@ import assert from 'node:assert/strict';
 async function main() {
   // Dummy key plus mocked transport: no request can leave this process.
   process.env.GEMINI_API_KEY = 'unit-test-only';
-  const { extractRecipe } = await import('../lib/recipe-extraction');
+  process.env.AI_PROVIDER = 'gemini';
+  const { extractRecipe, RecipeExtractionProviderError } = await import('../lib/recipe-extraction');
   const realFetch = globalThis.fetch;
   let calls = 0;
   const payload = { candidates: [{ finishReason: 'STOP', content: { parts: [{ text: JSON.stringify({ title: 'Soup', ingredients: ['1 cup water'], instructions: ['Boil.'] }) }] } }] };
@@ -13,7 +14,7 @@ async function main() {
     assert.equal(calls, 2);
     calls = 0;
     globalThis.fetch = async () => { calls++; return new Response('', { status: 503 }); };
-    await assert.rejects(extractRecipe({ text: 'Synthetic soup' }, new AbortController().signal, true), /extraction failed/);
+    await assert.rejects(extractRecipe({ text: 'Synthetic soup' }, new AbortController().signal, true), RecipeExtractionProviderError);
     assert.equal(calls, 2, 'Transient failures must not loop.');
     calls = 0;
     const canceled = new AbortController(); canceled.abort();

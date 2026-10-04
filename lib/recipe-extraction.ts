@@ -1,7 +1,11 @@
-import { recipeGenerate, hasRecipeAIKey, canRetryRecipeAI } from './ai-provider';
+import { recipeGenerate, hasRecipeAIKey, canRetryRecipeAI, BackupInputError } from './ai-provider';
 import { extractJsonPayload } from './ai-json';
 import { normalizeImportedRecipe, type ImportPart } from './recipe-import';
 import { withRequestDeadline } from './request-deadline';
+
+export class RecipeExtractionProviderError extends Error {
+  constructor() { super('Recipe reading is temporarily unavailable. Please try again later. Nothing was saved or charged.'); }
+}
 
 function extractionPrompt() {
   return `Transcribe the first complete recipe in this source faithfully. This is an import, not a request to invent, modernize, simplify, or adapt a recipe.
@@ -21,12 +25,13 @@ Read handwritten text and sideways text in its intended reading orientation. Ign
 }
 
 export async function extractRecipe(source: ImportPart, requestSignal: AbortSignal, allowPartial: boolean) {
-  if (!hasRecipeAIKey()) throw new Error('AI API key not configured');
+  if (!hasRecipeAIKey()) throw new RecipeExtractionProviderError();
   const parts = 'inlineData' in source
     ? [source, { text: extractionPrompt() }]
     : [{ text: `${extractionPrompt()}\n\nRECIPE SOURCE:\n${source.text}` }];
   return withRequestDeadline(requestSignal, 40_000, async (signal) => {
-    const send = () => recipeGenerate({
+    const send = async () => {
+      try { return await recipeGenerate({
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
       signal,
@@ -34,7 +39,12 @@ export async function extractRecipe(source: ImportPart, requestSignal: AbortSign
         contents: [{ role: 'user', parts }],
         generationConfig: { temperature: 0, maxOutputTokens: 8000, responseMimeType: 'application/json' },
       }),
-    });
+      }); } catch (error) {
+        signal.throwIfAborted();
+        if (error instanceof BackupInputError) throw error;
+        throw new RecipeExtractionProviderError();
+      }
+    };
     let response = await send();
     // Retry one transient provider failure within the same total deadline.
     if (canRetryRecipeAI(response) && [429, 500, 502, 503, 504].includes(response.status)) {
@@ -44,9 +54,11 @@ export async function extractRecipe(source: ImportPart, requestSignal: AbortSign
     }
     if (!response.ok) {
       console.error('[recipe-import] provider status', response.status);
-      throw new Error('Recipe extraction failed');
+      throw new RecipeExtractionProviderError();
     }
-    const data = await response.json();
+    let data;
+    try { data = await response.json(); }
+    catch { signal.throwIfAborted(); throw new RecipeExtractionProviderError(); }
     const candidate = data.candidates?.[0];
     if (candidate?.finishReason && candidate.finishReason !== 'STOP') throw new Error('Recipe extraction was incomplete');
     const content = candidate?.content?.parts?.map((part: { text?: unknown }) => typeof part.text === 'string' ? part.text : '').join('');
