@@ -50,7 +50,7 @@ function structuredReply(value, finishReason = 'stop') {
 function reset() {
   state = {
     user: { id: 'synthetic-user', subscriptionTier: 'free', subscriptionStatus: 'active', generationCount: 0,
-      lastGenerationReset: new Date(), allergies: [], dislikedIngredients: [], signupSource: null,
+      lastGenerationReset: new Date(), allergies: [], dislikedIngredients: [], likedIngredients: [], signupSource: null,
       createdAt: new Date(), currentPeriodEnd: null },
     draft: structuredClone(draft), correction: reconciliation(), calls: [], updates: [], timers: [],
     cleared: new Set(), logs: [], canceled: false, correctionReturned: false, clearCalls: 0,
@@ -67,7 +67,7 @@ async function bundle() {
     '@/lib/server-error-log': `export function logServerError(...args) { globalThis.recipeIntegrityQA.logs.push(args); }`,
     '@/lib/generation-cancellation': `export async function wasGenerationCanceled() { return globalThis.recipeIntegrityQA.canceled; }
       export async function clearGenerationCancellation() { globalThis.recipeIntegrityQA.clearCalls++; }`,
-    '@/lib/ai': `export const AI_API_KEY='synthetic-key', AI_CHAT_URL=${JSON.stringify(endpoint)}, MODEL_SMART='synthetic-model';`,
+    '@/lib/ai': `export const AI_API_KEY='synthetic-key', AI_CHAT_URL=${JSON.stringify(endpoint)}, AI_GENERATE_URL='https://synthetic-provider.example.invalid/native', MODEL_SMART='synthetic-model';`,
     '@/lib/db': `export const prisma = { user: {
       async findUnique() { return globalThis.recipeIntegrityQA.user; },
       async updateMany(query) { globalThis.recipeIntegrityQA.updates.push({query,correctionReturned:globalThis.recipeIntegrityQA.correctionReturned}); return {count:1}; },
@@ -78,7 +78,10 @@ async function bundle() {
   const result = await esbuild.build({
     entryPoints: [entry], bundle: true, platform: 'node', format: 'cjs', write: false, packages: 'external',
     plugins: [{ name: 'synthetic-recipe-integrity', setup(build) {
-      build.onResolve({ filter: /^@\/lib\// }, args => Object.hasOwn(mocks, args.path) ? { path: args.path, namespace: 'mock' } : undefined);
+      build.onResolve({ filter: /^(?:@\/lib\/|\.\/ai$)/ }, args => {
+        const key = args.path === './ai' ? '@/lib/ai' : args.path;
+        return Object.hasOwn(mocks, key) ? { path: key, namespace: 'mock' } : undefined;
+      });
       build.onLoad({ filter: /.*/, namespace: 'mock' }, args => ({ contents: mocks[args.path], loader: 'js' }));
     } }],
   });
@@ -97,7 +100,7 @@ async function run(route, body = {}, signal) {
     headers: { 'content-type': 'application/json' },
   }));
   const text = await response.text();
-  assert.equal(response.status, 200, text);
+  assert.equal(response.status, 200, text + require('node:util').inspect(state.logs));
   const events = text.split('\n').filter(line => line.startsWith('data: ')).map(line => JSON.parse(line.slice(6)));
   assert.doesNotMatch(text, /PRIVATE_|synthetic-key/);
   return events;
@@ -210,7 +213,7 @@ async function main() {
         assert.ok(timer && timer.duration > 0 && timer.duration <= 52_000);
         timer.callback();
       });
-      state.reply = stage === 'fetch' ? stalled : async options => ({ ok: true, json: () => stalled(options) });
+      state.reply = stage === 'fetch' ? stalled : async options => ({ ok: true, status: 200, headers: new Headers(), arrayBuffer: () => stalled(options) });
       assertRejected(await run(route));
       assertTwoCalls();
       assert.equal(state.calls[1].options.signal.aborted, true);

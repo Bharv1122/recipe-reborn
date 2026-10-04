@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { z } from 'zod';
-import { AI_API_KEY, AI_CHAT_URL, MODEL_SMART } from '@/lib/ai';
+import { MODEL_SMART } from '@/lib/ai';
+import { recipeChat, hasRecipeAIKey, BackupInputError, BackupTransportError, ProviderConnectionError } from '@/lib/ai-provider';
 import { extractJsonPayload } from '@/lib/ai-json';
 import { normalizePantryItems, pantryInventoryItemSchema } from '@/lib/pantry-inventory';
 import { rateLimit } from '@/lib/rate-limit';
@@ -33,7 +34,7 @@ export async function POST(request: Request) {
       );
     }
 
-    if (!AI_API_KEY) {
+    if (!hasRecipeAIKey()) {
       return NextResponse.json({ error: 'Photo analysis is temporarily unavailable.' }, { status: 503 });
     }
 
@@ -91,16 +92,17 @@ Rules:
       });
     }
 
-    const response = await fetch(AI_CHAT_URL, {
+    const response = await recipeChat({
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${AI_API_KEY}` },
+      headers: { 'Content-Type': 'application/json' },
+      signal: request.signal,
       body: JSON.stringify({
         model: MODEL_SMART,
         temperature: 0.2,
         max_tokens: 5000,
         messages: [{ role: 'user', content }],
       }),
-    });
+    }, { totalMs: 50_000 });
 
     if (!response.ok) {
       console.error('Pantry photo model request failed:', response.status);
@@ -108,8 +110,10 @@ Rules:
     }
 
     const payload = await response.json();
-    const modelContent = payload?.choices?.[0]?.message?.content;
-    if (typeof modelContent !== 'string') {
+    const choice = payload?.choices?.[0];
+    const modelContent = choice?.message?.content;
+    // Refused, truncated or otherwise unfinished answers are never accepted.
+    if (choice?.finish_reason !== 'stop' || choice?.message?.refusal || typeof modelContent !== 'string') {
       return NextResponse.json({ error: 'No inventory was returned from the photos.' }, { status: 502 });
     }
 
@@ -140,7 +144,18 @@ Rules:
       photosStored: false,
     });
   } catch (error) {
-    console.error('Pantry photo extraction error:', error);
+    if (error instanceof BackupInputError) {
+      return NextResponse.json({ error: 'Use JPEG, PNG, or WebP photos right now.' }, { status: 415 });
+    }
+    if (request.signal.aborted) return new NextResponse(null, { status: 499 });
+    if ((error as { name?: string })?.name === 'TimeoutError') {
+      return NextResponse.json({ error: 'Photo analysis took too long. Please try again.' }, { status: 504 });
+    }
+    if (error instanceof BackupTransportError || error instanceof ProviderConnectionError) {
+      return NextResponse.json({ error: 'Photo analysis is temporarily unavailable.' }, { status: 503 });
+    }
+    // Never log raw errors: they can carry provider responses.
+    console.error('Pantry photo extraction error:', error instanceof Error ? error.name : 'Unknown error');
     return NextResponse.json({ error: 'Failed to analyze pantry photos.' }, { status: 500 });
   }
 }

@@ -152,6 +152,12 @@ export async function saveMealPlanDraft(id: string, userId: string, only?: { day
         mealPlanRecipes: { create: entries.map(({ day, mealType }) => ({ day, mealType,
           recipeId: recipeIds[`${day}:${mealType}`], servings: draft.settings.servings, order: MEAL_TYPES.indexOf(mealType) })) } } });
       planId = plan.id;
+      // Keep exclusions on the saved plan independently of the seven-day preview.
+      await tx.$executeRaw`UPDATE "MealPlan" SET "generationSettings" = ${JSON.stringify({
+        allergies: draft.settings.allergies,
+        dislikedIngredients: draft.settings.dislikedIngredients,
+        dietaryPreferences: draft.settings.dietaryPreferences,
+      })}::jsonb WHERE id = ${plan.id} AND "userId" = ${userId}`;
     }
     await tx.$executeRaw`UPDATE "MealPlanDraft" SET "recipeIds" = ${JSON.stringify(recipeIds)}::jsonb, "savedPlanId" = ${planId} WHERE id = ${id} AND "userId" = ${userId}`;
     return only ? { recipeId: savedRecipeId } : { planId };

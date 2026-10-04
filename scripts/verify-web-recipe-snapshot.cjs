@@ -46,13 +46,14 @@ async function bundle() {
     '@/lib/db': 'export const prisma = globalThis.__webRecipeDB;',
     '@/lib/auth-options': 'export const authOptions = {};',
     'next-auth': 'export async function getServerSession(){ const id=globalThis.__webRecipeQA.owner; return id?{user:{id}}:null; }',
-    '@/lib/ai': "export const AI_API_KEY='synthetic', AI_CHAT_URL='https://provider.example.invalid', MODEL_FAST='synthetic';",
+    '@/lib/ai': "export const AI_API_KEY='synthetic', AI_CHAT_URL='https://provider.example.invalid', AI_GENERATE_URL='https://provider.example.invalid/generate', MODEL_FAST='synthetic';",
     '@/lib/usda': 'export async function lookupNutrients(){ throw new Error("Unexpected USDA call"); }',
   };
   const built = await build({
     stdin: { contents: "export { POST as save } from './app/api/recipes/route'; export { GET as reopen, PATCH as edit } from './app/api/recipes/[id]/route'; export { POST as nutrition } from './app/api/recipes/[id]/nutrition/route';", resolveDir: process.cwd(), loader: 'ts' },
     bundle: true, platform: 'node', format: 'cjs', packages: 'external', write: false,
     plugins: [{ name: 'isolated-web-recipes', setup(builder) {
+      builder.onResolve({ filter: /^\.\/ai$/ }, () => ({ path: '@/lib/ai', namespace: 'mock' }));
       builder.onResolve({ filter: /^(@\/lib\/(db|auth-options|ai|usda)|next-auth)$/ }, ({ path: name }) => ({ path: name, namespace: 'mock' }));
       builder.onLoad({ filter: /.*/, namespace: 'mock' }, ({ path: name }) => ({ contents: mocks[name], loader: 'js' }));
     } }],
@@ -72,7 +73,7 @@ async function main() {
     state.providerCalls++;
     state.providerHook?.();
     const content = state.providerCalls % 2 === 1 ? { ingredients: [] } : state.estimate;
-    return Response.json({ choices: [{ message: { content: JSON.stringify(content) } }] });
+    return Response.json({ choices: [{ finish_reason: 'stop', message: { content: JSON.stringify(content) } }] });
   };
   async function save(body = input) {
     const response = await route.save(request(body));

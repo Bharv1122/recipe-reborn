@@ -35,6 +35,12 @@ function fixture() {
     },
     $executeRaw: async (strings: TemplateStringsArray, ...args: any[]) => {
       const sql = strings.join('?');
+      if (sql.includes('SET "generationSettings"')) {
+        const plan = plans.get(args[1]);
+        assert.equal(plan.userId, args[2]);
+        plan.generationSettings = JSON.parse(args[0]);
+        return 1;
+      }
       if (sql.includes('INSERT INTO')) {
         const [id, userId, payload, createdAt, expiresAt] = args;
         drafts.set(id, { id, userId, settings: JSON.parse(payload), createdAt, expiresAt, status: 'pending', meals: null, recipeIds: {}, savedPlanId: null }); return 1;
@@ -109,6 +115,9 @@ async function main() {
   assert.equal(whole.planId, repeat.planId); assert.equal(f.plans().size, 1); assert.equal(f.recipes().size, 7);
   assert.equal([...f.recipes().values()].filter(r => r.savedAt).length, 1);
   const links = [...f.plans().values()][0].mealPlanRecipes.create;
+  assert.deepEqual([...f.plans().values()][0].generationSettings, {
+    allergies: settings.allergies, dislikedIngredients: settings.dislikedIngredients, dietaryPreferences: settings.dietaryPreferences,
+  }, 'Saved plan must retain exclusions after the preview expires');
   assert.equal(links.length, 7); assert.equal(links[0].recipeId, first.recipeId);
   console.log('PASS explicit whole-plan save is atomic/idempotent, reuses saved meal, keeps other meals outside library');
 

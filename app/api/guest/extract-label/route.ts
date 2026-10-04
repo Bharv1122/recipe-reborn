@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
-import { AI_CHAT_URL, AI_API_KEY, MODEL_SMART } from '@/lib/ai';
+import { MODEL_SMART } from '@/lib/ai';
+import { recipeChat, hasRecipeAIKey, BackupInputError, BackupTransportError, ProviderConnectionError } from '@/lib/ai-provider';
 import { getClientIp } from '@/lib/rate-limit';
 import { checkGuestLimit } from '@/lib/guest-rate-limit';
 import { extractJsonPayload } from '@/lib/ai-json';
@@ -49,7 +50,7 @@ export async function POST(req: Request) {
       );
     }
 
-    if (!AI_API_KEY) {
+    if (!hasRecipeAIKey()) {
       return NextResponse.json({ error: 'AI API configuration missing' }, { status: 500 });
     }
 
@@ -91,12 +92,10 @@ RULES:
 - If there is no readable ingredient list in the image, set "found" to false and "ingredients" to "".
 - Return ONLY the JSON, no other text.`;
 
-    const response = await fetch(AI_CHAT_URL, {
+    const response = await recipeChat({
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${AI_API_KEY}`,
-      },
+      headers: { 'Content-Type': 'application/json' },
+      signal: req.signal,
       body: JSON.stringify({
         model: MODEL_SMART,
         messages: [
@@ -116,10 +115,12 @@ RULES:
         max_tokens: 8000,
         temperature: 0.1,
       }),
-    });
+    }, { totalMs: 45_000 });
 
     if (!response.ok) {
-      console.error('[guest-extract-label] AI error:', response.status, await response.text().catch(() => ''));
+      // Status only: provider bodies are never logged.
+      console.error('[guest-extract-label] AI error:', response.status);
+      await response.body?.cancel();
       return NextResponse.json(
         { error: "We couldn't read that photo. Try again, or type the ingredients instead." },
         { status: 502 }
@@ -127,9 +128,11 @@ RULES:
     }
 
     const data = await response.json();
-    const content = data.choices?.[0]?.message?.content;
+    const choice = data?.choices?.[0];
+    const content = choice?.message?.content;
 
-    if (!content) {
+    // Refused, truncated or otherwise unfinished answers are never accepted.
+    if (choice?.finish_reason !== 'stop' || choice?.message?.refusal || typeof content !== 'string' || !content) {
       return NextResponse.json(
         { error: "We couldn't read that photo. Try again, or type the ingredients instead." },
         { status: 502 }
@@ -140,7 +143,7 @@ RULES:
     try {
       parsed = JSON.parse(extractJsonPayload(content));
     } catch {
-      console.error('[guest-extract-label] Unparseable AI response:', content.slice(0, 300));
+      console.error('[guest-extract-label] Unparseable AI response', { length: content.length });
       return NextResponse.json(
         { error: "We couldn't read that photo. Try again, or type the ingredients instead." },
         { status: 502 }
@@ -166,7 +169,21 @@ RULES:
       remaining: limit.remaining,
     });
   } catch (error) {
-    console.error('[guest-extract-label] Unexpected error:', error);
+    if (error instanceof BackupInputError) {
+      return NextResponse.json(
+        { error: "This photo format isn't supported right now. Please use a JPEG, PNG or WebP photo." },
+        { status: 415 }
+      );
+    }
+    if (req.signal.aborted) return new NextResponse(null, { status: 499 });
+    if (error instanceof BackupTransportError || error instanceof ProviderConnectionError || (error as { name?: string })?.name === 'TimeoutError') {
+      // Not the photo's fault: say so instead of asking for a new photo.
+      return NextResponse.json(
+        { error: 'Label reading is temporarily unavailable. Try again in a minute, or type the ingredients instead.' },
+        { status: 503 }
+      );
+    }
+    console.error('[guest-extract-label] Unexpected error:', error instanceof Error ? error.name : 'Unknown error');
     return NextResponse.json(
       { error: 'Something went wrong reading that photo. Please try again.' },
       { status: 500 }

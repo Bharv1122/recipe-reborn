@@ -1,7 +1,8 @@
 import { getRequestUserId } from '@/lib/request-auth';
 import { rateLimit } from '@/lib/rate-limit';
 import { NextRequest, NextResponse } from 'next/server';
-import { AI_AUDIO_URL, AI_API_KEY } from '@/lib/ai';
+import { hasRecipeAIKey, BackupInputError } from '@/lib/ai-provider';
+import { transcribeAudio } from '@/lib/audio-transcription';
 
 export const dynamic = 'force-dynamic';
 
@@ -66,8 +67,7 @@ export async function POST(request: NextRequest) {
     const limited = await rateLimit(`voice-transcription:${userId}`, 10, 60);
     if (!limited.success) return NextResponse.json({ error: 'Please wait a minute before trying voice again.' }, { status: 429 });
 
-    if (!AI_API_KEY) {
-      console.error('Transcription error: GEMINI_API_KEY is not configured');
+    if (!hasRecipeAIKey()) {
       return NextResponse.json(
         { error: 'Voice transcription is not available right now. Please type your ingredients instead.' },
         { status: 500 }
@@ -110,13 +110,7 @@ export async function POST(request: NextRequest) {
     request.signal.addEventListener('abort', abortRecording, { once: true });
     if (request.signal.aborted) controller.abort();
     timeout = setTimeout(() => { timedOut = true; controller.abort(); }, 45_000);
-    const response = await fetch(AI_AUDIO_URL, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'x-goog-api-key': AI_API_KEY,
-      },
-      body: JSON.stringify({
+    const response = await transcribeAudio(audioFile, format, {
         contents: [
           {
             role: 'user',
@@ -138,13 +132,11 @@ export async function POST(request: NextRequest) {
           maxOutputTokens: 1000,
           thinkingConfig: { thinkingBudget: 0 },
         },
-      }),
-      signal: controller.signal,
-    });
+      }, controller.signal);
 
     if (!response.ok) {
-      const errorText = await response.text();
-      console.error('Gemini transcription API error:', response.status, errorText);
+      await response.body?.cancel();
+      console.error('Transcription service unavailable:', response.status);
       return NextResponse.json(
         { error: 'Failed to transcribe audio. Please try again or type your ingredients.' },
         { status: 502 }
@@ -179,6 +171,7 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({ text }, { status: 200 });
   } catch (error) {
+    if (error instanceof BackupInputError) return NextResponse.json({ error: error.message }, { status: 415 });
     if (timedOut) {
       return NextResponse.json(
         { error: 'Transcription took too long. Please try again or type your ingredients.' },
@@ -188,7 +181,7 @@ export async function POST(request: NextRequest) {
     if (request.signal.aborted) {
       return NextResponse.json({ error: 'Recording canceled.' }, { status: 499 });
     }
-    console.error('Transcription error:', error);
+    console.error('Transcription request failed:', error instanceof Error ? error.name : 'Unknown');
     return NextResponse.json(
       { error: 'Internal server error' },
       { status: 500 }
