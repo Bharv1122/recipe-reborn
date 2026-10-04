@@ -4,7 +4,7 @@ type Json = Record<string, any>;
 type Provider = 'gemini' | 'openai';
 export class BackupInputError extends Error {}
 export class BackupTransportError extends Error {}
-class ProviderConnectionError extends Error {}
+export class ProviderConnectionError extends Error {}
 export interface RecipeAIOptions { totalMs?: number }
 export function canRetryRecipeAI(response: Response): boolean {
   return response.headers.get('x-ai-provider') !== 'openai';

@@ -1,8 +1,9 @@
 # OpenAI backup rollout
 
 Scope: authenticated recipe generation (including its reconciliation calls),
-weekly meal-plan generation/repair, label photos, and text/image/PDF recipe imports.
-Voice, guest routes, recipe adaptation, AI Chef, nutrition and other tools retain
+weekly meal-plan generation/repair, label photos, text/image/PDF recipe imports,
+and recipe adaptation (substitute/remove, preferences, and cooking measurements).
+Voice, guest routes, AI Chef, nutrition and other tools retain
 their existing Gemini transport. This is a server change; QA28 can exercise it.
 
 ## Configuration
@@ -25,6 +26,10 @@ Timeout fallback is deliberately disabled until real latency is measured. Genera
 45-second total cap; generation uses its existing deadline, and meal plans allow
 up to 120 seconds per call within their 250-second generation deadline. Shorter
 caller cancellation/deadlines always win. Response bodies share those limits.
+Adaptation shares one 50-second deadline across provider fallback and at most
+one content repair. A repair starts only with at least 10 seconds left. Provider
+failures and refusals never trigger that content repair. Imports and edits return
+service-unavailable errors for upstream failures instead of blaming the photo.
 Caller transport retries stop after OpenAI has been attempted; validation repair
 is still a separate, bounded generation step. Images use chat image parts;
 PDFs are sent inline, requiring no Files/Responses permissions. HEIC/HEIF cannot

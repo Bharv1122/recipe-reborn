@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
-import { AI_API_KEY, AI_GENERATE_URL } from '@/lib/ai';
+import { recipeGenerate, hasRecipeAIKey, BackupTransportError, ProviderConnectionError } from '@/lib/ai-provider';
+import { RequestDeadlineError, withRequestDeadline } from '@/lib/request-deadline';
 import { extractJsonPayload } from '@/lib/ai-json';
 import { getRequestUserId } from '@/lib/request-auth';
 import { rateLimit } from '@/lib/rate-limit';
@@ -17,37 +18,35 @@ import {
 export const dynamic = 'force-dynamic';
 export const maxDuration = 60;
 
-async function requestAdaptation(prompt: string, requestSignal: AbortSignal) {
-  if (!AI_API_KEY) throw new Error('AI API key not configured');
-  const controller = new AbortController();
-  const abort = () => controller.abort();
-  if (requestSignal.aborted) controller.abort();
-  else requestSignal.addEventListener('abort', abort, { once: true });
-  const timeout = setTimeout(abort, 25_000);
+class AdaptationProviderError extends Error {}
+class AdaptationRefusalError extends Error {}
+
+async function requestAdaptation(prompt: string, requestSignal: AbortSignal, remainingMs: number) {
+  if (!hasRecipeAIKey()) throw new AdaptationProviderError();
+  let data;
   try {
-    const response = await fetch(AI_GENERATE_URL, {
+    const response = await recipeGenerate({
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'x-goog-api-key': AI_API_KEY },
-      signal: controller.signal,
+      signal: requestSignal,
       body: JSON.stringify({
         contents: [{ role: 'user', parts: [{ text: prompt }] }],
         generationConfig: { temperature: 0, maxOutputTokens: 8000, responseMimeType: 'application/json' },
       }),
-    });
-    if (!response.ok) throw new Error(`Recipe adaptation provider returned ${response.status}`);
-    const data = await response.json();
-    const candidate = data.candidates?.[0];
-    if (candidate?.finishReason && candidate.finishReason !== 'STOP') throw new Error('Recipe adaptation was incomplete');
-    const content = candidate?.content?.parts?.map((part: { text?: unknown }) => typeof part.text === 'string' ? part.text : '').join('');
-    if (!content) throw new Error('Recipe adaptation returned no content');
-    return parseAdaptedImportOutput(JSON.parse(extractJsonPayload(content)));
-  } catch (error) {
-    if (controller.signal.aborted && !requestSignal.aborted) throw new Error('Recipe adaptation provider timed out');
-    throw error;
-  } finally {
-    clearTimeout(timeout);
-    requestSignal.removeEventListener('abort', abort);
+    // The caller's shared deadline wins; avoid two timers racing at the same instant.
+    }, { totalMs: remainingMs + 1000 });
+    // Provider failures are not bad recipe content and must not become repair prompts.
+    if (!response.ok) throw new AdaptationProviderError();
+    data = await response.json();
+  } catch {
+    requestSignal.throwIfAborted();
+    throw new AdaptationProviderError();
   }
+  const candidate = data.candidates?.[0];
+  if (data.promptFeedback?.blockReason || (candidate?.finishReason && !['STOP', 'MAX_TOKENS'].includes(candidate.finishReason))) throw new AdaptationRefusalError();
+  if (candidate?.finishReason && candidate.finishReason !== 'STOP') throw new Error('Recipe adaptation was incomplete');
+  const content = candidate?.content?.parts?.map((part: { text?: unknown }) => typeof part.text === 'string' ? part.text : '').join('');
+  if (!content) throw new Error('Recipe adaptation returned no content');
+  return parseAdaptedImportOutput(JSON.parse(extractJsonPayload(content)));
 }
 
 export async function POST(request: Request) {
@@ -82,38 +81,51 @@ export async function POST(request: Request) {
       likes: parsed.data.action.type === 'preferences' ? user.likedIngredients : [],
     };
 
-    let repairReason = '';
-    for (let attempt = 0; attempt < 2; attempt += 1) {
-      let output: AdaptedImportOutput;
-      try {
-        output = await requestAdaptation(
-          buildImportAdaptationPrompt(parsed.data.recipe, parsed.data.action, preferences, repairReason),
-          request.signal,
-        );
-      } catch (error) {
-        if (request.signal.aborted) throw new DOMException('Recipe adaptation canceled', 'AbortError');
-        repairReason = error instanceof Error ? error.message : 'The provider returned an invalid adaptation';
-        if (attempt === 0) continue;
-        throw error;
+    return await withRequestDeadline(request.signal, 50_000, async (signal) => {
+      const deadlineAt = Date.now() + 50_000;
+      let repairReason = '';
+      for (let attempt = 0; attempt < 2; attempt += 1) {
+        const remainingMs = deadlineAt - Date.now();
+        if (attempt > 0 && remainingMs < 10_000) break;
+        let output: AdaptedImportOutput;
+        try {
+          output = await requestAdaptation(
+            buildImportAdaptationPrompt(parsed.data.recipe, parsed.data.action, preferences, repairReason),
+            signal,
+            remainingMs,
+          );
+        } catch (error) {
+          if (request.signal.aborted) throw new DOMException('Recipe adaptation canceled', 'AbortError');
+          signal.throwIfAborted();
+          if (error instanceof AdaptationProviderError || error instanceof BackupTransportError || error instanceof ProviderConnectionError || error instanceof AdaptationRefusalError) throw error;
+          repairReason = error instanceof Error ? error.message : 'The provider returned an invalid adaptation';
+          if (attempt === 0) continue;
+          throw error;
+        }
+        if (output.status === 'cannot_adapt') {
+          return NextResponse.json({ error: output.reason, code: 'cannot_adapt' }, { status: 422 });
+        }
+        try {
+          const recipe = validateAdaptedImport(output.recipe, parsed.data, preferences);
+          return NextResponse.json({
+            recipe,
+            changeSummary: output.changeSummary,
+            reviewNotes: output.reviewNotes,
+            appliedPreferences: parsed.data.action.type === 'preferences' ? preferences : null,
+            quotaUsed: false,
+          });
+        } catch (error) {
+          repairReason = error instanceof Error ? error.message : 'The adapted recipe failed validation';
+        }
       }
-      if (output.status === 'cannot_adapt') {
-        return NextResponse.json({ error: output.reason, code: 'cannot_adapt' }, { status: 422 });
-      }
-      try {
-        const recipe = validateAdaptedImport(output.recipe, parsed.data, preferences);
-        return NextResponse.json({
-          recipe,
-          changeSummary: output.changeSummary,
-          reviewNotes: output.reviewNotes,
-          appliedPreferences: parsed.data.action.type === 'preferences' ? preferences : null,
-          quotaUsed: false,
-        });
-      } catch (error) {
-        repairReason = error instanceof Error ? error.message : 'The adapted recipe failed validation';
-      }
-    }
-    return NextResponse.json({ error: 'The recipe could not be changed coherently. Your draft was not changed or saved.' }, { status: 422 });
+      return NextResponse.json({ error: 'The recipe could not be changed coherently. Your draft was not changed or saved.' }, { status: 422 });
+    });
   } catch (error) {
+    if (error instanceof RequestDeadlineError) return NextResponse.json({ error: 'Recipe editing took too long. Your draft was not changed or saved. Please try again.' }, { status: 504 });
+    if (error instanceof AdaptationProviderError || error instanceof BackupTransportError || error instanceof ProviderConnectionError) {
+      return NextResponse.json({ error: 'Recipe editing is temporarily unavailable. Your draft was not changed or saved. Please try again later.' }, { status: 503 });
+    }
+    if (error instanceof AdaptationRefusalError) return NextResponse.json({ error: 'The recipe could not be adapted. Your draft was not changed or saved.' }, { status: 422 });
     if (error instanceof DOMException && error.name === 'AbortError') {
       return NextResponse.json({ error: 'Recipe adaptation canceled. Your draft was not changed or saved.' }, { status: 499 });
     }

@@ -1,4 +1,4 @@
-import { recipeChat, hasRecipeAIKey, BackupInputError } from '@/lib/ai-provider';
+import { recipeChat, hasRecipeAIKey, BackupInputError, BackupTransportError, ProviderConnectionError } from '@/lib/ai-provider';
 import { NextResponse } from 'next/server';
 import { AI_API_KEY, MODEL_SMART } from '@/lib/ai';
 import { rateLimit } from '@/lib/rate-limit';
@@ -207,6 +207,7 @@ IMPORTANT RULES:
     });
   } catch (error) {
     if (error instanceof BackupInputError) return NextResponse.json({ error: error.message }, { status: 415 });
+    if (error instanceof BackupTransportError || error instanceof ProviderConnectionError) return NextResponse.json({ error: 'Photo reading is temporarily unavailable. Please try again.' }, { status: 503 });
     if (req.signal.aborted) return new NextResponse(null, { status: 499 });
     console.error('[photo-extraction] request failed');
     return NextResponse.json(
