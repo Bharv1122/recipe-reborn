@@ -1,5 +1,6 @@
 import { recipeChat, canRetryRecipeAI, BackupTransportError } from './ai-provider';
 import { AI_API_KEY, MODEL_FAST, MODEL_SMART } from './ai';
+import { US_COOKING_MEASURES } from '../shared/cooking-measurements';
 import {
   DAYS, expandBlockedIngredients, parseMealPlanContent, validateMealPlan,
   type DayName, type MealPlanValidationError, type MealType, type ValidatedDayPlan,
@@ -14,6 +15,8 @@ export interface GeneratePlanOptions {
   allergies: string[];
   dislikedIngredients: string[];
   preferredIngredients?: string[];
+  /** Newly generated plans default to U.S. measures; legacy saved previews remain readable. */
+  usMeasures?: boolean;
   deadlineAt?: number;
 }
 
@@ -149,6 +152,7 @@ Requirements:
 - ${likedInfo}
 - ${blockedIngredientInstruction(options)}
 - Use varied, achievable home-cooking recipes with measured ingredient quantities
+${options.usMeasures ? `- ${US_COOKING_MEASURES}` : ''}
 - Every recipe must be distinct across the week. Never repeat the same dish on multiple days or disguise a repeated dish with a minor title change. Vary the main ingredient, preparation, and accompaniments.
 - Build every dish from basic grocery ingredients. Ordinary staples such as plain bread or tortillas, canned beans or tomatoes, broth, condiments, and plain frozen fruit or vegetables are allowed.
 - Never use a ready-to-eat or pre-cooked entree or prepared meal component, including rotisserie meat, frozen prepared meals or sides, jarred prepared gravy or pasta sauce, boxed mixes, or ready-made dough. Make those components from basic ingredients instead.
@@ -239,6 +243,7 @@ Correct those checks in the replacement. If a food exclusion failed, choose genu
 ${allergies}
 ${dislikes}
 ${blockedIngredientInstruction(options)}
+${options.usMeasures ? `${US_COOKING_MEASURES} If metric_units failed, convert every cooking quantity to these units.` : ''}
 Dietary preferences: ${options.dietaryPreferences.join(', ') || 'none'}.
 Build the recipe from basic grocery ingredients. Do not use ready-to-eat or pre-cooked entrees or prepared meal components such as rotisserie meat, frozen prepared meals or sides, jarred prepared gravy or pasta sauce, boxed mixes, or ready-made dough. Ordinary staples such as plain bread or tortillas, canned beans or tomatoes, broth, condiments, and plain frozen fruit or vegetables are allowed.
 Create a genuinely different dish from every other meal already in this weekly plan. Do not reuse or lightly rename any of these recipe titles: ${excludedTitles.length > 0 ? excludedTitles.join('; ') : 'none'}.
@@ -276,7 +281,7 @@ async function repairInvalidMeals(
   repairFailures: Record<string, number>,
 ): Promise<unknown | null> {
   if (!Array.isArray(value)) return null;
-  const repairableCodes = new Set(['missing_meal', 'unexpected_meal', 'invalid_meal', 'serving_mismatch', 'allergen_detected', 'disliked_ingredient', 'prepared_shortcut', 'duplicate_meal']);
+  const repairableCodes = new Set(['missing_meal', 'unexpected_meal', 'invalid_meal', 'serving_mismatch', 'allergen_detected', 'disliked_ingredient', 'prepared_shortcut', 'duplicate_meal', 'metric_units']);
   if (errors.some((error) => !repairableCodes.has(error.code) || !error.day || !error.mealType)) {
     return null;
   }
@@ -343,7 +348,7 @@ async function repairInvalidMeals(
 export async function generateValidatedPlan(
   options: GeneratePlanOptions,
 ): Promise<{ plan: ValidatedDayPlan[]; attempts: number }> {
-  options = { ...options, deadlineAt: options.deadlineAt ?? Date.now() + 250_000 };
+  options = { ...options, usMeasures: options.usMeasures ?? true, deadlineAt: options.deadlineAt ?? Date.now() + 250_000 };
   const basePrompt = buildPrompt(options);
   const maxTokens = DAYS.length * options.mealTypes.length * 350;
   let retryReasons: string[] = [];
@@ -374,6 +379,7 @@ export async function generateValidatedPlan(
       servings: options.servings,
       allergies: options.allergies,
       dislikedIngredients: options.dislikedIngredients,
+      usMeasures: options.usMeasures,
     });
     if (validation.success) return { plan: validation.plan, attempts: attempt };
     lastFailures = validation.errors; lastPhase = 'initial';
@@ -385,6 +391,7 @@ export async function generateValidatedPlan(
         servings: options.servings,
         allergies: options.allergies,
         dislikedIngredients: options.dislikedIngredients,
+        usMeasures: options.usMeasures,
       });
       if (repairedValidation.success) {
         return { plan: repairedValidation.plan, attempts: attempt + 1 };
@@ -400,6 +407,7 @@ export async function generateValidatedPlan(
           servings: options.servings,
           allergies: options.allergies,
           dislikedIngredients: options.dislikedIngredients,
+          usMeasures: options.usMeasures,
         });
         if (finalValidation.success) {
           return { plan: finalValidation.plan, attempts: attempt + 2 };

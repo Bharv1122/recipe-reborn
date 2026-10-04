@@ -74,7 +74,12 @@ code on an existing deployment.
 
 ## Review and current evidence
 
-Claude reviewed this candidate privately on October 3. His timing, stacked-retry,
+Claude reviewed this candidate privately on October 3. The timing, stacked-retry,
 stream-cleanup and photo cancellation/format findings were addressed with tests.
-Live OpenAI acceptance remains a release gate. Gemini remains
-the default. No activation or successful OpenAI request is claimed by mock tests.
+Live acceptance on an unpromoted deployment passed recipe generation, a 21-meal
+preview without automatic saving, explicit single-meal saving and repeat-save
+idempotency, label nutrition extraction, and faithful recipe PNG/PDF imports.
+That run exposed metric cooking quantities in weekly plans. New plan generation
+now requests and validates U.S. cooking measures, including targeted repairs;
+legacy previews remain saveable. Repeat live acceptance on the final revision
+is required before activation. Gemini remains the default.

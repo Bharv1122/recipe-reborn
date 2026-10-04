@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { US_COOKING_MEASURES } from '../shared/cooking-measurements';
 import { AI_CHAT_URL, MODEL_FAST, MODEL_SMART } from '../lib/ai';
 import { generateValidatedPlan, MealPlanProviderError, MealPlanSafetyError } from '../lib/meal-plan-generation';
 import { DAYS, validateMeal, validateMealPlan, type DayName } from '../lib/meal-plan-validation';
@@ -94,6 +95,30 @@ async function test(name: string, run: () => Promise<void>) {
 }
 
 async function main() {
+  await test('Metric cooking quantities repair only the rejected meal while legacy previews stay saveable', () => withModel(call => {
+    assert.ok(call.prompt.includes(US_COOKING_MEASURES));
+    if (call.kind === 'plan') {
+      const plan = validPlan(); plan[2].dinner.ingredients = ['200g chicken breast'];
+      assert.equal(validateMeal(plan[2].dinner, options).success, true, 'Legacy save validation must remain compatible');
+      return completion(plan);
+    }
+    assert.equal(call.day, 'wednesday');
+    assert.ok(call.prompt.includes('metric_units'));
+    return completion({ ...meal('Chicken sweet potato skillet'), ingredients: ['7 oz chicken breast', '1 cup diced sweet potato'] });
+  }, async calls => {
+    const result = await generateValidatedPlan(options);
+    assert.equal(validateMealPlan(result.plan.map(({day,meals})=>({day,...meals})),{...options,usMeasures:true}).success,true);
+    assert.equal(calls.length,2);
+  }));
+  await test('Metric quantities in instructions are rejected after allergy checks', async () => {
+    const candidate={...meal('Chicken skillet'),instructions:'Add 100 ml water and simmer.'};
+    const invalid=validateMeal(candidate,{...options,usMeasures:true});
+    assert.equal(invalid.success,false);
+    if(!invalid.success) assert.equal(invalid.error.code,'metric_units');
+    const unsafe=validateMeal({...candidate,ingredients:['200g salmon']},{...options,usMeasures:true});
+    assert.equal(unsafe.success,false);
+    if(!unsafe.success) assert.equal(unsafe.error.code,'allergen_detected');
+  });
   await test('Valid plan needs no repair', () => withModel(() => completion(validPlan()), async (calls) => {
     validateResult(await generateValidatedPlan(options));
     assert.equal(calls.length, 1);
