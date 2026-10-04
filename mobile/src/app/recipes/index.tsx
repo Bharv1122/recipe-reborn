@@ -47,7 +47,7 @@ export default function RecipesScreen() {
     <Stack.Screen options={{ headerShown: true, title: 'My recipes', headerTintColor: colors.green, headerStyle: { backgroundColor: colors.white } }} />
     <ScrollView contentContainerStyle={styles.content} refreshControl={<RefreshControl refreshing={loading} enabled={removingId === null} onRefresh={load} />}>
       <InlineError message={error} />{error ? <Button label="Retry loading recipes" secondary disabled={Boolean(removingId)} onPress={load} /> : null}
-      <Button label="Plan my meals" secondary onPress={() => router.push('/meal-plans')} />
+      <Button label="Plan my meals" secondary onPress={() => router.push('/(tabs)/plans')} />
       {loaded && !loading && !error && !recipes.length ? <Card><Text style={styles.title}>Your recipes will live here</Text><Text style={styles.body}>Make your first recipe, then save it to cook again.</Text><Button label="Make my first recipe" onPress={() => router.push('/generate')} /></Card> : null}
       {recipes.map((recipe) => <Card key={recipe.id}>
         <Pressable accessibilityRole="button" accessibilityLabel={recipe.title} accessibilityHint="Opens the saved recipe" disabled={removingId !== null} style={styles.openRecipe} onPress={() => router.push({ pathname: '/recipes/[id]', params: { id: recipe.id } })}>

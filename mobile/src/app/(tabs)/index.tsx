@@ -7,7 +7,7 @@ export default function HomeScreen() {
   const router = useRouter();
   const choices = [
     { title: 'Scan a package', icon: '▥', description: 'Scan a food label or barcode and make it homemade.', go: () => router.push('/(tabs)/scan') },
-    { title: 'Plan my meals', icon: '▦', description: 'Preview a week of meals and save only what you want.', go: () => router.push('/meal-plans') },
+    { title: 'Plan my meals', icon: '▦', description: 'Preview a week of meals and save only what you want.', go: () => router.push('/(tabs)/plans') },
     { title: 'Use my ingredients', icon: '♧', description: 'Speak, type, or photograph what you have.', go: () => router.push({ pathname: '/generate', params: { source: 'pantry' } }) },
     { title: 'Choose a dish', icon: '♨', description: 'Tell us what you would like to cook.', go: () => router.push({ pathname: '/generate', params: { source: 'dish' } }) },
     { title: 'Import a recipe', icon: '▤', description: 'Bring a recipe from a photo, file, or website.', go: () => router.push('/import-recipe') },

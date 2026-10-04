@@ -6,6 +6,13 @@ const values = z.object({
   fat: nutrient, fiber: nutrient, sodium: nutrient,
 });
 const label = z.string().trim().min(1).max(500);
+// Homemade nutrition is only ever an estimate per serving; exact claims are rejected.
+export const freshNutritionSchema = values.extend({
+  perServing: z.literal(true),
+  accuracy: z.literal('estimated'),
+  basisLabel: label,
+  sourceLabel: label,
+});
 
 export const recipeComparisonSchema = z.object({
   version: z.literal(1),
@@ -22,11 +29,6 @@ export const recipeComparisonSchema = z.object({
     // A missing review flag must not turn scanned data into confirmed data.
     reviewRequired: z.boolean().default(true),
   }).nullable(),
-  freshNutrition: values.extend({
-    perServing: z.literal(true),
-    accuracy: z.literal('estimated'),
-    basisLabel: label,
-    sourceLabel: label,
-  }).nullable(),
+  freshNutrition: freshNutritionSchema.nullable(),
 }).refine((value) => value.source === 'label' || value.originalNutrition === null,
   'Only label recipes can include package nutrition');
