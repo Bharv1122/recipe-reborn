@@ -381,6 +381,50 @@ async function main() {
     });
   }));
 
+  await test('Olives dislike: repeated olive oil repairs see the rejected lines and the dislike stays enforced', async () => {
+    const oliveOptions: Options = { ...options, dislikedIngredients: ['Olives'] };
+    const withOil = (title: string, oil: string) => ({ ...meal(title), ingredients: ['1 cup brown rice', '2 cups broccoli', oil], instructions: 'Cook the rice. Steam broccoli and toss with the oil.' });
+    const oliveDays: DayName[] = ['monday', 'tuesday', 'thursday', 'saturday', 'sunday'];
+    const fastTitles = ['Herb chicken orzo', 'Paprika pork rice', 'Lentil carrot pie', 'Beef zucchini kebabs', 'Turkey potato tray'];
+    const smartTitles = ['Squash risotto', 'Cabbage chickpea skillet', 'White bean cabbage skillet', 'Quinoa pumpkin bake', 'Lemon chickpea salad'];
+    // The validator must keep rejecting olive oil for an olives dislike.
+    const guard = validateMeal(withOil('Oily bowl', '1 tablespoon olive oil'), oliveOptions);
+    assert.equal(guard.success, false);
+    if (!guard.success) assert.equal(guard.error.code, 'disliked_ingredient');
+    assert.equal(validateMeal(withOil('Canola bowl', '1 tablespoon canola oil'), oliveOptions).success, true);
+    await withModel((call) => {
+      assert.match(call.prompt, /Because olive is excluded, olive oil is also rejected: never use olive oil; use a permitted cooking fat/);
+      if (call.kind === 'plan') {
+        return completion(DAYS.map((day, index) => ({ day, dinner: withOil(titles[index], oliveDays.includes(day) ? '1 tablespoon olive oil' : '1 tablespoon canola oil') })));
+      }
+      assert.ok(call.day && oliveDays.includes(call.day));
+      assert.match(call.prompt, /untrusted recipe data/);
+      assert.match(call.prompt, /Rejection reasons: \["The meal contains a disliked ingredient\."\]/);
+      const flagged = call.prompt.match(/Ingredient lines that matched an excluded food: (\[[^\n]*?\])\./)?.[1];
+      assert.ok(flagged, 'Repair must name the concrete rejected ingredient line.');
+      if (call.model === MODEL_FAST) {
+        assert.deepEqual(JSON.parse(flagged), ['1 tablespoon olive oil']);
+        // Reproduce the production failure: the fast repair repeats olive oil.
+        return completion(withOil(fastTitles[oliveDays.indexOf(call.day)], '2 teaspoons olive oil'));
+      }
+      // Smart repair sees the fast repair's own rejected line, not the original.
+      assert.deepEqual(JSON.parse(flagged), ['2 teaspoons olive oil']);
+      assert.match(call.prompt, /Rejected ingredient lines: \["1 cup brown rice","2 cups broccoli","2 teaspoons olive oil"\]/);
+      return completion(withOil(smartTitles[oliveDays.indexOf(call.day)], '1 tablespoon avocado oil'));
+    }, async (calls) => {
+      const plan = validateResult(await generateValidatedPlan(oliveOptions), oliveOptions);
+      assert.ok(plan.every(({ meals }) => !/olive/i.test(JSON.stringify(meals.dinner))));
+      assert.equal(calls.filter((call) => call.kind === 'plan').length, 1);
+      assert.equal(calls.filter((call) => call.kind === 'repair' && call.model === MODEL_FAST).length, 5);
+      assert.equal(calls.filter((call) => call.kind === 'repair' && call.model === MODEL_SMART).length, 5);
+    });
+  });
+
+  await test('Olive oil instruction is absent without an olive exclusion', () => withModel((call) => {
+    assert.doesNotMatch(call.prompt, /olive oil is also rejected/);
+    return completion(validPlan());
+  }, async () => { validateResult(await generateValidatedPlan(options)); }));
+
   console.log(`Meal-plan generation: ${cases} isolated cases passed; mocked provider only, no database or live API.`);
 }
 
