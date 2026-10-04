@@ -1,4 +1,5 @@
-import { AI_CHAT_URL, AI_API_KEY, MODEL_FAST, MODEL_SMART } from './ai';
+import { recipeChat, canRetryRecipeAI, BackupTransportError } from './ai-provider';
+import { AI_API_KEY, MODEL_FAST, MODEL_SMART } from './ai';
 import {
   DAYS, expandBlockedIngredients, parseMealPlanContent, validateMealPlan,
   type DayName, type MealPlanValidationError, type MealType, type ValidatedDayPlan,
@@ -65,26 +66,26 @@ export class MealPlanProviderError extends Error {
 
 // Never log provider bodies: they can contain the user's food preferences.
 async function requestContent(body: Record<string, unknown>, deadlineAt?: number): Promise<string> {
-  const remaining = deadlineAt === undefined ? 45000 : deadlineAt - Date.now();
+  const remaining = deadlineAt === undefined ? 120_000 : deadlineAt - Date.now();
   if (remaining <= 0) throw new MealPlanProviderError('Meal-plan deadline reached', false, 'deadline');
   let response: Response;
   try {
-    response = await fetch(AI_CHAT_URL, {
+    response = await recipeChat({
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
         Authorization: `Bearer ${AI_API_KEY}`,
       },
-      signal: AbortSignal.timeout(Math.min(45_000, remaining)),
+      signal: AbortSignal.timeout(Math.min(120_000, remaining)),
       body: JSON.stringify({ ...body, reasoning_effort: 'none' }),
-    });
-  } catch {
-    throw new MealPlanProviderError('Meal-plan provider request timed out or failed to connect', true, 'transport');
+    }, { totalMs: Math.min(120_000, remaining) });
+  } catch (error) {
+    throw new MealPlanProviderError('Meal-plan provider request timed out or failed to connect', !(error instanceof BackupTransportError), 'transport');
   }
   if (!response.ok) {
     throw new MealPlanProviderError(
       `Meal-plan provider returned status ${response.status}`,
-      response.status === 408 || response.status === 429 || response.status >= 500,
+      canRetryRecipeAI(response) && (response.status === 408 || response.status === 429 || response.status >= 500),
       `http_${response.status}`,
     );
   }

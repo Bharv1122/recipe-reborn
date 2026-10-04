@@ -1,4 +1,4 @@
-import { AI_API_KEY, AI_GENERATE_URL } from './ai';
+import { recipeGenerate, hasRecipeAIKey, canRetryRecipeAI } from './ai-provider';
 import { extractJsonPayload } from './ai-json';
 import { normalizeImportedRecipe, type ImportPart } from './recipe-import';
 import { withRequestDeadline } from './request-deadline';
@@ -21,14 +21,14 @@ Read handwritten text and sideways text in its intended reading orientation. Ign
 }
 
 export async function extractRecipe(source: ImportPart, requestSignal: AbortSignal, allowPartial: boolean) {
-  if (!AI_API_KEY) throw new Error('AI API key not configured');
+  if (!hasRecipeAIKey()) throw new Error('AI API key not configured');
   const parts = 'inlineData' in source
     ? [source, { text: extractionPrompt() }]
     : [{ text: `${extractionPrompt()}\n\nRECIPE SOURCE:\n${source.text}` }];
   return withRequestDeadline(requestSignal, 40_000, async (signal) => {
-    const send = () => fetch(AI_GENERATE_URL, {
+    const send = () => recipeGenerate({
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'x-goog-api-key': AI_API_KEY },
+      headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
       signal,
       body: JSON.stringify({
         contents: [{ role: 'user', parts }],
@@ -37,7 +37,7 @@ export async function extractRecipe(source: ImportPart, requestSignal: AbortSign
     });
     let response = await send();
     // Retry one transient provider failure within the same total deadline.
-    if ([429, 500, 502, 503, 504].includes(response.status)) {
+    if (canRetryRecipeAI(response) && [429, 500, 502, 503, 504].includes(response.status)) {
       await response.body?.cancel();
       signal.throwIfAborted();
       response = await send();

@@ -172,7 +172,7 @@ async function main() {
   await test('Provider deadline signal aborts requests and exhausts bounded retries', async () => {
     const originalTimeout = AbortSignal.timeout;
     const budgets: number[] = [];
-    // Accelerate the real signal mechanism; no 45-second wall-clock wait.
+    // Accelerate the real signal mechanism; no 120-second wall-clock wait.
     AbortSignal.timeout = (milliseconds: number) => {
       budgets.push(milliseconds);
       const controller = new AbortController();
@@ -190,7 +190,7 @@ async function main() {
         await assert.rejects(() => generateValidatedPlan(options), (error: unknown) => error instanceof MealPlanProviderError);
         assert.equal(calls.length, 2);
         assert.equal(budgets.length, 2);
-        assert.ok(budgets.every((milliseconds) => milliseconds > 0 && milliseconds <= 45_000));
+        assert.ok(budgets.every((milliseconds) => milliseconds > 0 && milliseconds <= 120_000));
       });
     } finally {
       AbortSignal.timeout = originalTimeout;
