@@ -31,7 +31,7 @@ function currentWeekMonday() {
   return `${year}-${month}-${day}`;
 }
 
-export default function MealPlansScreen() {
+export default function MealPlansScreen({ embeddedTab = false }: { embeddedTab?: boolean }) {
   const { recipeId } = useLocalSearchParams<{ recipeId?: string }>();
   const router = useRouter();
   const { user, refreshAccount } = useAuth();
@@ -151,7 +151,7 @@ export default function MealPlansScreen() {
   };
 
   return <Screen>
-    <Stack.Screen options={{ headerShown: true, title: recipeId ? 'Add to meal plan' : 'Meal plans', headerTintColor: colors.green }} />
+    {!embeddedTab ? <Stack.Screen options={{ headerShown: true, title: recipeId ? 'Add to meal plan' : 'Meal plans', headerTintColor: colors.green }} /> : null}
     <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
       {!recipeId && view === 'plans' ? <Card>
         <Text style={styles.sectionTitle}>Your meal plans</Text>
@@ -198,7 +198,7 @@ export default function MealPlansScreen() {
         <Text style={styles.body}>Next, choose the plan below. Nothing is added until you tap Add recipe.</Text>
       </Card> : null}
       <InlineError message={error} />{message ? <Text style={styles.success}>{message}</Text> : null}
-      {!recipeId && view === 'plans' ? previews.map(preview => <Card key={preview.id}><Text style={styles.sectionTitle}>Not saved · Week of {preview.weekStartDate.slice(0, 10)}</Text><Text style={styles.body}>Preview available until {new Date(preview.expiresAt).toLocaleDateString()}</Text><Button label="Review meals to save" secondary onPress={() => router.push({ pathname: '/meal-plans/draft/[id]', params: { id: preview.id } })} /></Card>) : null}
+      {!recipeId && view === 'plans' ? previews.map(preview => <Pressable key={preview.id} accessibilityRole="button" accessibilityLabel={`Week of ${preview.weekStartDate.slice(0, 10)}, not saved`} accessibilityHint="Opens the meals for this week" onPress={() => router.push({ pathname: '/meal-plans/draft/[id]', params: { id: preview.id } })}><Card><Text style={styles.sectionTitle}>Not saved · Week of {preview.weekStartDate.slice(0, 10)}</Text><Text style={styles.body}>Preview available until {new Date(preview.expiresAt).toLocaleDateString()}</Text></Card></Pressable>) : null}
       {(recipeId || view === 'plans') ? plans.map((plan) => <Pressable accessibilityRole="button" accessibilityLabel={plan.name} accessibilityHint={recipeId ? 'Selects this meal plan' : 'Opens the meal plan'} accessibilityState={{ busy: addingPlanId === plan.id, disabled: addingPlanId !== null }} disabled={addingPlanId !== null} key={plan.id} onPress={() => recipeId ? setSelectedPlanId(plan.id) : choose(plan)}><Card><Text style={styles.sectionTitle}>{recipeId && selectedPlanId === plan.id ? `Selected: ${plan.name}` : plan.name}</Text><Text style={styles.body}>{addingPlanId === plan.id ? 'Adding recipe…' : `${new Date(plan.weekStartDate).toLocaleDateString(undefined, { timeZone: 'UTC' })} · ${plan.mealPlanRecipes.length} meals`}</Text></Card></Pressable>) : null}
       {recipeId && selectedPlanId ? <Button label={`Add recipe to ${day} ${mealType}`} loading={addingPlanId !== null} onPress={() => { const plan = plans.find((item) => item.id === selectedPlanId); if (plan) void choose(plan); }} /> : null}
       {recipeId && !plans.length ? <Card>

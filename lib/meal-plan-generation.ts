@@ -1,6 +1,7 @@
 import { recipeChat, canRetryRecipeAI, BackupTransportError } from './ai-provider';
 import { AI_API_KEY, MODEL_FAST, MODEL_SMART } from './ai';
 import { US_COOKING_MEASURES } from '../shared/cooking-measurements';
+import { INGREDIENT_QUANTITY_RULES } from '../shared/ingredient-quantities';
 import {
   DAYS, expandBlockedIngredients, parseMealPlanContent, validateMealPlan,
   type DayName, type MealPlanValidationError, type MealType, type ValidatedDayPlan,
@@ -154,6 +155,7 @@ Requirements:
 - ${likedInfo}
 - ${blockedIngredientInstruction(options)}
 - Use varied, achievable home-cooking recipes with measured ingredient quantities
+- ${INGREDIENT_QUANTITY_RULES} Each recipe makes exactly ${options.servings} serving${options.servings === 1 ? '' : 's'}, so amounts are for ${options.servings === 1 ? 'that one serving' : `all ${options.servings} servings together`}.
 ${options.usMeasures ? `- ${US_COOKING_MEASURES}` : ''}
 - Every recipe must be distinct across the week. Never repeat the same dish on multiple days or disguise a repeated dish with a minor title change. Vary the main ingredient, preparation, and accompaniments.
 - Build every dish from basic grocery ingredients. Ordinary staples such as plain bread or tortillas, canned beans or tomatoes, broth, condiments, and plain frozen fruit or vegetables are allowed.
@@ -246,6 +248,7 @@ ${allergies}
 ${dislikes}
 ${blockedIngredientInstruction(options)}
 ${options.usMeasures ? `${US_COOKING_MEASURES} If metric_units failed, convert every cooking quantity to these units.` : ''}
+${INGREDIENT_QUANTITY_RULES} Amounts cover all ${options.servings} serving${options.servings === 1 ? '' : 's'} together. If missing_quantity failed, add an amount to every unmeasured ingredient.
 Dietary preferences: ${options.dietaryPreferences.join(', ') || 'none'}.
 Build the recipe from basic grocery ingredients. Do not use ready-to-eat or pre-cooked entrees or prepared meal components such as rotisserie meat, frozen prepared meals or sides, jarred prepared gravy or pasta sauce, boxed mixes, or ready-made dough. Ordinary staples such as plain bread or tortillas, canned beans or tomatoes, broth, condiments, and plain frozen fruit or vegetables are allowed.
 Create a genuinely different dish from every other meal already in this weekly plan. Do not reuse or lightly rename any of these recipe titles: ${excludedTitles.length > 0 ? excludedTitles.join('; ') : 'none'}.
@@ -283,7 +286,7 @@ async function repairInvalidMeals(
   repairFailures: Record<string, number>,
 ): Promise<unknown | null> {
   if (!Array.isArray(value)) return null;
-  const repairableCodes = new Set(['missing_meal', 'unexpected_meal', 'invalid_meal', 'serving_mismatch', 'allergen_detected', 'disliked_ingredient', 'prepared_shortcut', 'duplicate_meal', 'metric_units']);
+  const repairableCodes = new Set(['missing_meal', 'unexpected_meal', 'invalid_meal', 'serving_mismatch', 'allergen_detected', 'disliked_ingredient', 'prepared_shortcut', 'duplicate_meal', 'metric_units', 'missing_quantity']);
   if (errors.some((error) => !repairableCodes.has(error.code) || !error.day || !error.mealType)) {
     return null;
   }

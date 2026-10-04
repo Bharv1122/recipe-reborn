@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { hasMetricCookingMeasures } from '../shared/cooking-measurements';
+import { findUnmeasuredIngredients } from '../shared/ingredient-quantities';
 import { expandedFoodTerms, findBlockedFoodInRecipe, normalizeFoodText } from './food-preferences';
 
 export const DAYS = [
@@ -46,6 +47,7 @@ export type MealPlanValidationCode =
   | 'disliked_ingredient'
   | 'prepared_shortcut'
   | 'metric_units'
+  | 'missing_quantity'
   | 'duplicate_meal';
 
 export interface MealPlanValidationError {
@@ -59,12 +61,16 @@ export type MealPlanValidationResult =
   | { success: true; plan: ValidatedDayPlan[] }
   | { success: false; errors: MealPlanValidationError[] };
 
+/** Stored meal instructions are one string; step arrays are joined with newlines and share this total. */
+export const MEAL_INSTRUCTIONS_MAX_CHARS = 8000;
+
 const mealSchema = z.object({
   title: z.string().trim().min(1).max(160),
   ingredients: z.array(z.string().trim().min(1).max(500)).min(1).max(40),
   instructions: z.union([
-    z.string().trim().min(1).max(8000),
-    z.array(z.string().trim().min(1).max(1000)).min(1).max(30),
+    z.string().trim().min(1).max(MEAL_INSTRUCTIONS_MAX_CHARS),
+    z.array(z.string().trim().min(1).max(1000)).min(1).max(30)
+      .refine(steps => steps.join('\n').length <= MEAL_INSTRUCTIONS_MAX_CHARS),
   ]),
   prepTime: z.string().trim().max(50).optional().default(''),
   cookTime: z.string().trim().max(50).optional().default(''),
@@ -154,6 +160,8 @@ export function validateMeal(
     allergies: string[];
     dislikedIngredients?: string[];
     usMeasures?: boolean;
+    /** Every non-seasoning ingredient states an amount. Defaults to usMeasures (the AI-generation path); edits and stored drafts leave both off. */
+    requireQuantities?: boolean;
     day?: DayName;
     mealType?: MealType;
   },
@@ -191,6 +199,10 @@ export function validateMeal(
   }
   if (options.usMeasures && hasMetricCookingMeasures([...meal.ingredients, meal.instructions])) {
     return { success: false, error: { code: 'metric_units', message: 'Use U.S. cooking measures in ingredients and directions.', day: options.day, mealType: options.mealType } };
+  }
+  // Checks that amounts are stated, not that totals or nutrition are right.
+  if ((options.requireQuantities ?? options.usMeasures) && findUnmeasuredIngredients(meal.ingredients).length) {
+    return { success: false, error: { code: 'missing_quantity', message: 'Give every ingredient, including sides and grains, an amount for all servings combined, and say whether grains are cooked or dry.', day: options.day, mealType: options.mealType } };
   }
   return { success: true, meal };
 }
@@ -235,7 +247,7 @@ export function parseMealPlanContent(content: string): unknown {
 
 export function validateMealPlan(
   value: unknown,
-  options: { mealTypes: MealType[]; servings: number; allergies: string[]; dislikedIngredients?: string[]; usMeasures?: boolean },
+  options: { mealTypes: MealType[]; servings: number; allergies: string[]; dislikedIngredients?: string[]; usMeasures?: boolean; requireQuantities?: boolean },
 ): MealPlanValidationResult {
   if (!Array.isArray(value)) {
     return {

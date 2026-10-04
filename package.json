@@ -24,6 +24,7 @@
     "verify:import-adaptation": "tsx scripts/verify-import-adaptation.ts",
     "verify:recipe-edit-backup": "node scripts/verify-recipe-edit-backup.cjs",
     "verify:recipe-comparison": "tsx scripts/verify-recipe-comparison.ts",
+    "verify:ingredient-quantities": "tsx scripts/verify-ingredient-quantities.ts",
     "postinstall": "prisma generate"
   },
   "prisma": {

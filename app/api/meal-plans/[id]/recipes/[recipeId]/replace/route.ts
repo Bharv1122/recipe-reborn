@@ -2,93 +2,16 @@ import { randomUUID } from 'node:crypto';
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
 import { getRequestUserId } from '@/lib/request-auth';
-import { MODEL_FAST, MODEL_SMART } from '@/lib/ai';
-import { recipeChat, hasRecipeAIKey } from '@/lib/ai-provider';
+import { hasRecipeAIKey } from '@/lib/ai-provider';
 import { replacementSettings } from '@/lib/meal-plan-settings';
-import { US_COOKING_MEASURES } from '@/shared/cooking-measurements';
-import { validateMeal, type DayName, type MealType, type ValidatedMeal } from '@/lib/meal-plan-validation';
+import { validateMeal, type DayName, type MealType } from '@/lib/meal-plan-validation';
+import { generateMealReplacement } from '@/lib/meal-plan-replacement';
 import { ENTITLEMENT_SELECT, hasPremiumAccess, premiumRequiredMessage } from '@/lib/entitlement';
 import { limitAiRequest } from '@/lib/ai-rate-limit';
 import { RequestDeadlineError, withRequestDeadline } from '@/lib/request-deadline';
 
 export const maxDuration = 60;
-class ReplacementProviderError extends Error {}
 class ReplacementConflictError extends Error {}
-
-function parseMealObject(content: string): unknown {
-  let jsonText = content.trim();
-  const fenceMatch = jsonText.match(/```(?:json)?\s*([\s\S]*?)```/);
-  jsonText = fenceMatch ? fenceMatch[1] : jsonText.replace(/^```(?:json)?\s*/, '');
-  const start = jsonText.indexOf('{');
-  const end = jsonText.lastIndexOf('}');
-  if (start !== -1 && end > start) jsonText = jsonText.slice(start, end + 1);
-  const parsed = JSON.parse(jsonText.trim());
-  return parsed && typeof parsed === 'object' && 'meal' in parsed ? parsed.meal : parsed;
-}
-
-async function generateReplacement(options: {
-  day: string;
-  mealType: string;
-  servings: number;
-  allergies: string[];
-  dislikedIngredients: string[];
-  excludedTitles: string[];
-  preferredIngredients: string[];
-  dietaryPreferences: string[];
-  signal: AbortSignal;
-}): Promise<ValidatedMeal | null> {
-  const constraints = [
-    options.allergies.length ? `Never use these allergens or their derivatives: ${options.allergies.join(', ')}.` : '',
-    options.dislikedIngredients.length ? `Do not use these disliked ingredients: ${options.dislikedIngredients.join(', ')}.` : '',
-    options.preferredIngredients.length ? `When practical, favor these liked ingredients without overriding exclusions: ${options.preferredIngredients.join(', ')}.` : '',
-    `Do not repeat any of these recipes: ${options.excludedTitles.join('; ')}.`,
-  ].filter(Boolean).join('\n');
-  const prompt = `Create one different ${options.mealType} recipe for ${options.day}, with exactly ${options.servings} servings.
-${constraints}
-Dietary preferences: ${options.dietaryPreferences.join(', ') || 'none'}.
-${US_COOKING_MEASURES}
-Use ordinary basic ingredients and cooking steps. Do not rely on boxed mixes, seasoning packets, canned soup, jarred meal sauces, frozen meals, rotisserie chicken, ready-made dough, or other prepared shortcuts.
-
-Return only one JSON object with title, ingredients (measured string array), instructions, prepTime, cookTime, servings, dietaryTags, and estimatedCalories.`;
-
-  for (const model of [MODEL_FAST, MODEL_SMART]) {
-    const response = await recipeChat({
-      signal: options.signal,
-      method: 'POST',
-      body: JSON.stringify({
-        model,
-        messages: [
-          { role: 'system', content: 'Return one safe, practical, unique home-cooking recipe as valid JSON.' },
-          { role: 'user', content: prompt },
-        ],
-        temperature: 0.45,
-        max_tokens: 2200,
-        response_format: { type: 'json_object' },
-      }),
-    });
-    if (!response.ok) throw new ReplacementProviderError();
-    const data = await response.json();
-    if (data.choices?.[0]?.finish_reason !== 'stop' || data.choices?.[0]?.message?.refusal) throw new ReplacementProviderError();
-    const content = data.choices?.[0]?.message?.content;
-    if (typeof content !== 'string' || !content.trim()) continue;
-    try {
-      const validation = validateMeal(parseMealObject(content), {
-        servings: options.servings,
-        allergies: options.allergies,
-        dislikedIngredients: options.dislikedIngredients,
-        usMeasures: true,
-        day: options.day as DayName,
-        mealType: options.mealType as MealType,
-      });
-      if (validation.success && !options.excludedTitles.some((title) => title.trim().toLowerCase() === validation.meal.title.trim().toLowerCase())) {
-        return validation.meal;
-      }
-    } catch {
-      // A malformed or unsafe answer is rejected before any database write.
-    }
-  }
-  return null;
-}
 
 export async function POST(request: Request, props: { params: Promise<{ id: string; recipeId: string }> }) {
   try {
@@ -122,9 +45,9 @@ export async function POST(request: Request, props: { params: Promise<{ id: stri
 
     const aiLimit = await limitAiRequest(userId);
     if (aiLimit) return aiLimit;
-    const meal = await withRequestDeadline(request.signal, 50_000, (signal) => generateReplacement({
-      day: entry.day,
-      mealType: entry.mealType,
+    const meal = await withRequestDeadline(request.signal, 50_000, (signal) => generateMealReplacement({
+      day: entry.day as DayName,
+      mealType: entry.mealType as MealType,
       servings: entry.servings,
       ...settings,
       excludedTitles: titles.map(({ recipe }) => recipe.title),

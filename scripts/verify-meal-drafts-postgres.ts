@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { prisma } from '../lib/db';
-import { reserveMealPlanDraft, completeMealPlanDraft, saveMealPlanDraft, getMealPlanDraft } from '../lib/meal-plan-drafts';
+import { reserveMealPlanDraft, completeMealPlanDraft, saveMealPlanDraft, getMealPlanDraft, changeMealPlanDraftMeal } from '../lib/meal-plan-drafts';
 import { DAYS, type ValidatedDayPlan } from '../lib/meal-plan-validation';
 import type { GeneratePlanOptions } from '../lib/meal-plan-generation';
 
@@ -36,6 +36,12 @@ async function main() {
       assert.equal((await getMealPlanDraft(id, user.id, deps)).days!.length, 7);
       await assert.rejects(getMealPlanDraft(id, 'other-owner', deps), (error: any) => error.status === 404);
       const slot = { day: 'monday' as const, mealType: 'dinner' as const };
+      const original = meals[0].meals.dinner!;
+      const edited = { ...original, title: 'Carrot rice with parsley', ingredients: [...original.ingredients, '1 tbsp chopped parsley'] };
+      await changeMealPlanDraftMeal(id, user.id, { slot, expectedMeal: original, change: { kind: 'edit', meal: edited, nutrition: null } }, {}, deps);
+      assert.equal(await tx.recipe.count({ where: { userId: user.id } }), 0);
+      assert.equal(await tx.mealPlan.count({ where: { userId: user.id } }), 0);
+      await assert.rejects(changeMealPlanDraftMeal(id, user.id, { slot, expectedMeal: original, change: { kind: 'edit', meal: original, nutrition: null } }, {}, deps), (error: any) => error.status === 409);
       const first = await saveMealPlanDraft(id, user.id, slot, deps);
       assert.equal((await saveMealPlanDraft(id, user.id, slot, deps)).recipeId, first.recipeId);
       assert.equal(await tx.recipe.count({ where: { userId: user.id } }), 1);
@@ -43,11 +49,18 @@ async function main() {
       await assert.rejects(saveMealPlanDraft(id, user.id, { day: 'tuesday', mealType: 'dinner' }, deps), (error: any) => error.status === 422);
       assert.equal((await saveMealPlanDraft(id, user.id, slot, deps)).recipeId, first.recipeId);
       await tx.user.update({ where: { id: user.id }, data: { allergies: [] } });
+      const replacement = { ...edited, title: 'Carrot rice with basil', ingredients: [...original.ingredients, '1 tbsp chopped basil'] };
+      const replaced = await changeMealPlanDraftMeal(id, user.id, { slot, expectedMeal: edited, change: { kind: 'replace' } }, { replace: async () => replacement }, deps);
+      assert.equal(replaced.savedMeals['monday:dinner'], undefined);
+      assert.equal((await tx.recipe.findUnique({ where: { id: first.recipeId } }))!.title, edited.title);
+      assert.equal(await tx.recipe.count({ where: { userId: user.id } }), 1);
+      assert.equal(await tx.mealPlan.count({ where: { userId: user.id } }), 0);
       const saved = await saveMealPlanDraft(id, user.id, undefined, deps);
       assert.equal((await saveMealPlanDraft(id, user.id, undefined, deps)).planId, saved.planId);
-      assert.equal(await tx.recipe.count({ where: { userId: user.id } }), 7);
+      assert.equal(await tx.recipe.count({ where: { userId: user.id } }), 8);
       assert.equal(await tx.recipe.count({ where: { userId: user.id, savedAt: { not: null } } }), 1);
       assert.equal(await tx.mealPlan.count({ where: { userId: user.id } }), 1);
+      await assert.rejects(changeMealPlanDraftMeal(id, user.id, { slot, expectedMeal: replacement, change: { kind: 'edit', meal: edited, nutrition: null } }, {}, deps), (error: any) => error.status === 409);
       await tx.mealPlan.create({ data: { userId: user.id, name: 'Manual plan', weekStartDate: new Date() } });
       await reserveMealPlanDraft(user.id, settings, 2, deps);
       await assert.rejects(reserveMealPlanDraft(user.id, settings, 2, deps), (error: any) => error.status === 403);
@@ -58,6 +71,6 @@ async function main() {
   assert.ok(complete);
   const [leftover] = await prisma.$queryRaw<Array<{ exists: boolean }>>`SELECT EXISTS (SELECT 1 FROM pg_namespace WHERE nspname = ${schema}) AS exists`;
   assert.equal(leftover.exists, false);
-  console.log('PASS real Postgres: migration/RLS/JSONB/dates, no autosave, owner checks, current allergy rejection, idempotent meal/plan saves, manual-plan quota exclusion. All test writes and temporary schema rolled back.');
+  console.log('PASS real Postgres: migration/RLS/JSONB/dates, no autosave, preview edit/replacement, stale edit refusal, saved-copy preservation, saved-plan refusal, owner checks, current allergy rejection, idempotent saves, manual-plan quota exclusion. All test writes and temporary schema rolled back.');
 }
 main().catch(error => { console.error(`Postgres check failed: ${error?.name ?? 'Error'} ${error?.code ?? ''}`); if (error instanceof assert.AssertionError) console.error(error.message); process.exitCode = 1; }).finally(() => prisma.$disconnect());

@@ -4,7 +4,7 @@ const { spawnSync } = require('node:child_process');
 const fs = require('node:fs');
 const checks = ['ai-fallback','audio-backup','auxiliary-ai-backup','chat-deletion','chef-chat','consumption-only','content-reports',
   'cooking-measurements','extraction-recovery','generation-provider-retry','generation-recovery',
-  'guest-recipe-handoff','import-adaptation','meal-plan-drafts','meal-plan-generation','meal-plan-safety',
+  'guest-recipe-handoff','import-adaptation','ingredient-quantities','meal-plan-draft-changes','meal-plan-drafts','meal-plan-generation','meal-plan-safety',
   'meal-replacement','mobile-content-reports','mobile-foundation','mobile-signup','native-repair',
   'nutrition-comparison','nutrition-estimate','offline-session','onboarding-analytics','optional-microphone',
   'pantry-inventory','partner-code','recipe-browser','recipe-comparison','recipe-detail','recipe-edit-backup',
