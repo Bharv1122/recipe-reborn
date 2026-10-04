@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { hasMetricCookingMeasures } from '../shared/cooking-measurements';
 import { expandedFoodTerms, findBlockedFoodInRecipe, normalizeFoodText } from './food-preferences';
 
 export const DAYS = [
@@ -44,6 +45,7 @@ export type MealPlanValidationCode =
   | 'allergen_detected'
   | 'disliked_ingredient'
   | 'prepared_shortcut'
+  | 'metric_units'
   | 'duplicate_meal';
 
 export interface MealPlanValidationError {
@@ -151,6 +153,7 @@ export function validateMeal(
     servings: number;
     allergies: string[];
     dislikedIngredients?: string[];
+    usMeasures?: boolean;
     day?: DayName;
     mealType?: MealType;
   },
@@ -185,6 +188,9 @@ export function validateMeal(
   }
   if (containsPreparedShortcut(meal)) {
     return { success: false, error: { code: 'prepared_shortcut', message: 'The meal relies on a prepared shortcut instead of basic ingredients.', day: options.day, mealType: options.mealType } };
+  }
+  if (options.usMeasures && hasMetricCookingMeasures([...meal.ingredients, meal.instructions])) {
+    return { success: false, error: { code: 'metric_units', message: 'Use U.S. cooking measures in ingredients and directions.', day: options.day, mealType: options.mealType } };
   }
   return { success: true, meal };
 }
@@ -229,7 +235,7 @@ export function parseMealPlanContent(content: string): unknown {
 
 export function validateMealPlan(
   value: unknown,
-  options: { mealTypes: MealType[]; servings: number; allergies: string[]; dislikedIngredients?: string[] },
+  options: { mealTypes: MealType[]; servings: number; allergies: string[]; dislikedIngredients?: string[]; usMeasures?: boolean },
 ): MealPlanValidationResult {
   if (!Array.isArray(value)) {
     return {

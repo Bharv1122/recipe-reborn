@@ -1,5 +1,19 @@
 # Recipe Reborn — Play privacy reconciliation
 
+## October 3 OpenAI backup candidate (not yet activated)
+
+The optional server switch `AI_PROVIDER=auto|openai` adds OpenAI Chat Completions
+as a recipient for signed-in recipe generation, meal-plan generation, and recipe
+or label reading. This can include ingredient/recipe text, saved dietary/allergy
+preferences, photos and PDFs. `auto` keeps Gemini primary; unset/`gemini` leaves
+the previous recipient behavior intact. Audio, anonymous generation, AI Chef,
+nutrition, adaptation and other tools still use Gemini in this bounded release.
+OpenAI requests set `store: false`; this does not establish zero retention or
+ephemeral processing. Review the OpenAI API processing terms/account settings
+before updating Play answers. Existing Gemini-specific service-provider evidence
+below is not evidence of OpenAI account terms. The public privacy-policy candidate
+names both providers. No Play Console form or store artifact was changed here.
+
 Prepared September 23, 2026 against current source. Package: `com.recipereborn.app`. The actual saved Play Console responses are unavailable; this is an answer matrix to reconcile with them, not a claim that the form was changed. The separate QA package is not the Play artifact. Existing EAS submission configuration targets **alpha**, so this is closed testing rather than an internal-only release.
 
 ## Minimum form changes to check

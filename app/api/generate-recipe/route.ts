@@ -1,7 +1,8 @@
+import { recipeChat, canRetryRecipeAI } from '@/lib/ai-provider';
 import { labelRecipePrompt } from '@/lib/label-recipe-prompt';
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
-import { AI_CHAT_URL, AI_API_KEY, MODEL_SMART } from '@/lib/ai';
+import { AI_API_KEY, MODEL_SMART } from '@/lib/ai';
 import { rateLimit } from '@/lib/rate-limit';
 import { resolvePartnerTrial } from '@/lib/partner-offer-server';
 import { z } from 'zod';
@@ -368,10 +369,10 @@ The legacy field name "freshIngredients" means the COMPLETE recipe ingredient li
       };
 
       try {
-        const modelResponse = await fetch(AI_CHAT_URL, {
+        const modelResponse = await recipeChat({
           ...llmRequest,
           signal: controller.signal,
-        });
+        }, { totalMs: generationDeadline - Date.now() });
         return {
           response: modelResponse,
           abort: () => controller.abort(),
@@ -395,7 +396,7 @@ The legacy field name "freshIngredients" means the COMPLETE recipe ingredient li
     if (!response?.ok) {
       logServerError('generation_model_non_ok', undefined, { status: response.status });
       modelStream.cleanup();
-      const retryDelay = generationRetryDelay(response, generationDeadline);
+      const retryDelay = canRetryRecipeAI(response) ? generationRetryDelay(response, generationDeadline) : null;
       await response.body?.cancel();
       if (retryDelay !== null) {
         await waitForGenerationRetry(retryDelay, request.signal);
@@ -429,7 +430,7 @@ The legacy field name "freshIngredients" means the COMPLETE recipe ingredient li
       let timedOut = false;
       const timeout = setTimeout(() => { timedOut = true; controller.abort(); }, remaining);
       try {
-        const review = await fetch(AI_CHAT_URL, {
+        const review = await recipeChat({
           method: 'POST',
           headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${AI_API_KEY}` },
           signal: controller.signal,
@@ -479,7 +480,7 @@ The legacy field name "freshIngredients" means the COMPLETE recipe ingredient li
       if (request.signal.aborted) controller.abort();
       try {
         return await withRequestDeadline(controller.signal, remaining, async signal => {
-          const repaired = await fetch(AI_CHAT_URL, {
+          const repaired = await recipeChat({
             method: 'POST', signal,
             headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${AI_API_KEY}` },
             body: JSON.stringify({ model: MODEL_SMART, stream: false, max_tokens: 6000, reasoning_effort: 'low', response_format: { type: 'json_object' },
@@ -519,6 +520,7 @@ The legacy field name "freshIngredients" means the COMPLETE recipe ingredient li
               if (line?.startsWith('data: ')) {
                 const data = line?.slice(6);
                 if (data === '[DONE]') {
+                  await reader?.cancel().catch(() => {});
                   try {
                     if (outputCanceled || request.signal.aborted || await wasGenerationCanceled(user.id, generationId.data)) {
                       throw new DOMException('Recipe generation canceled', 'AbortError');
@@ -603,6 +605,8 @@ The legacy field name "freshIngredients" means the COMPLETE recipe ingredient li
           );
           controller.close();
           return;
+        } finally {
+          await reader?.cancel().catch(() => {});
         }
 
         modelStream.cleanup();

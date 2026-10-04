@@ -6,7 +6,7 @@ import { hasPremiumAccess, premiumRequiredMessage } from '@/lib/entitlement';
 import { getRequestUserId } from '@/lib/request-auth';
 import { limitAiRequest } from '@/lib/ai-rate-limit';
 import { reserveMealPlanDraft, completeMealPlanDraft, failMealPlanDraft, getMealPlanDraft, listMealPlanDrafts, MealPlanDraftError } from '@/lib/meal-plan-drafts';
-import { MODEL_FAST } from '@/lib/ai';
+import { aiProviderMode } from '@/lib/ai-provider';
 import { generateValidatedPlan, MealPlanSafetyError, MealPlanProviderError } from '@/lib/meal-plan-generation';
 import { DEFAULT_TRIAL_DAYS } from '@/lib/partner-offers';
 import { resolvePartnerTrial } from '@/lib/partner-offer-server';
@@ -168,7 +168,7 @@ export async function POST(req: Request) {
     console.info('[meal-plan] completed', {
       requestId,
       mealCount: generated.plan.length * mealTypes.length,
-      model: MODEL_FAST,
+      configuredProviderMode: aiProviderMode(),
       attempts: generated.attempts,
       timingsMs: { profile: profileMs, ai: aiMs, database: databaseMs, total: totalMs },
     });

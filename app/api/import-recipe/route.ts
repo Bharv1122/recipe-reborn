@@ -1,4 +1,5 @@
 import { extractRecipe } from '@/lib/recipe-extraction';
+import { BackupInputError } from '@/lib/ai-provider';
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
 import { getRequestUserId } from '@/lib/request-auth';
@@ -102,6 +103,7 @@ export async function POST(req: NextRequest) {
     if (error instanceof RequestDeadlineError) return NextResponse.json({ error: error.message }, { status: 504 });
     if (error instanceof DOMException && error.name === 'AbortError') return NextResponse.json({ error: 'Recipe import canceled. Nothing was saved or charged.' }, { status: 499 });
     if (error instanceof ImportInputError) return NextResponse.json({ error: error.message }, { status: error.status });
+    if (error instanceof BackupInputError) return NextResponse.json({ error: "This photo format isn't supported right now. Please use a JPEG, PNG or WebP photo." }, { status: 415 });
     if (error instanceof SyntaxError) return NextResponse.json({ error: 'The source did not contain a readable complete recipe.' }, { status: 422 });
     console.error('[recipe-import] failed', error instanceof Error ? error.message : 'Unknown error');
     return NextResponse.json({ error: 'The recipe could not be read. Try a clearer photo or another supported source.' }, { status: 422 });

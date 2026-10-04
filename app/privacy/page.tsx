@@ -12,7 +12,7 @@ export default function PrivacyPage() {
             <Image src="/logo-mark.png" alt="Recipe Reborn emblem" width={48} height={48} className="h-12 w-12 rounded-full shadow-md" />
             <h1 className="text-4xl font-bold text-white">Privacy Policy</h1>
           </div>
-          <p className="text-emerald-50/90">Last updated: September 23, 2026</p>
+          <p className="text-emerald-50/90">Last updated: October 3, 2026</p>
         </div>
 
         {/* Content */}
@@ -68,7 +68,7 @@ export default function PrivacyPage() {
 
             <h3 className="text-xl font-semibold text-gray-800 mb-3 mt-6">2.4 Mobile Permissions and Device Storage</h3>
             <p className="text-gray-700 leading-relaxed mb-4">
-              Camera, photo selection, microphone, and notification features are optional. Microphone access is requested when you choose voice input. Recording occurs in the foreground, stops after one minute, and can be canceled. You can type instead. Photos and recordings that you submit leave your device and are processed through Recipe Reborn and Google Gemini to provide the requested feature.
+              Camera, photo selection, microphone, and notification features are optional. Microphone access is requested when you choose voice input. Recording occurs in the foreground, stops after one minute, and can be canceled. You can type instead. Photos and recordings that you submit leave your device and are processed through Recipe Reborn and its AI providers to provide the requested feature, as described below.
             </p>
             <p className="text-gray-700 leading-relaxed mb-4">
               The mobile app uses the device&apos;s secure credential storage for sign-in tokens and a limited cached profile: account ID, name, email, allergies, and disliked ingredients. It also keeps shopping lists and pending item check-offs in a local device database so previously loaded lists can work offline. Sign-out clears these credentials, cached profile, and shopping cache.
@@ -168,10 +168,10 @@ export default function PrivacyPage() {
           <section>
             <h2 className="text-2xl font-semibold text-gray-900 mb-4">9. Third-Party AI Services</h2>
             <p className="text-gray-700 leading-relaxed">
-              Recipe Reborn currently uses Google Gemini for recipe generation, photo analysis, voice transcription, AI Chef answers, and nutrition estimates. We send the content needed for your request, which may include ingredients, photos, audio, recipe details, recent chat messages, and saved allergy or dietary preferences. Our AI requests do not deliberately include your account email or sign-in credentials.
+              Recipe Reborn uses Google Gemini for its AI features. When the OpenAI backup is enabled, signed-in recipe generation, meal-plan generation, and recipe or label reading may use OpenAI instead, including when Gemini is unavailable. Voice transcription, AI Chef, nutrition estimates, and other AI tools continue to use Gemini. We send the content needed for your request, which may include ingredients, photos, audio, recipe details, recent chat messages, and saved allergy or dietary preferences. Our AI requests do not deliberately include your account email or sign-in credentials.
             </p>
             <p className="text-gray-700 leading-relaxed mt-4">
-              Google&apos;s processing is governed by the applicable <a href="https://ai.google.dev/gemini-api/terms" className="text-emerald-700 hover:underline">Gemini API terms</a>, including its data-use and security-related retention provisions. We do not promise that provider processing is memory-only or that every provider copy is deleted immediately after a response. Avoid including unrelated personal or confidential information in photos, recordings, or cooking questions.
+              OpenAI requests use its Chat Completions API with response storage disabled. Provider retention and safety logging may still apply under <a href="https://developers.openai.com/api/docs/guides/your-data" className="text-emerald-700 hover:underline">OpenAI&apos;s API data controls</a>. Google&apos;s processing is governed by the applicable <a href="https://ai.google.dev/gemini-api/terms" className="text-emerald-700 hover:underline">Gemini API terms</a>, including its data-use and security-related retention provisions. We do not promise that provider processing is memory-only or that every provider copy is deleted immediately after a response. Avoid including unrelated personal or confidential information in photos, recordings, or cooking questions.
             </p>
             <p className="text-gray-700 leading-relaxed mt-4">
               Product barcode lookups send the barcode to Open Food Facts through our server. A barcode lookup does not require uploading a photo of the barcode to that product-data service.
