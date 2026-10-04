@@ -34,6 +34,11 @@ function harness(entry, { analytics = 'pending', saveOk = true, loginError = fal
   const ui = new Proxy({}, { get: (_, name) => name === '__esModule' ? false : String(name) });
   const dependencies = {
     react: {
+      useRef(initial) {
+        const index = cursor++;
+        if (!(index in state)) state[index] = { current: initial };
+        return state[index];
+      },
       useState(initial) {
         const index = cursor++;
         if (!(index in state)) state[index] = typeof initial === 'function' ? initial() : initial;

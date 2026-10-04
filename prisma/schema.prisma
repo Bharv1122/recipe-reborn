@@ -320,6 +320,7 @@ model MealPlan {
   name          String
   weekStartDate DateTime // Start of the week for this meal plan
   description   String?  @db.Text
+  generationSettings Json? // Original plan exclusions survive preview expiration.
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
 

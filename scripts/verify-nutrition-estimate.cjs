@@ -16,11 +16,12 @@ async function bundle() {
   const mocks = {
     '@/lib/request-auth': 'export async function getRequestUserId(){ return globalThis.__nutritionQA.owner; }',
     '@/lib/rate-limit': 'export async function rateLimit(){ return {success: globalThis.__nutritionQA.rateAllowed}; }',
-    '@/lib/ai': "export const AI_API_KEY='synthetic', AI_CHAT_URL='https://provider.example.invalid', MODEL_FAST='gemini-2.5-flash-lite';",
+    '@/lib/ai': "export const AI_API_KEY='synthetic', AI_CHAT_URL='https://provider.example.invalid', AI_GENERATE_URL='https://provider.example.invalid/generate', MODEL_FAST='gemini-2.5-flash-lite';",
   };
   const built = await build({
     entryPoints: ['app/api/nutrition/estimate/route.ts'], bundle: true, platform: 'node', format: 'cjs', packages: 'external', write: false,
     plugins: [{ name: 'isolated-nutrition', setup(builder) {
+      builder.onResolve({ filter: /^\.\/ai$/ }, () => ({ path: '@/lib/ai', namespace: 'mock' }));
       builder.onResolve({ filter: /^@\/lib\/(request-auth|rate-limit|ai)$/ }, ({ path: name }) => ({ path: name, namespace: 'mock' }));
       builder.onLoad({ filter: /.*/, namespace: 'mock' }, ({ path: name }) => ({ contents: mocks[name], loader: 'js' }));
     } }],

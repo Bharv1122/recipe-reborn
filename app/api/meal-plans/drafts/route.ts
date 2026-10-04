@@ -113,7 +113,8 @@ export async function POST(req: Request) {
     const profileMs = Math.round(performance.now() - profileStartedAt);
 
     const settings = { weekStartDate, dietaryPreferences, calorieTarget, mealTypes, servings,
-      allergies, dislikedIngredients, preferredIngredients: profile?.likedIngredients ?? [] };
+      allergies, dislikedIngredients, preferredIngredients: profile?.likedIngredients ?? [],
+      accountDislikesAtCreation: profile?.dislikedIngredients ?? [] };
     draftId = await reserveMealPlanDraft(userId, settings,
       profile?.subscriptionStatus === 'trialing' && !partnerTrial?.fullPremium ? 2 : null);
     const aiStartedAt = performance.now();

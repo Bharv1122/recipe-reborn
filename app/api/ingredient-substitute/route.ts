@@ -1,7 +1,8 @@
 import { NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth/next';
 import { authOptions } from '@/lib/auth-options';
-import { AI_CHAT_URL, AI_API_KEY, MODEL_FAST } from '@/lib/ai';
+import { MODEL_FAST } from '@/lib/ai';
+import { recipeChat } from '@/lib/ai-provider';
 import { limitAiRequest } from '@/lib/ai-rate-limit';
 
 export async function POST(req: Request) {
@@ -23,12 +24,10 @@ export async function POST(req: Request) {
       );
     }
 
-    const response = await fetch(AI_CHAT_URL, {
+    const response = await recipeChat({
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${AI_API_KEY}`,
-      },
+      headers: { 'Content-Type': 'application/json' },
+      signal: req.signal,
       body: JSON.stringify({
         model: MODEL_FAST,
         messages: [
@@ -54,26 +53,30 @@ export async function POST(req: Request) {
         temperature: 0.7,
         response_format: { type: 'json_object' },
       }),
-    });
+    }, { totalMs: 45_000 });
 
     if (!response.ok) {
       throw new Error('Failed to get substitutes from AI');
     }
 
     const data = await response.json();
-    const content = data.choices?.[0]?.message?.content;
+    const choice = data?.choices?.[0];
+    const content = choice?.message?.content;
 
-    if (!content) {
-      throw new Error('No content in AI response');
+    // Refused, truncated or otherwise unfinished answers are never accepted.
+    if (choice?.finish_reason !== 'stop' || choice?.message?.refusal || typeof content !== 'string' || !content) {
+      throw new Error('No complete content in AI response');
     }
 
     const substitutes = JSON.parse(content);
 
     return NextResponse.json(substitutes);
-  } catch (error: any) {
-    console.error('Substitute API error:', error);
+  } catch (error) {
+    if (req.signal.aborted) return new NextResponse(null, { status: 499 });
+    // Raw errors can quote provider output; never log or return them.
+    console.error('Substitute API error:', error instanceof Error ? error.name : 'Unknown error');
     return NextResponse.json(
-      { error: error?.message || 'Failed to get ingredient substitutes' },
+      { error: 'Failed to get ingredient substitutes' },
       { status: 500 }
     );
   }

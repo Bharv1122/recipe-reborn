@@ -6,6 +6,7 @@
     "build": "prisma generate && next build",
     "start": "next start",
     "lint": "eslint .",
+    "verify:offline": "node scripts/verify-offline.cjs",
     "verify:meal-plan": "tsx scripts/verify-meal-plan-safety.ts",
     "verify:meal-plan-generation": "tsx scripts/verify-meal-plan-generation.ts",
     "verify:chef-chat": "node scripts/verify-chef-chat.cjs",

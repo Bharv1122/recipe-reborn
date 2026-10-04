@@ -2,8 +2,10 @@ import { getServerSession } from 'next-auth';
 import { NextResponse } from 'next/server';
 import { authOptions } from '@/lib/auth-options';
 import { prisma } from '@/lib/db';
-import { AI_CHAT_URL, AI_API_KEY, MODEL_FAST } from '@/lib/ai';
+import { MODEL_FAST } from '@/lib/ai';
+import { recipeChat, canRetryRecipeAI, ProviderConnectionError } from '@/lib/ai-provider';
 import { extractJsonPayload } from '@/lib/ai-json';
+import { RequestDeadlineError, withRequestDeadline } from '@/lib/request-deadline';
 import { lookupNutrients } from '@/lib/usda';
 import { nullableNutritionNumber, type FreshNutritionEstimate, type NutritionValues } from '@/lib/nutrition-facts';
 import { recipeComparisonSchema } from '@/lib/recipe-comparison-validation';
@@ -17,32 +19,55 @@ interface ParsedIngredient {
 // Minimum share of total ingredient weight that must resolve against USDA
 // before we trust the hybrid sum over the pure-AI estimate.
 const MIN_USDA_COVERAGE = 0.6;
+// One deadline covers the hybrid parse, USDA lookups and the fallback estimate.
+const NUTRITION_DEADLINE_MS = 50_000;
 
-async function callGemini(system: string, user: string): Promise<string> {
-  const response = await fetch(AI_CHAT_URL, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${AI_API_KEY}`,
-    },
-    body: JSON.stringify({
-      model: MODEL_FAST,
-      messages: [
-        { role: 'system', content: system },
-        { role: 'user', content: user },
-      ],
-      temperature: 0.2,
-      // gemini-2.5-flash thinking tokens count against this budget
-      max_tokens: 6000,
-    }),
-  });
+// retryable is false when another AI call would repeat a failed backup call
+// or re-ask after a refusal.
+class NutritionProviderError extends Error {
+  constructor(readonly retryable: boolean) { super('Nutrition provider failed'); }
+}
+
+async function callGemini(system: string, user: string, signal: AbortSignal): Promise<string> {
+  let response: Response;
+  try {
+    response = await recipeChat({
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      signal,
+      body: JSON.stringify({
+        model: MODEL_FAST,
+        messages: [
+          { role: 'system', content: system },
+          { role: 'user', content: user },
+        ],
+        temperature: 0.2,
+        // gemini-2.5-flash thinking tokens count against this budget
+        max_tokens: 6000,
+      }),
+    }, { totalMs: NUTRITION_DEADLINE_MS });
+  } catch (error) {
+    signal.throwIfAborted();
+    // Only a Gemini-only connection failure may be retried by the next estimate.
+    throw new NutritionProviderError(error instanceof ProviderConnectionError);
+  }
 
   if (!response.ok) {
-    throw new Error(`AI request failed: ${response.status}`);
+    await response.body?.cancel();
+    throw new NutritionProviderError(canRetryRecipeAI(response));
   }
 
   const data = await response.json();
-  return data.choices[0]?.message?.content || '';
+  const choice = data.choices?.[0];
+  // A refusal or safety stop is an answer, not an outage: never ask again.
+  if (choice?.message?.refusal || choice?.finish_reason === 'content_filter') {
+    throw new NutritionProviderError(false);
+  }
+  // Truncated, missing or unknown finish reasons are not usable answers.
+  if (choice?.finish_reason !== 'stop' || typeof choice?.message?.content !== 'string') {
+    throw new Error('Nutrition provider did not complete its response');
+  }
+  return choice.message.content;
 }
 
 function parseJsonReply(content: string): any {
@@ -52,7 +77,8 @@ function parseJsonReply(content: string): any {
 // Step 1 of the hybrid path: Gemini turns free-form ingredient lines into
 // generic food names + gram weights that USDA search can resolve.
 async function parseIngredients(
-  freshIngredients: string
+  freshIngredients: string,
+  signal: AbortSignal
 ): Promise<ParsedIngredient[]> {
   const prompt = `Parse each recipe ingredient line into a generic food name and its total weight in grams.
 
@@ -69,7 +95,8 @@ Return JSON:
 
   const content = await callGemini(
     'You parse recipe ingredients into structured data. Return only valid JSON without any markdown formatting or code blocks.',
-    prompt
+    prompt,
+    signal
   );
 
   const parsed = parseJsonReply(content);
@@ -90,14 +117,11 @@ Return JSON:
 // is too thin to trust (caller falls back to the pure-AI estimate).
 async function usdaHybridEstimate(
   freshIngredients: string,
-  servings: number
+  servings: number,
+  signal: AbortSignal
 ): Promise<NutritionValues | null> {
-  const ingredients = await parseIngredients(freshIngredients);
+  const ingredients = await parseIngredients(freshIngredients, signal);
   if (ingredients.length === 0) return null;
-
-  console.log(
-    `[nutrition] parsed: ${ingredients.map((i) => `${i.name}=${i.grams}g`).join(', ')}`
-  );
 
   const lookups = await Promise.all(
     ingredients.map((ing) => lookupNutrients(ing.name))
@@ -150,7 +174,8 @@ async function geminiEstimate(
   title: string,
   freshIngredients: string,
   instructions: string,
-  servings: number
+  servings: number,
+  signal: AbortSignal
 ): Promise<NutritionValues> {
   const prompt = `Analyze the nutritional content of this recipe and provide estimates per serving:
 
@@ -177,14 +202,16 @@ Be as accurate as possible based on standard nutritional data for these ingredie
 
   const content = await callGemini(
     'You are a nutritionist analyzing recipes. Return only valid JSON without any markdown formatting or code blocks.',
-    prompt
+    prompt,
+    signal
   );
 
   let nutrition;
   try {
     nutrition = parseJsonReply(content);
-  } catch (parseError) {
-    console.error('Failed to parse nutrition response:', content);
+  } catch {
+    // Never log model output; it echoes the user's recipe.
+    console.error('Failed to parse nutrition response');
     throw new Error('Failed to parse nutrition data from AI response');
   }
 
@@ -250,25 +277,28 @@ export async function POST(req: Request, props: { params: Promise<{ id: string }
     }
 
     // Hybrid first (real USDA data), pure-AI estimate as fallback
-    let nutrition: NutritionValues | null = null;
-    let sourceLabel = 'Estimated from recipe ingredients with Gemini';
-    try {
-      nutrition = await usdaHybridEstimate(recipe.freshIngredients, servings);
-      if (nutrition) {
-        sourceLabel = 'USDA-backed estimate from parsed ingredient amounts';
+    let sourceLabel = 'AI estimate from recipe ingredients';
+    const nutrition = await withRequestDeadline(req.signal, NUTRITION_DEADLINE_MS, async (signal) => {
+      try {
+        const hybrid = await usdaHybridEstimate(recipe.freshIngredients, servings, signal);
+        if (hybrid) {
+          sourceLabel = 'USDA-backed estimate from parsed ingredient amounts';
+          return hybrid;
+        }
+      } catch (hybridError) {
+        // A failed backup call, refusal or deadline must not start a second AI call.
+        if (signal.aborted || (hybridError instanceof NutritionProviderError && !hybridError.retryable)) throw hybridError;
+        console.error('USDA hybrid estimate failed:', hybridError instanceof Error ? hybridError.name : 'Unknown error');
       }
-    } catch (hybridError) {
-      console.error('USDA hybrid estimate failed:', hybridError);
-    }
 
-    if (!nutrition) {
-      nutrition = await geminiEstimate(
+      return geminiEstimate(
         recipe.title,
         recipe.freshIngredients,
         recipe.instructions,
-        servings
+        servings,
+        signal
       );
-    }
+    });
 
     const freshNutrition: FreshNutritionEstimate = {
       ...nutrition,
@@ -305,7 +335,14 @@ export async function POST(req: Request, props: { params: Promise<{ id: string }
     }
     return NextResponse.json(freshNutrition);
   } catch (error) {
-    console.error('Error analyzing nutrition:', error);
+    if (req.signal.aborted) return new NextResponse(null, { status: 499 });
+    if (error instanceof RequestDeadlineError) {
+      return NextResponse.json({ error: 'Nutrition took too long. Please try again.' }, { status: 504 });
+    }
+    if (error instanceof NutritionProviderError) {
+      return NextResponse.json({ error: 'Nutrition is temporarily unavailable. Please try again.' }, { status: 503 });
+    }
+    console.error('Error analyzing nutrition:', error instanceof Error ? error.name : 'Unknown error');
     return NextResponse.json(
       { error: 'Failed to analyze nutrition' },
       { status: 500 }

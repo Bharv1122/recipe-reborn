@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth-options';
-import { AI_CHAT_URL, AI_API_KEY, MODEL_FAST } from '@/lib/ai';
+import { MODEL_FAST } from '@/lib/ai';
+import { recipeChat, hasRecipeAIKey } from '@/lib/ai-provider';
 import { extractJsonPayload } from '@/lib/ai-json';
 import { ENTITLEMENT_SELECT, hasPremiumAccess, premiumRequiredMessage } from '@/lib/entitlement';
 import { prisma } from '@/lib/db';
@@ -43,8 +44,7 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const apiKey = AI_API_KEY;
-    if (!apiKey) {
+    if (!hasRecipeAIKey()) {
       return NextResponse.json(
         { error: 'AI API key not configured' },
         { status: 500 }
@@ -73,12 +73,10 @@ Provide 3 wine pairing recommendations in JSON format with the following structu
 
 Keep descriptions concise (2-3 sentences).`;
 
-    const response = await fetch(AI_CHAT_URL, {
+    const response = await recipeChat({
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${apiKey}`,
-      },
+      headers: { 'Content-Type': 'application/json' },
+      signal: req.signal,
       body: JSON.stringify({
         model: MODEL_FAST,
         messages: [
@@ -95,25 +93,28 @@ Keep descriptions concise (2-3 sentences).`;
         // gemini-2.5-flash thinking tokens count against this budget
         max_tokens: 4000,
       }),
-    });
+    }, { totalMs: 45_000 });
 
     if (!response.ok) {
       throw new Error('Failed to get wine pairing recommendations');
     }
 
     const data = await response.json();
-    const content = data.choices?.[0]?.message?.content;
+    const choice = data?.choices?.[0];
+    const content = choice?.message?.content;
 
-    if (!content) {
-      throw new Error('No content in response');
+    // Refused, truncated or otherwise unfinished answers are never accepted.
+    if (choice?.finish_reason !== 'stop' || choice?.message?.refusal || typeof content !== 'string' || !content) {
+      throw new Error('No complete content in response');
     }
 
     // Try to parse JSON from the response
     let winePairing;
     try {
       winePairing = JSON.parse(extractJsonPayload(content));
-    } catch (parseError) {
-      console.error('Failed to parse wine pairing JSON:', parseError);
+    } catch {
+      // Parser messages can quote model output, so log only the event.
+      console.error('Failed to parse wine pairing JSON');
       // Return a default response if parsing fails
       winePairing = {
         pairings: [
@@ -130,7 +131,8 @@ Keep descriptions concise (2-3 sentences).`;
 
     return NextResponse.json(winePairing);
   } catch (error) {
-    console.error('Error getting wine pairing:', error);
+    if (req.signal.aborted) return new NextResponse(null, { status: 499 });
+    console.error('Error getting wine pairing:', error instanceof Error ? error.name : 'Unknown error');
     return NextResponse.json(
       { error: 'Failed to get wine pairing recommendations' },
       { status: 500 }

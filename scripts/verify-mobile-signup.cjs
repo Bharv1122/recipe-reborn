@@ -36,7 +36,7 @@ function find(node, predicate) {
     const common = {
       react: 'export const useState=(...a)=>globalThis.mobileSignupHooks.useState(...a); export const useCallback=f=>f; export const useEffect=()=>{}; export const useMemo=f=>f(); export const createContext=()=>({Provider:"AuthProvider"}); export const useContext=()=>null;',
       'react/jsx-runtime': 'export const jsx=(type,props)=>({type,props}); export const jsxs=jsx; export const Fragment="Fragment";',
-      'react-native': 'export const Platform={OS:"android"}; export const StyleSheet={create:x=>x}; export const KeyboardAvoidingView="KeyboardAvoidingView",ScrollView="ScrollView",Text="Text",View="View",Pressable="Pressable";',
+      'react-native': 'export const AppState={currentState:"active",addEventListener:()=>({remove(){}})}; export const Platform={OS:"android"}; export const StyleSheet={create:x=>x}; export const KeyboardAvoidingView="KeyboardAvoidingView",ScrollView="ScrollView",Text="Text",View="View",Pressable="Pressable";',
       'expo-router': 'export const Link="Link";',
       '@/components/ui': 'export const Button="Button",Card="Card",Field="Field",InlineError="InlineError",Screen="Screen";',
     };

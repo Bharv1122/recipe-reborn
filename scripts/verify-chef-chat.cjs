@@ -19,11 +19,12 @@ async function bundle(entry, apiKey = 'synthetic-provider-key') {
       if (globalThis.chefChatQA.databaseError) throw new Error('PRIVATE_DATABASE_ERROR');
       return globalThis.chefChatQA.user;
     } } };`,
-    '@/lib/ai': `export const AI_API_KEY=${JSON.stringify(apiKey)}, AI_CHAT_URL='https://provider.example.invalid/chat', MODEL_FAST='gemini-2.5-flash-lite';`,
+    '@/lib/ai': `export const AI_API_KEY=${JSON.stringify(apiKey)}, AI_CHAT_URL='https://provider.example.invalid/chat', AI_GENERATE_URL='https://provider.example.invalid/generate', MODEL_FAST='gemini-2.5-flash-lite';`,
   };
   const result = await esbuild.build({
     entryPoints: [entry], bundle: true, platform: 'node', format: 'cjs', write: false,
     packages: 'external', plugins: [{ name: 'isolated-chef-chat', setup(build) {
+      build.onResolve({ filter: /^\.\/ai$/ }, () => ({ path: '@/lib/ai', namespace: 'mock' }));
       for (const [name, contents] of Object.entries(mocks)) {
         const filter = new RegExp('^' + name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '$');
         build.onResolve({ filter }, () => ({ path: name, namespace: 'mock' }));
@@ -74,7 +75,7 @@ function nativeToken(options = {}) {
 async function check(name, run) {
   reset();
   await run();
-  assert.equal(state.clearedTimers.length, state.timers.length, name + ': timers must be cleared on every path');
+  assert.deepEqual(new Set(state.clearedTimers), new Set(state.timers), name + ': timers must be cleared on every path');
   assert.doesNotMatch(JSON.stringify(state.logs), /PRIVATE_|synthetic-provider-key|shellfish|cilantro|What can I cook/);
   passed++;
   console.log('PASS:', name);
@@ -92,7 +93,7 @@ async function main() {
   };
   // Deterministic timeout triggering: never wait 45 seconds or contact a network.
   global.setTimeout = (callback, duration) => {
-    assert.equal(duration, 45_000);
+    assert(duration > 0 && duration <= 45_000, 'Every provider timer stays within the route deadline');
     const timer = { callback, duration };
     state.timers.push(timer);
     return timer;
@@ -218,7 +219,7 @@ async function main() {
         options.signal.addEventListener('abort', () => reject(new Error('PRIVATE_ABORT_ERROR')), { once: true });
         state.timers[0].callback();
       });
-      state.reply = stage === 'fetch' ? stalled : async options => ({ ok: true, json: () => stalled(options) });
+      state.reply = stage === 'fetch' ? stalled : async options => ({ ok: true, status: 200, headers: new Headers(), arrayBuffer: () => stalled(options) });
       assert.equal((await website.POST(request())).status, 504);
       assert.equal(state.calls[0].options.signal.aborted, true);
     });

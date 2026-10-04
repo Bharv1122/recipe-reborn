@@ -1,7 +1,8 @@
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth-options';
 import { NextRequest, NextResponse } from 'next/server';
-import { AI_CHAT_URL, AI_API_KEY, MODEL_FAST } from '@/lib/ai';
+import { MODEL_FAST } from '@/lib/ai';
+import { recipeChat, BackupTransportError, ProviderConnectionError } from '@/lib/ai-provider';
 import { limitAiRequest } from '@/lib/ai-rate-limit';
 
 export const dynamic = 'force-dynamic';
@@ -55,12 +56,12 @@ Be warm, encouraging, and enthusiastic about healthy cooking!`
       ...messages
     ];
 
-    const response = await fetch(AI_CHAT_URL, {
+    // The deadline covers the whole stream. Provider fallback can only happen
+    // before the first byte, so a client never receives two partial answers.
+    const response = await recipeChat({
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${AI_API_KEY}`,
-      },
+      headers: { 'Content-Type': 'application/json' },
+      signal: request.signal,
       body: JSON.stringify({
         model: MODEL_FAST,
         messages: apiMessages,
@@ -68,42 +69,20 @@ Be warm, encouraging, and enthusiastic about healthy cooking!`
         max_tokens: 500,
         temperature: 0.7,
       }),
-    });
+    }, { totalMs: 45_000 });
 
-    if (!response?.ok) {
-      const errorText = await response?.text();
-      console.error('LLM API error:', errorText);
+    if (!response.ok || !response.body) {
+      // Never log provider bodies; they can echo the conversation.
+      console.error('LLM API error:', response.status);
+      await response.body?.cancel();
       return NextResponse.json(
         { error: 'Failed to process voice chat request' },
-        { status: response?.status ?? 500 }
+        { status: response.ok ? 502 : response.status }
       );
     }
 
-    // Stream the response back to the client
-    const stream = new ReadableStream({
-      async start(controller) {
-        const reader = response?.body?.getReader();
-        const decoder = new TextDecoder();
-        const encoder = new TextEncoder();
-
-        try {
-          while (true) {
-            const { done, value } = (await reader?.read()) ?? { done: true, value: undefined };
-            if (done) break;
-
-            const chunk = decoder.decode(value);
-            controller.enqueue(encoder.encode(chunk));
-          }
-        } catch (error) {
-          console.error('Stream error:', error);
-          controller.error(error);
-        } finally {
-          controller.close();
-        }
-      },
-    });
-
-    return new Response(stream, {
+    // Pass provider bytes through untouched; cancelling this body aborts the provider.
+    return new Response(response.body, {
       headers: {
         'Content-Type': 'text/plain; charset=utf-8',
         'Cache-Control': 'no-cache',
@@ -111,7 +90,14 @@ Be warm, encouraging, and enthusiastic about healthy cooking!`
       },
     });
   } catch (error) {
-    console.error('Voice chat error:', error);
+    if (request.signal.aborted) return new NextResponse(null, { status: 499 });
+    if ((error as { name?: string })?.name === 'TimeoutError') {
+      return NextResponse.json({ error: 'Voice chat took too long. Please try again.' }, { status: 504 });
+    }
+    if (error instanceof BackupTransportError || error instanceof ProviderConnectionError) {
+      return NextResponse.json({ error: 'Voice chat is temporarily unavailable. Please try again.' }, { status: 503 });
+    }
+    console.error('Voice chat error:', error instanceof Error ? error.name : 'Unknown error');
     return NextResponse.json(
       { error: 'Internal server error' },
       { status: 500 }
