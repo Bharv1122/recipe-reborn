@@ -2,8 +2,10 @@ import { getServerSession } from 'next-auth';
 import { NextResponse } from 'next/server';
 import { authOptions } from '@/lib/auth-options';
 import { prisma } from '@/lib/db';
-import { AI_CHAT_URL, AI_API_KEY, MODEL_FAST } from '@/lib/ai';
+import { MODEL_FAST } from '@/lib/ai';
+import { recipeChat } from '@/lib/ai-provider';
 import { limitAiRequest } from '@/lib/ai-rate-limit';
+import { parseStoredRecipeList } from '@/lib/recipe-list';
 
 // POST /api/recipes/[id]/scale - Scale a recipe
 export async function POST(req: Request, props: { params: Promise<{ id: string }> }) {
@@ -19,7 +21,7 @@ export async function POST(req: Request, props: { params: Promise<{ id: string }
 
     const { scaleFactor } = await req.json();
 
-    if (!scaleFactor || scaleFactor <= 0) {
+    if (typeof scaleFactor !== 'number' || !Number.isFinite(scaleFactor) || scaleFactor <= 0) {
       return NextResponse.json(
         { error: 'Valid scale factor is required' },
         { status: 400 }
@@ -50,14 +52,11 @@ For example, if scaling by 2x:
 - "1/2 tsp salt" becomes "1 tsp salt"
 - "3 eggs" becomes "6 eggs"`;
 
-    const response = await fetch(
-      AI_CHAT_URL,
+    const response = await recipeChat(
       {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${AI_API_KEY}`,
-        },
+        headers: { 'Content-Type': 'application/json' },
+        signal: req.signal,
         body: JSON.stringify({
           model: MODEL_FAST,
           messages: [
@@ -74,7 +73,8 @@ For example, if scaling by 2x:
           temperature: 0.3,
           max_tokens: 2000,
         }),
-      }
+      },
+      { totalMs: 45_000 }
     );
 
     if (!response.ok) {
@@ -82,8 +82,17 @@ For example, if scaling by 2x:
     }
 
     const data = await response.json();
-    const scaledIngredients =
-      data.choices[0]?.message?.content?.trim() || recipe.freshIngredients;
+    const choice = data?.choices?.[0];
+    // A refused, truncated or unfinished answer is a failure, never the
+    // unscaled original presented as scaled.
+    if (choice?.finish_reason !== 'stop' || choice?.message?.refusal || typeof choice?.message?.content !== 'string') {
+      throw new Error('Scale provider did not complete its response');
+    }
+    const scaledIngredients = choice.message.content.trim();
+    const originalCount = parseStoredRecipeList(recipe.freshIngredients).length;
+    if (!scaledIngredients || parseStoredRecipeList(scaledIngredients).length !== originalCount) {
+      throw new Error('Scaled ingredients did not match the recipe');
+    }
 
     // Calculate scaled servings
     const originalServings = parseInt(recipe.servings || '1');
@@ -106,7 +115,8 @@ For example, if scaling by 2x:
       nutrition: scaledNutrition,
     });
   } catch (error) {
-    console.error('Error scaling recipe:', error);
+    if (req.signal.aborted) return new NextResponse(null, { status: 499 });
+    console.error('Error scaling recipe:', error instanceof Error ? error.name : 'Unknown error');
     return NextResponse.json(
       { error: 'Failed to scale recipe' },
       { status: 500 }

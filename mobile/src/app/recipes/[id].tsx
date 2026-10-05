@@ -1,19 +1,15 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Alert, ScrollView, StyleSheet, Text } from 'react-native';
+import { Alert, Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
 import { Button, Card, InlineError, Screen } from '@/components/ui';
+import { RecipeDetail, type DetailSave } from '@/components/recipe-detail';
 import { apiRequest } from '@/services/api';
 import { getRecipe } from '@/services/recipes';
 import { stageShoppingDraft } from '@/services/shopping-handoff';
+import { importDraft, importSnapshot } from '@/services/recipe-import';
+import { ReportContentAction } from '@/components/report-content';
 import type { Recipe } from '@/types';
 import { colors } from '@/theme';
-import { RecipeComparison } from '@/components/recipe-comparison';
-import { ReportContentAction } from '@/components/report-content';
-
-function parseArray(value: string): string[] {
-  try { const parsed = JSON.parse(value); return Array.isArray(parsed) ? parsed.map(String) : [value]; }
-  catch { return value.split('\n').map((item) => item.trim()).filter(Boolean); }
-}
 
 export default function RecipeDetailScreen() {
   const { id, justSaved } = useLocalSearchParams<{ id: string; justSaved?: string }>();
@@ -21,54 +17,67 @@ export default function RecipeDetailScreen() {
   const [recipe, setRecipe] = useState<Recipe | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [showMore, setShowMore] = useState(false);
-  useEffect(() => { if (id) getRecipe(id).then((data) => setRecipe(data.recipe)).catch((value) => setError(value.message)); }, [id]);
-  const ingredients = useMemo(() => recipe ? parseArray(recipe.freshIngredients) : [], [recipe]);
-  const instructions = useMemo(() => recipe ? parseArray(recipe.instructions) : [], [recipe]);
-
-  const remove = () => Alert.alert('Delete recipe?', 'This removes the saved recipe and its collection/meal-plan links.', [
+  const [changed, setChanged] = useState(false);
+  useEffect(() => {
+    let active = true;
+    if (id) getRecipe(id).then(data => { if (active) { importSnapshot(importDraft(data.recipe)); setRecipe(data.recipe); } }).catch(value => { if (active) setError(value.message); });
+    return () => { active = false; };
+  }, [id]);
+  const initial = useMemo(() => recipe ? importSnapshot(importDraft(recipe)) : null, [recipe]);
+  const save = async ({ recipe: shown, nutrition, changed: edited, allowLeave }: DetailSave) => {
+    if (!recipe) return;
+    if (!edited) {
+      if (!recipe.savedAt) {
+        const result = await apiRequest<{ recipe: Recipe }>('/api/mobile/recipes/' + encodeURIComponent(recipe.id), { method: 'PATCH', body: JSON.stringify({ saveToLibrary: true }) });
+        setRecipe(result.recipe);
+      }
+      Alert.alert('Saved', 'This recipe is in My recipes.');
+      return;
+    }
+    const result = await apiRequest<{ recipe: Recipe }>('/api/mobile/recipes', {
+      method: 'POST', body: JSON.stringify({ ...shown, originalIngredients: recipe.originalIngredients || initial!.freshIngredients.join('\n'), librarySource: recipe.librarySource === 'imported' ? 'imported' : 'generated',
+        ...(recipe.importSourceSnapshot ? { importSourceSnapshot: recipe.importSourceSnapshot } : {}),
+        comparisonSnapshot: { version: 1, source: recipe.comparisonSnapshot?.source ?? 'dish', originalNutrition: recipe.comparisonSnapshot?.originalNutrition ?? null, freshNutrition: nutrition },
+      }),
+    });
+    allowLeave();
+    router.replace({ pathname: '/recipes/[id]', params: { id: result.recipe.id, justSaved: '1' } });
+  };
+  const remove = () => Alert.alert('Remove from My recipes?', 'The recipe stays in meal plans and collections that already use it.', [
     { text: 'Cancel', style: 'cancel' },
-    { text: 'Delete', style: 'destructive', onPress: async () => {
-      try { await apiRequest(`/api/mobile/recipes/${id}`, { method: 'DELETE' }); router.back(); }
-      catch (value) { setError(value instanceof Error ? value.message : 'Could not delete recipe.'); }
+    { text: 'Remove', style: 'destructive', onPress: async () => {
+      try { await apiRequest('/api/mobile/recipes/' + encodeURIComponent(id), { method: 'DELETE' }); router.back(); }
+      catch (value) { setError(value instanceof Error ? value.message : 'Could not remove the saved recipe.'); }
     } },
   ]);
-
-  return <Screen>
-    <Stack.Screen options={{ headerShown: true, title: recipe?.title || 'Recipe', headerTintColor: colors.green }} />
-    <ScrollView contentContainerStyle={styles.content}>
-      <InlineError message={error} />
-      {recipe ? <Card>
-        {justSaved === '1' ? <Text style={styles.heading}>Saved in My recipes</Text> : null}
-        <Text style={styles.title}>{recipe.title}</Text>
-        <Text style={styles.meta}>{[recipe.prepTime, recipe.cookTime, recipe.servings && `${recipe.servings} servings`].filter(Boolean).join(' · ')}</Text>
-        <Button label="Add to a meal plan" onPress={() => router.push({ pathname: '/meal-plans', params: { recipeId: recipe.id } })} />
-        <Button label="Shop for these ingredients" secondary onPress={() => { stageShoppingDraft({ title: recipe.title, ingredients }); router.push('/(tabs)/shopping'); }} />
-        <Text style={styles.heading}>Fresh ingredients</Text>
-        {ingredients.map((item, index) => <Text key={`${item}-${index}`} style={styles.body}>• {item}</Text>)}
-        <Text style={styles.heading}>Instructions</Text>
-        {instructions.map((item, index) => <Text key={`${index}-${item}`} style={styles.body}>{index + 1}. {item}</Text>)}
-        <Button label="Need cooking help? Ask AI Chef" secondary onPress={() => router.push('/chat')} />
+  if (!recipe || recipe.id !== id || !initial) return <Screen><InlineError message={error} /><Text>Loading recipe…</Text></Screen>;
+  return <>
+    <Stack.Screen options={{ headerShown: true, title: 'Your recipe', headerTintColor: colors.white, headerStyle: { backgroundColor: colors.green }, headerRight: () => <Pressable accessibilityRole="button" accessibilityLabel="Recipe options" onPress={() => setShowMore(true)} style={styles.menuTrigger}><Text style={styles.menuIcon}>⋮</Text></Pressable> }} />
+    <RecipeDetail key={recipe.id} initial={initial} sourceRecipe={recipe.importSourceSnapshot} saved={Boolean(recipe.savedAt)} originalIngredients={recipe.originalIngredients} savedNutrition={recipe.comparisonSnapshot?.freshNutrition} packageNutrition={recipe.comparisonSnapshot?.originalNutrition} isPackage={recipe.comparisonSnapshot?.source === 'label'} onSave={save} onChange={setChanged}
+      intro={<><InlineError message={error} />{justSaved === '1' ? <Text style={{ color: colors.green }}>Saved in My recipes</Text> : null}</>}
+      extra={<Card>
+        {recipe.librarySource === 'imported' && !recipe.importSourceSnapshot ? <Text style={{ color: colors.muted }}>This older import has no preserved source; source revert is unavailable.</Text> : null}
+        <View style={styles.actions}>
+          <Pressable accessibilityRole="button" accessibilityLabel="Add to meal plan" disabled={changed} style={[styles.action, changed && styles.disabled]} onPress={() => router.push({ pathname: '/meal-plans', params: { recipeId: recipe.id } })}><Text style={styles.actionIcon}>▦</Text><Text style={styles.actionLabel}>Add to meal plan</Text></Pressable>
+          <Pressable accessibilityRole="button" accessibilityLabel="Shop for these ingredients" disabled={changed} style={[styles.action, changed && styles.disabled]} onPress={() => { stageShoppingDraft({ title: recipe.title, ingredients: initial.freshIngredients }); router.push('/(tabs)/shopping'); }}><Text style={styles.actionIcon}>🛒</Text><Text style={styles.actionLabel}>Shop</Text></Pressable>
+          <Pressable accessibilityRole="button" accessibilityLabel="Ask AI Chef" style={styles.action} onPress={() => router.push('/chat')}><Text style={styles.actionIcon}>✦</Text><Text style={styles.actionLabel}>Ask Chef</Text></Pressable>
+        </View>
+        {changed ? <Text style={{ color: colors.muted }}>Save your new copy before adding it to a meal plan or shopping for all ingredients.</Text> : null}
+      </Card>} />
+    <Modal visible={showMore} transparent animationType="fade" onRequestClose={() => setShowMore(false)}>
+      <View style={styles.backdrop}><View accessibilityViewIsModal style={styles.modal}><ScrollView contentContainerStyle={styles.menu}>
+        <Text style={styles.heading}>Recipe options</Text>
+        {recipe.savedAt ? <Button label="Add to collection" secondary disabled={changed} onPress={() => { setShowMore(false); router.push({ pathname: '/collections', params: { recipeId: recipe.id } }); }} /> : null}
         <ReportContentAction target={{ source: 'saved', recipeId: recipe.id }} />
-        <Button label={showMore ? 'Hide recipe options' : 'More recipe options'} secondary onPress={() => setShowMore(!showMore)} />
-        {showMore ? <>
-          <Button label="Add to collection" secondary onPress={() => router.push({ pathname: '/collections', params: { recipeId: recipe.id } })} />
-          <Button label="Delete saved recipe" secondary onPress={remove} />
-        </> : null}
-      </Card> : <Text style={styles.meta}>Loading recipe…</Text>}
-      {recipe?.comparisonSnapshot ? <RecipeComparison
-        key={recipe.id}
-        recipe={{ title: recipe.title, freshIngredients: ingredients, instructions, prepTime: recipe.prepTime || '', cookTime: recipe.cookTime || '', servings: recipe.servings || '' }}
-        originalIngredients={recipe.originalIngredients}
-        original={recipe.comparisonSnapshot.originalNutrition}
-        isPackage={recipe.comparisonSnapshot.source === 'label'}
-        savedNutrition={recipe.comparisonSnapshot.freshNutrition}
-        estimateOnMount={false}
-      /> : null}
-    </ScrollView>
-  </Screen>;
+        {recipe.savedAt ? <Button label="Remove from My recipes" secondary onPress={() => { setShowMore(false); remove(); }} /> : null}
+        <Button label="Close" secondary onPress={() => setShowMore(false)} />
+      </ScrollView></View></View>
+    </Modal>
+  </>;
 }
-
 const styles = StyleSheet.create({
-  content: { gap: 14, paddingBottom: 30 }, title: { color: colors.greenDark, fontSize: 25, fontWeight: '800' },
-  meta: { color: colors.muted }, heading: { color: colors.ink, fontSize: 17, fontWeight: '800', marginTop: 8 }, body: { color: colors.ink, lineHeight: 22 },
+  actions: { flexDirection: 'row', gap: 8 }, action: { flex: 1, minHeight: 60, alignItems: 'center', justifyContent: 'center', gap: 6 },
+  actionIcon: { color: colors.green, fontSize: 24 }, actionLabel: { color: colors.green, fontWeight: '700', textAlign: 'center' }, disabled: { opacity: 0.4 },
+  menuTrigger: { minWidth: 48, minHeight: 48, alignItems: 'center', justifyContent: 'center' }, menuIcon: { color: colors.white, fontSize: 28 },
+  backdrop: { flex: 1, backgroundColor: '#0006', padding: 24, justifyContent: 'center' }, modal: { maxHeight: '80%', backgroundColor: colors.white, borderRadius: 20 }, menu: { padding: 20, gap: 14 }, heading: { color: colors.greenDark, fontSize: 21, fontWeight: '800' },
 });

@@ -1,5 +1,5 @@
 import { useCallback, useRef, useState } from 'react';
-import { Image, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Image, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { CameraView, useCameraPermissions, type BarcodeScanningResult } from 'expo-camera';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { apiRequest, apiResponse } from '@/services/api';
@@ -26,6 +26,18 @@ export default function ScanScreen() {
   const [product, setProduct] = useState<Product | null>(null);
   const [photoUri, setPhotoUri] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [labelProductName, setLabelProductName] = useState('');
+
+  const chooseMode = (nextMode: Mode, productName = '') => {
+    if (mode === nextMode) return;
+    setMode(nextMode);
+    setLabelProductName(productName.slice(0, 100));
+    setScanned(false);
+    setProduct(null);
+    setPhotoUri(null);
+    setCameraReady(false);
+    setError(null);
+  };
 
   useFocusEffect(useCallback(() => {
     setCameraReady(false);
@@ -46,6 +58,7 @@ export default function ScanScreen() {
     stageScanRecipeHandoff({
       source: 'label',
       origin: 'barcode',
+      productName: product.name.slice(0, 100),
       originalNutrition: product.originalNutrition,
       ingredients: product.ingredients_text,
       context: product.name ? `Barcode product: ${product.name}` : 'Ingredients loaded from the scanned barcode',
@@ -72,9 +85,10 @@ export default function ScanScreen() {
       stageScanRecipeHandoff({
         source: 'label',
         origin: 'label-photo',
+        productName: labelProductName,
         originalNutrition: data.originalNutrition ?? null,
         ingredients,
-        context: data.title ? String(data.title) : 'Ingredients extracted from your package-label photo',
+        context: labelProductName || (data.title ? String(data.title) : 'Ingredients extracted from your package-label photo'),
       });
       router.push('/generate');
     } catch (value) {
@@ -123,6 +137,19 @@ export default function ScanScreen() {
 
   return <Screen>
     <ScrollView contentContainerStyle={styles.content}>
+      <View accessibilityRole="radiogroup" style={styles.modes}>
+        {([['barcode', 'Scan barcode'], ['label', 'Photograph ingredient label']] as const).map(([value, label]) =>
+          <Pressable
+            key={value}
+            accessibilityRole="radio"
+            accessibilityState={{ selected: mode === value, disabled: busy }}
+            disabled={busy}
+            onPress={() => chooseMode(value)}
+            style={[styles.mode, mode === value && styles.modeActive]}
+          >
+            <Text style={[styles.modeText, mode === value && styles.modeTextActive]}>{label}</Text>
+          </Pressable>)}
+      </View>
       {!product && !photoUri ? <>
         <Text style={styles.title}>{mode === 'barcode' ? 'Point at the barcode' : 'Photograph the ingredient list'}</Text>
         <Text style={styles.body}>{mode === 'barcode' ? 'Hold the package steady. We will look it up automatically.' : 'Turn the package to its ingredients. Keep the words close, clear and well lit.'}</Text>
@@ -130,6 +157,7 @@ export default function ScanScreen() {
 
       {focused && !photoUri && !product ? <View style={styles.cameraWrap}>
         <CameraView
+          key={mode}
           ref={camera}
           style={styles.camera}
           facing="back"
@@ -143,7 +171,6 @@ export default function ScanScreen() {
       </View> : null}
 
       {mode !== 'barcode' && !photoUri ? <Button label={cameraReady ? 'Take ingredient photo' : 'Starting camera…'} onPress={capture} loading={busy} disabled={!cameraReady} /> : null}
-      {!product && !photoUri ? <Button label={mode === 'barcode' ? 'No barcode? Photograph the ingredients' : 'Use the barcode instead'} secondary disabled={busy} onPress={() => { setMode(mode === 'barcode' ? 'label' : 'barcode'); setScanned(false); setError(null); }} /> : null}
       {photoUri ? <Card>
         <Image accessibilityLabel={`Preview of captured ${mode} photo`} source={{ uri: photoUri }} style={styles.preview} />
         <Text style={styles.title}>Can you read the ingredients?</Text>
@@ -161,9 +188,9 @@ export default function ScanScreen() {
       <InlineError message={error} />
       {product ? <Card>
         <Text style={styles.title}>{product.found ? (product.name || 'Product found') : 'Barcode not found'}</Text>
-        <Text style={styles.body}>{product.found && product.ingredients_text.trim() ? 'We found the ingredients. Check them next, then make your homemade version.' : 'We could not find ingredients for this barcode. Take a photo of the ingredient list instead.'}</Text>
+        <Text style={styles.body}>{product.found && product.ingredients_text.trim() ? 'We found the ingredients. Check them next, then make your homemade version.' : product.found ? `We found ${product.name || 'this product'}, but its ingredient list is not available. Take a photo of the label.` : 'This barcode is not in the database. Take a photo of the ingredient label.'}</Text>
         {product.found && product.ingredients_text.trim() ? <Button label="Review ingredients" onPress={generateFromBarcode} /> : null}
-        {(!product.found || !product.ingredients_text.trim()) ? <Button label="Photograph the ingredients" onPress={() => { setMode('label'); setProduct(null); setScanned(false); setCameraReady(false); setError(null); }} /> : null}
+        {(!product.found || !product.ingredients_text.trim()) ? <Button label="Photograph ingredient label" onPress={() => chooseMode('label', product.name)} /> : null}
         <Button label="Scan another" secondary onPress={() => { setScanned(false); setProduct(null); }} />
       </Card> : null}
       {busy && mode === 'barcode' ? <Text style={styles.status}>Looking up product…</Text> : null}
@@ -173,7 +200,7 @@ export default function ScanScreen() {
 }
 
 const styles = StyleSheet.create({
-  content: { gap: 14, paddingBottom: 30 }, modes: { flexDirection: 'row', gap: 6, flexWrap: 'wrap' },
+  content: { gap: 14, paddingBottom: 30 }, modes: { flexDirection: 'row', gap: 8, flexWrap: 'wrap' },
   mode: { minHeight: 44, justifyContent: 'center', borderWidth: 1, borderColor: colors.line, backgroundColor: colors.white, borderRadius: 18, paddingVertical: 8, paddingHorizontal: 13 },
   modeActive: { backgroundColor: colors.green, borderColor: colors.green }, modeText: { color: colors.ink, textTransform: 'capitalize', fontWeight: '700' }, modeTextActive: { color: colors.white },
   cameraWrap: { height: 390, borderRadius: 20, overflow: 'hidden', backgroundColor: '#000' }, camera: { flex: 1 },

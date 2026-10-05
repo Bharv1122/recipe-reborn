@@ -10,6 +10,9 @@ export const AI_API_KEY = process.env.GEMINI_API_KEY ?? '';
 export const MODEL_SMART = 'gemini-2.5-flash';
 export const MODEL_FAST = 'gemini-2.5-flash-lite';
 
+export const AI_GENERATE_URL =
+  `https://generativelanguage.googleapis.com/v1beta/models/${MODEL_SMART}:generateContent`;
+
 // Native audio accepts phone M4A and browser WebM/Ogg recordings. The
 // OpenAI-compatible input_audio endpoint only accepts WAV and MP3.
 export const AI_AUDIO_URL =

@@ -19,16 +19,46 @@ const reconciliationSchema = z.object({
   }).strict()).min(1).max(150),
 }).strict();
 
+// Spelled-out counts are quantities, not foods. "half" is deliberately absent
+// because "half-and-half" is itself a (dairy) ingredient identity.
+const COUNT_WORDS = 'one two three four five six seven eight nine ten eleven twelve dozen couple few several';
+
 // Quantity, packaging and preparation words only, not a food ontology. Keeping
 // food identities literal deliberately favors a bounded check over guessed
 // equivalence between different foods, brands or allergen-bearing substitutes.
+// The cook-performed preparation words are the "preparation wording" the
+// reconciliation prompt allows the model to correct.
 const NON_IDENTITY_WORDS = new Set((
   'a an and or of the to taste as needed optional if you have it for serving garnish divided plus more ' +
   'about approximately small medium large extra virgin fresh frozen canned can tin jar package carton bottle bag container ' +
   'organic cooked uncooked raw sliced diced chopped minced crushed ground drained rinsed peeled trimmed thawed ' +
+  'thinly finely roughly coarsely lightly cubed halved quartered grated shredded beaten whisked softened melted ' +
+  'cut into inch cube piece chunk room temperature ' +
   'unsalted salted low sodium added tablespoon tbsp tbs teaspoon tsp cup ounce oz pound lb gram g kilogram kg ' +
   'milliliter ml liter litre pint quart gallon bunch sprig stalk pinch dash handful'
 ).split(' '));
+
+// A whole pantry segment that only asks for a yield ("Make two servings",
+// "Serves 4") names no food, so it is skipped rather than searched for. The
+// pattern is anchored and contains no food words, so it cannot hide an item.
+const COUNT = String.raw`(?:\d+(?:[./]\d+)?|${COUNT_WORDS.split(' ').join('|')}|a\s+couple(?:\s+of)?|a\s+few)`;
+const SERVING_REQUEST = new RegExp(
+  String.raw`^(?:please\s+)?(?:(?:make|makes|cook|prepare|serve|serves|feed|feeds|yield|yields|for|enough\s+for)\s+)?` +
+  String.raw`(?:about\s+)?${COUNT}(?:\s*(?:-|to)\s*${COUNT})?\s+(?:servings?|portions?|people|persons?)$` +
+  String.raw`|^(?:serves|feeds)\s+${COUNT}(?:\s*(?:-|to)\s*${COUNT})?$`,
+  'i',
+);
+
+// Split inventory on list separators and sentence ends. A period between
+// digits ("1.5 cups rice") is a decimal quantity, not a sentence end.
+function pantrySegments(pantryIngredients: string): string[] {
+  return pantryIngredients.split(/[,;\n!?]+|\band\b|(?<!\d)\.|\.(?!\d)/i)
+    .map(segment => segment.trim().replace(/\s+/g, ' '))
+    .filter(segment => segment && !SERVING_REQUEST.test(segment));
+}
+
+// Preserve named compounds such as five-spice; only standalone counts are quantities.
+const STANDALONE_COUNT = new RegExp(`(?<![a-z-])(?:${COUNT_WORDS.split(' ').join('|')})(?![a-z-])`, 'g');
 
 function singular(word: string): string {
   if (word === 'tomatoes' || word === 'potatoes') return word.slice(0, -2);
@@ -39,7 +69,7 @@ function singular(word: string): string {
 
 function identityWords(value: string): string[] {
   return value.normalize('NFKD').replace(/[\u0300-\u036f]/g, '').toLowerCase()
-    .replace(/\bevoo\b/g, 'olive oil').replace(/\bgreenbeans\b/g, 'green beans')
+    .replace(STANDALONE_COUNT, ' ').replace(/\bevoo\b/g, 'olive oil').replace(/\bgreenbeans\b/g, 'green beans')
     .replace(/\bcloves?\s+(?:of\s+)?garlic\b/g, 'garlic')
     .replace(/[^a-z]+/g, ' ').trim().split(/\s+/)
     .map(singular).filter(word => word && !NON_IDENTITY_WORDS.has(word));
@@ -125,7 +155,7 @@ export function validateIngredientReconciliation(
   }
   const finalLines = finalWords.map(searchable);
   const steps = recipe.instructions.map(step => searchable(identityWords(step)));
-  for (const item of pantryIngredients.split(/[,;\n]+|\band\b/i)) {
+  for (const item of pantrySegments(pantryIngredients)) {
     const keys = mentionedKeys(identityWords(item), steps);
     if (keys.some(key => !finalLines.some(line => line.includes(key)))) {
       throw new Error('Ingredient reconciliation omitted a pantry ingredient used in the cooking steps');

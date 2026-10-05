@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { US_COOKING_MEASURES } from '../shared/cooking-measurements';
 import { AI_CHAT_URL, MODEL_FAST, MODEL_SMART } from '../lib/ai';
 import { generateValidatedPlan, MealPlanProviderError, MealPlanSafetyError } from '../lib/meal-plan-generation';
 import { DAYS, validateMeal, validateMealPlan, type DayName } from '../lib/meal-plan-validation';
@@ -94,6 +95,30 @@ async function test(name: string, run: () => Promise<void>) {
 }
 
 async function main() {
+  await test('Metric cooking quantities repair only the rejected meal while legacy previews stay saveable', () => withModel(call => {
+    assert.ok(call.prompt.includes(US_COOKING_MEASURES));
+    if (call.kind === 'plan') {
+      const plan = validPlan(); plan[2].dinner.ingredients = ['200g chicken breast'];
+      assert.equal(validateMeal(plan[2].dinner, options).success, true, 'Legacy save validation must remain compatible');
+      return completion(plan);
+    }
+    assert.equal(call.day, 'wednesday');
+    assert.ok(call.prompt.includes('metric_units'));
+    return completion({ ...meal('Chicken sweet potato skillet'), ingredients: ['7 oz chicken breast', '1 cup diced sweet potato'] });
+  }, async calls => {
+    const result = await generateValidatedPlan(options);
+    assert.equal(validateMealPlan(result.plan.map(({day,meals})=>({day,...meals})),{...options,usMeasures:true}).success,true);
+    assert.equal(calls.length,2);
+  }));
+  await test('Metric quantities in instructions are rejected after allergy checks', async () => {
+    const candidate={...meal('Chicken skillet'),instructions:'Add 100 ml water and simmer.'};
+    const invalid=validateMeal(candidate,{...options,usMeasures:true});
+    assert.equal(invalid.success,false);
+    if(!invalid.success) assert.equal(invalid.error.code,'metric_units');
+    const unsafe=validateMeal({...candidate,ingredients:['200g salmon']},{...options,usMeasures:true});
+    assert.equal(unsafe.success,false);
+    if(!unsafe.success) assert.equal(unsafe.error.code,'allergen_detected');
+  });
   await test('Valid plan needs no repair', () => withModel(() => completion(validPlan()), async (calls) => {
     validateResult(await generateValidatedPlan(options));
     assert.equal(calls.length, 1);
@@ -163,7 +188,7 @@ async function main() {
       ? completion(invalidSlots('wednesday'))
       : contentCompletion('{"title":'),
     async (calls) => {
-      await assert.rejects(() => generateValidatedPlan(options), (error: unknown) => error instanceof MealPlanSafetyError);
+      await assert.rejects(() => generateValidatedPlan(options), (error: unknown) => error instanceof MealPlanProviderError);
       assert.equal(calls.filter((call) => call.kind === 'plan').length, 2);
       assert.ok(calls.length <= 6);
     },
@@ -172,7 +197,7 @@ async function main() {
   await test('Provider deadline signal aborts requests and exhausts bounded retries', async () => {
     const originalTimeout = AbortSignal.timeout;
     const budgets: number[] = [];
-    // Accelerate the real signal mechanism; no 45-second wall-clock wait.
+    // Accelerate the real signal mechanism; no 120-second wall-clock wait.
     AbortSignal.timeout = (milliseconds: number) => {
       budgets.push(milliseconds);
       const controller = new AbortController();
@@ -190,7 +215,7 @@ async function main() {
         await assert.rejects(() => generateValidatedPlan(options), (error: unknown) => error instanceof MealPlanProviderError);
         assert.equal(calls.length, 2);
         assert.equal(budgets.length, 2);
-        assert.ok(budgets.every((milliseconds) => milliseconds > 0 && milliseconds <= 45_000));
+        assert.ok(budgets.every((milliseconds) => milliseconds > 0 && milliseconds <= 120_000));
       });
     } finally {
       AbortSignal.timeout = originalTimeout;
@@ -229,8 +254,8 @@ async function main() {
   await test('Expanded exclusions reach both phases without weakening validation', async () => {
     const aliasOptions: Options = { ...options, allergies: ['shellfish'], dislikedIngredients: ['scrambled eggs'] };
     const initial = validPlan();
-    initial[2].dinner = { ...meal('Rice supper'), ingredients: ['8 oz salmon', '1 cup rice'] };
-    const unsafeRepair = { ...meal('Chickpea salad'), ingredients: ['1 cup chickpeas', '1 tablespoon mayonnaise'] };
+    initial[2].dinner = { ...meal('Rice supper'), ingredients: ['8 oz shrimp', '1 cup rice'] };
+    const unsafeRepair = { ...meal('Egg breakfast'), ingredients: ['2 scrambled eggs', '1 slice toast'] };
     const allergyGuard = validateMeal(initial[2].dinner, aliasOptions);
     const dislikeGuard = validateMeal(unsafeRepair, aliasOptions);
     assert.equal(allergyGuard.success, false, 'The existing expanded allergy guard must stay active.');
@@ -241,7 +266,7 @@ async function main() {
       const exclusions = call.prompt.match(/Validation also excludes these ingredient names and aliases: ([^\n]+?)\. Use alternatives;/)?.[1]
         .split(',').map((term) => term.trim());
       assert.ok(exclusions, `${call.kind} prompt is missing the validator's expanded exclusions.`);
-      for (const term of ['shellfish', 'fish', 'salmon', 'shrimp', 'scrambled eggs', 'egg', 'mayonnaise', 'meringue']) {
+      for (const term of ['shellfish', 'shrimp', 'scrambled eggs', 'scrambled egg']) {
         assert.ok(exclusions.includes(term), `${call.kind} prompt omitted the blocked alias ${term}.`);
       }
       if (call.kind === 'plan') return completion(initial);
@@ -295,6 +320,110 @@ async function main() {
     assert.ok(peakInFlight <= 4, `Observed ${peakInFlight} concurrent repair requests.`);
     assert.equal(inFlight, 0);
   }));
+
+  await test('Safety diagnostics expose slots and codes without recipe content', () => withModel((call) => {
+    const unsafe = { ...meal('Private rejected title'), ingredients: ['2 cups salmon'] };
+    return completion(call.kind === 'plan' ? DAYS.map(day => ({ day, dinner: unsafe })) : unsafe);
+  }, async () => {
+    await assert.rejects(generateValidatedPlan(options), error => {
+      assert.ok(error instanceof MealPlanSafetyError);
+      assert.equal(error.phase, 'smart_repair');
+      assert.equal(error.failures.length, 7);
+      assert.ok(error.failures.every(failure => failure.code === 'allergen_detected' && failure.mealType === 'dinner'));
+      assert.doesNotMatch(JSON.stringify(error), /salmon|Private rejected title/);
+      return true;
+    });
+  }));
+
+  await test('Missing day diagnostics survive without unnecessary slot repairs', () => withModel(() => completion(validPlan().slice(0, 6)), async calls => {
+    await assert.rejects(generateValidatedPlan(options), error => {
+      assert.ok(error instanceof MealPlanSafetyError);
+      assert.equal(error.phase, 'initial');
+      assert.ok(error.failures.some(failure => failure.code === 'wrong_day_count'));
+      assert.ok(error.failures.some(failure => failure.code === 'missing_day'));
+      return true;
+    });
+    assert.equal(calls.length, 2);
+    assert.ok(calls.every(call => call.kind === 'plan'));
+  }));
+
+  await test('Repair HTTP failures are counted separately from content rejection', () => withModel(call => call.kind === 'plan'
+    ? completion(invalidSlots('wednesday')) : new Response(null, { status: 502 }), async () => {
+    await assert.rejects(generateValidatedPlan(options), error => {
+      assert.ok(error instanceof MealPlanProviderError);
+      assert.equal(error.failureKind, 'repair_unavailable');
+      return true;
+    });
+  }));
+
+  await test('Replacement instructions identify only that slot rejection', () => withModel(call => {
+    if (call.kind === 'plan') {
+      const plan = validPlan();
+      plan[0].dinner.ingredients = ['2 cups salmon'];
+      plan[2].dinner = meal(titles[1]);
+      return completion(plan);
+    }
+    const codes = call.prompt.match(/Rejected checks for this slot: ([^.]+)\./)?.[1];
+    if (call.day === 'monday') { assert.equal(codes, 'allergen_detected'); return completion(meal('Quinoa pumpkin bake')); }
+    assert.equal(call.day, 'wednesday');
+    assert.equal(codes, 'duplicate_meal');
+    return completion(meal('White bean cabbage skillet'));
+  }, async () => { validateResult(await generateValidatedPlan(options)); }));
+
+  await test('Unreadable final plan clears stale validation diagnostics', () => withModel(call => {
+    if (call.kind === 'plan' && call.prompt.includes('Your previous response was rejected')) return contentCompletion('[{"day":"monday"');
+    return completion(validPlan().slice(0, 6));
+  }, async () => {
+    await assert.rejects(generateValidatedPlan(options), error => {
+      assert.ok(error instanceof MealPlanProviderError);
+      assert.equal(error.failureKind, 'malformed');
+      return true;
+    });
+  }));
+
+  await test('Olives dislike: repeated olive oil repairs see the rejected lines and the dislike stays enforced', async () => {
+    const oliveOptions: Options = { ...options, dislikedIngredients: ['Olives'] };
+    const withOil = (title: string, oil: string) => ({ ...meal(title), ingredients: ['1 cup brown rice', '2 cups broccoli', oil], instructions: 'Cook the rice. Steam broccoli and toss with the oil.' });
+    const oliveDays: DayName[] = ['monday', 'tuesday', 'thursday', 'saturday', 'sunday'];
+    const fastTitles = ['Herb chicken orzo', 'Paprika pork rice', 'Lentil carrot pie', 'Beef zucchini kebabs', 'Turkey potato tray'];
+    const smartTitles = ['Squash risotto', 'Cabbage chickpea skillet', 'White bean cabbage skillet', 'Quinoa pumpkin bake', 'Lemon chickpea salad'];
+    // The validator must keep rejecting olive oil for an olives dislike.
+    const guard = validateMeal(withOil('Oily bowl', '1 tablespoon olive oil'), oliveOptions);
+    assert.equal(guard.success, false);
+    if (!guard.success) assert.equal(guard.error.code, 'disliked_ingredient');
+    assert.equal(validateMeal(withOil('Canola bowl', '1 tablespoon canola oil'), oliveOptions).success, true);
+    await withModel((call) => {
+      assert.match(call.prompt, /Because olive is excluded, olive oil is also rejected: never use olive oil; use a permitted cooking fat/);
+      if (call.kind === 'plan') {
+        return completion(DAYS.map((day, index) => ({ day, dinner: withOil(titles[index], oliveDays.includes(day) ? '1 tablespoon olive oil' : '1 tablespoon canola oil') })));
+      }
+      assert.ok(call.day && oliveDays.includes(call.day));
+      assert.match(call.prompt, /untrusted recipe data/);
+      assert.match(call.prompt, /Rejection reasons: \["The meal contains a disliked ingredient\."\]/);
+      const flagged = call.prompt.match(/Ingredient lines that matched an excluded food: (\[[^\n]*?\])\./)?.[1];
+      assert.ok(flagged, 'Repair must name the concrete rejected ingredient line.');
+      if (call.model === MODEL_FAST) {
+        assert.deepEqual(JSON.parse(flagged), ['1 tablespoon olive oil']);
+        // Reproduce the production failure: the fast repair repeats olive oil.
+        return completion(withOil(fastTitles[oliveDays.indexOf(call.day)], '2 teaspoons olive oil'));
+      }
+      // Smart repair sees the fast repair's own rejected line, not the original.
+      assert.deepEqual(JSON.parse(flagged), ['2 teaspoons olive oil']);
+      assert.match(call.prompt, /Rejected ingredient lines: \["1 cup brown rice","2 cups broccoli","2 teaspoons olive oil"\]/);
+      return completion(withOil(smartTitles[oliveDays.indexOf(call.day)], '1 tablespoon avocado oil'));
+    }, async (calls) => {
+      const plan = validateResult(await generateValidatedPlan(oliveOptions), oliveOptions);
+      assert.ok(plan.every(({ meals }) => !/olive/i.test(JSON.stringify(meals.dinner))));
+      assert.equal(calls.filter((call) => call.kind === 'plan').length, 1);
+      assert.equal(calls.filter((call) => call.kind === 'repair' && call.model === MODEL_FAST).length, 5);
+      assert.equal(calls.filter((call) => call.kind === 'repair' && call.model === MODEL_SMART).length, 5);
+    });
+  });
+
+  await test('Olive oil instruction is absent without an olive exclusion', () => withModel((call) => {
+    assert.doesNotMatch(call.prompt, /olive oil is also rejected/);
+    return completion(validPlan());
+  }, async () => { validateResult(await generateValidatedPlan(options)); }));
 
   console.log(`Meal-plan generation: ${cases} isolated cases passed; mocked provider only, no database or live API.`);
 }

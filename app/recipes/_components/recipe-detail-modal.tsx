@@ -4,10 +4,11 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog';
 import { Textarea } from '@/components/ui/textarea';
+import { Input } from '@/components/ui/input';
 import { StarRating } from '@/components/ui/star-rating';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Save, Wine, Info, Loader2, Share2, Facebook, Twitter, ChefHat, MessageCircle, ShoppingCart } from 'lucide-react';
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import toast from 'react-hot-toast';
 import { RecipePresentation } from '@/components/recipe-presentation';
@@ -17,6 +18,7 @@ import type { FreshNutritionEstimate } from '@/shared/nutrition-facts';
 import { VoiceReader } from '@/components/voice-reader';
 import { RecipeChat } from '@/components/recipe-chat';
 import { parseStoredRecipeList } from '@/lib/recipe-list';
+import { sourceHasDirections } from '@/shared/recipe-import';
 
 interface Recipe {
   id: string;
@@ -41,6 +43,8 @@ interface Recipe {
   fiber?: number | null;
   sodium?: number | null;
   createdAt: string;
+  librarySource?: string;
+  importSourceSnapshot?: unknown;
 }
 
 interface WinePairing {
@@ -81,11 +85,44 @@ interface RecipeDetailModalProps {
 }
 
 export function RecipeDetailModal({ recipe, onClose, onUpdate }: RecipeDetailModalProps) {
-  const instructions = parseStoredRecipeList(recipe?.instructions);
+  const initialInstructions = useMemo(() => parseStoredRecipeList(recipe?.instructions), [recipe?.instructions]);
   const [freshIngredients, setFreshIngredients] = useState<string[]>(() => parseStoredRecipeList(recipe?.freshIngredients));
+  const [currentInstructions, setCurrentInstructions] = useState<string[]>(initialInstructions);
+  const [draftTitle, setDraftTitle] = useState(recipe.title);
+  const [draftPrepTime, setDraftPrepTime] = useState(recipe.prepTime ?? '');
+  const [draftCookTime, setDraftCookTime] = useState(recipe.cookTime ?? '');
+  const [draftServings, setDraftServings] = useState(recipe.servings ?? '');
+  const [draftDietaryTags, setDraftDietaryTags] = useState(recipe.dietaryTags ?? []);
   const [rating, setRating] = useState(recipe?.rating ?? 0);
   const [notes, setNotes] = useState(recipe?.notes ?? '');
   const [isSaving, setIsSaving] = useState(false);
+  const [isAdaptingImport, setIsAdaptingImport] = useState(false);
+  const [hasImportedAdaptation, setHasImportedAdaptation] = useState(false);
+  const [adaptationNotes, setAdaptationNotes] = useState('');
+  const [selectedImportIngredient, setSelectedImportIngredient] = useState(() => parseStoredRecipeList(recipe.freshIngredients)[0] ?? '');
+  const [substituteInput, setSubstituteInput] = useState('');
+  const [oneRecipeDiet, setOneRecipeDiet] = useState('');
+  const [foodPreferences, setFoodPreferences] = useState<{ allergies: string[]; dislikedIngredients: string[]; likedIngredients: string[] } | null>(null);
+  const adaptationAbort = useRef<AbortController | null>(null);
+
+  const storedImportSourceSnapshot = useMemo(() => {
+    const raw = recipe.importSourceSnapshot as Record<string, unknown> | null | undefined;
+    if (raw && Array.isArray(raw.freshIngredients) && Array.isArray(raw.instructions)) {
+      return {
+        title: String(raw.title || recipe.title), freshIngredients: raw.freshIngredients.map(String), instructions: raw.instructions.map(String),
+        prepTime: String(raw.prepTime || ''), cookTime: String(raw.cookTime || ''), servings: String(raw.servings || ''),
+        dietaryTags: Array.isArray(raw.dietaryTags) ? raw.dietaryTags.map(String) : [],
+      };
+    }
+    return null;
+  }, [recipe]);
+  const copySourceSnapshot = useMemo(
+    () => storedImportSourceSnapshot ?? {
+      title: recipe.title, freshIngredients: parseStoredRecipeList(recipe.freshIngredients), instructions: initialInstructions,
+      prepTime: recipe.prepTime ?? '', cookTime: recipe.cookTime ?? '', servings: recipe.servings ?? '', dietaryTags: recipe.dietaryTags ?? [],
+    },
+    [recipe, initialInstructions, storedImportSourceSnapshot],
+  );
   
   // Wine pairing state
   const [winePairings, setWinePairings] = useState<WinePairing[]>([]);
@@ -112,8 +149,10 @@ export function RecipeDetailModal({ recipe, onClose, onUpdate }: RecipeDetailMod
   });
   const [savedIngredients, setSavedIngredients] = useState(() => parseStoredRecipeList(recipe.freshIngredients));
   const ingredientsChanged = JSON.stringify(freshIngredients) !== JSON.stringify(savedIngredients);
+  const instructionsChanged = JSON.stringify(currentInstructions) !== JSON.stringify(initialInstructions);
+  const recipeContentChanged = ingredientsChanged || instructionsChanged || hasImportedAdaptation;
   const [costsInvalidated, setCostsInvalidated] = useState(false);
-  const displayedComparison = ingredientsChanged && comparison ? { ...comparison, freshNutrition: null } : comparison;
+  const displayedComparison = recipeContentChanged && comparison ? { ...comparison, freshNutrition: null } : comparison;
   const [isLoadingNutrition, setIsLoadingNutrition] = useState(false);
   const [scaledIngredients, setScaledIngredients] = useState<string | null>(null);
   const [scaleFactor, setScaleFactor] = useState(1);
@@ -132,19 +171,62 @@ export function RecipeDetailModal({ recipe, onClose, onUpdate }: RecipeDetailMod
     }
   }, [recipe?.winePairing]);
 
+  useEffect(() => {
+    if (recipe.librarySource !== 'imported') return;
+    fetch('/api/user/preferences').then(async (response) => {
+      const data = await response.json().catch(() => null);
+      if (!response.ok) throw new Error(data?.error ?? 'Could not load food preferences');
+      setFoodPreferences(data);
+    }).catch(() => toast.error('Could not load saved food preferences. Try again before applying them.'));
+    return () => adaptationAbort.current?.abort();
+  }, [recipe.librarySource]);
+
+  useEffect(() => {
+    if (!freshIngredients.includes(selectedImportIngredient)) setSelectedImportIngredient(freshIngredients[0] ?? '');
+  }, [freshIngredients, selectedImportIngredient]);
+
+  const adaptImportedRecipe = async (action: { type: 'substitute'; original: string; substitute: string } | { type: 'remove'; original: string } | { type: 'preferences'; oneRecipeDiet: string }) => {
+    if (isAdaptingImport) return;
+    const controller = new AbortController(); adaptationAbort.current = controller;
+    setIsAdaptingImport(true);
+    try {
+      const response = await fetch('/api/import-recipe/adapt', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, signal: controller.signal,
+        body: JSON.stringify({
+          recipe: { title: draftTitle, freshIngredients, instructions: currentInstructions, prepTime: draftPrepTime,
+            cookTime: draftCookTime, servings: draftServings, dietaryTags: draftDietaryTags },
+          action,
+        }),
+      });
+      const data = await response.json().catch(() => null);
+      if (!response.ok) throw new Error(data?.error ?? 'The recipe could not be adapted.');
+      setDraftTitle(data.recipe.title); setFreshIngredients(data.recipe.freshIngredients); setCurrentInstructions(data.recipe.instructions);
+      setDraftPrepTime(data.recipe.prepTime); setDraftCookTime(data.recipe.cookTime); setDraftServings(data.recipe.servings);
+      setDraftDietaryTags(data.recipe.dietaryTags ?? []); setSubstituteInput(''); setHasImportedAdaptation(true);
+      setAdaptationNotes([data.changeSummary, ...(data.reviewNotes ?? [])].filter(Boolean).join('\n'));
+      setCostsInvalidated(true); setScaledIngredients(null); setScaleFactor(1);
+      toast.success('Adapted copy ready to review. The saved original is unchanged.');
+    } catch (error) {
+      if (!controller.signal.aborted) toast.error(error instanceof Error ? error.message : 'The recipe could not be adapted.');
+    } finally {
+      if (adaptationAbort.current === controller) adaptationAbort.current = null;
+      setIsAdaptingImport(false);
+    }
+  };
+
   const handleSave = async () => {
     setIsSaving(true);
     try {
-      const response = await fetch(`/api/recipes/${recipe?.id}`, {
-        method: 'PATCH',
+      const response = await fetch(hasImportedAdaptation ? '/api/recipes' : `/api/recipes/${recipe?.id}`, {
+        method: hasImportedAdaptation ? 'POST' : 'PATCH',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ 
-          rating, 
-          notes,
-          freshIngredients: JSON.stringify(freshIngredients),
-        }),
+        body: JSON.stringify(hasImportedAdaptation ? {
+          title: draftTitle, originalIngredients: copySourceSnapshot.freshIngredients.join('\n'), freshIngredients,
+          instructions: currentInstructions, dietaryTags: draftDietaryTags, prepTime: draftPrepTime, cookTime: draftCookTime,
+          servings: draftServings, librarySource: 'imported', importSourceSnapshot: copySourceSnapshot,
+        } : { rating, notes, freshIngredients: JSON.stringify(freshIngredients) }),
       });
 
       if (!response?.ok) {
@@ -152,6 +234,10 @@ export function RecipeDetailModal({ recipe, onClose, onUpdate }: RecipeDetailMod
       }
 
       const data = await response.json();
+      if (hasImportedAdaptation) {
+        toast.success('Adapted copy saved. The original recipe and existing plans stayed unchanged.');
+        onUpdate?.(); onClose(); return;
+      }
       const parsed = recipeComparisonSchema.safeParse(data.recipe?.comparisonSnapshot);
       if (ingredientsChanged) {
         setComparison(parsed.success ? parsed.data : null);
@@ -171,13 +257,15 @@ export function RecipeDetailModal({ recipe, onClose, onUpdate }: RecipeDetailMod
   };
 
   const handleDeleteIngredient = (index: number) => {
+    if (recipe.librarySource === 'imported') { void adaptImportedRecipe({ type: 'remove', original: freshIngredients[index] }); return; }
     const updatedIngredients = freshIngredients.filter((_, i) => i !== index);
     setFreshIngredients(updatedIngredients);
     setScaledIngredients(null);
     setScaleFactor(1);
   };
 
-  const handleSubstituteIngredient = (index: number, _originalIngredient: string, newIngredient: string) => {
+  const handleSubstituteIngredient = (index: number, originalIngredient: string, newIngredient: string) => {
+    if (recipe.librarySource === 'imported') { void adaptImportedRecipe({ type: 'substitute', original: originalIngredient, substitute: newIngredient }); return; }
     const updatedIngredients = [...freshIngredients];
     updatedIngredients[index] = newIngredient;
     setFreshIngredients(updatedIngredients);
@@ -388,19 +476,56 @@ export function RecipeDetailModal({ recipe, onClose, onUpdate }: RecipeDetailMod
 
               {/* Recipe Tab */}
               <TabsContent value="recipe" className="space-y-6 mt-6">
+                {recipe.librarySource === 'imported' && <section className="space-y-3 rounded-xl border border-emerald-200 bg-emerald-50 p-4">
+                  <div>
+                    <h3 className="font-semibold text-emerald-950">Adapt this imported recipe</h3>
+                    <p className="text-sm text-emerald-900">Choose an ingredient to substitute or remove, or apply saved preferences to this recipe only. A successful result becomes a reviewable copy; the original recipe and anything already planned or shopped remain unchanged.</p>
+                  </div>
+                  {adaptationNotes ? <p role="status" className="whitespace-pre-line rounded-lg bg-white p-3 text-sm text-amber-900">{adaptationNotes}</p> : null}
+                  <label className="block text-sm font-medium text-gray-800">Ingredient to change
+                    <select className="mt-1 min-h-11 w-full rounded-md border border-gray-300 bg-white px-3" value={selectedImportIngredient} onChange={(event) => setSelectedImportIngredient(event.target.value)} disabled={isAdaptingImport}>
+                      {freshIngredients.map((ingredient) => <option key={ingredient} value={ingredient}>{ingredient}</option>)}
+                    </select>
+                  </label>
+                  <div className="flex flex-col gap-2 sm:flex-row">
+                    <Input value={substituteInput} onChange={(event) => setSubstituteInput(event.target.value)} placeholder="Substitute with…" disabled={isAdaptingImport} />
+                    <Button type="button" disabled={isAdaptingImport || !selectedImportIngredient || !substituteInput.trim()} onClick={() => void adaptImportedRecipe({ type: 'substitute', original: selectedImportIngredient, substitute: substituteInput.trim() })}>Substitute and update full recipe</Button>
+                    <Button type="button" variant="outline" disabled={isAdaptingImport || !selectedImportIngredient} onClick={() => void adaptImportedRecipe({ type: 'remove', original: selectedImportIngredient })}>Remove and update full recipe</Button>
+                  </div>
+                  <div className="rounded-lg bg-white p-3 text-sm text-gray-700">
+                    <p className="font-medium">Saved preferences — this recipe only</p>
+                    <p>Allergies to avoid: {foodPreferences?.allergies.join(', ') || 'none saved'}</p>
+                    <p>Dislikes: {foodPreferences?.dislikedIngredients.join(', ') || 'none saved'}</p>
+                    <p>Likes may guide substitutes: {foodPreferences?.likedIngredients.join(', ') || 'none saved'}</p>
+                    <Input className="mt-2" value={oneRecipeDiet} onChange={(event) => setOneRecipeDiet(event.target.value)} placeholder="Optional one-recipe request, e.g. vegetarian" disabled={isAdaptingImport} />
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    <Button type="button" disabled={isAdaptingImport || !foodPreferences} onClick={() => void adaptImportedRecipe({ type: 'preferences', oneRecipeDiet })}>{isAdaptingImport ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Adapting…</> : 'Apply my preferences — this recipe only'}</Button>
+                    {isAdaptingImport ? <Button type="button" variant="outline" onClick={() => adaptationAbort.current?.abort()}>Cancel adaptation</Button> : null}
+                    {storedImportSourceSnapshot && sourceHasDirections(storedImportSourceSnapshot.instructions) ? <Button type="button" variant="outline" disabled={isAdaptingImport} onClick={() => {
+                      setDraftTitle(storedImportSourceSnapshot.title); setFreshIngredients([...storedImportSourceSnapshot.freshIngredients]); setCurrentInstructions([...storedImportSourceSnapshot.instructions]);
+                      setDraftPrepTime(storedImportSourceSnapshot.prepTime); setDraftCookTime(storedImportSourceSnapshot.cookTime); setDraftServings(storedImportSourceSnapshot.servings);
+                      setDraftDietaryTags([...storedImportSourceSnapshot.dietaryTags]); setHasImportedAdaptation(true); setCostsInvalidated(true);
+                      setAdaptationNotes('Restored the faithful imported source as an unsaved copy.');
+                    }}>Revert copy to imported source</Button> : null}
+                  </div>
+                  {!storedImportSourceSnapshot ? <p className="text-xs text-amber-900">This older import has no preserved source snapshot, so source revert is unavailable. You can still review and save an adapted copy; the saved recipe remains unchanged.</p> : null}
+                  <p className="text-xs text-emerald-900">Adaptations do not use another monthly recipe generation. Save creates a new recipe. Nutrition and cost estimates stay blank until recalculated for that copy. Allergy checks are bounded safeguards, not a medical guarantee.</p>
+                </section>}
                 <RecipePresentation
-                  recipe={{ ...recipe, freshIngredients, instructions,
-                    estimatedCostPerServing: ingredientsChanged || costsInvalidated ? null : recipe.estimatedCostPerServing,
-                    storeBoughtCost: ingredientsChanged || costsInvalidated ? null : recipe.storeBoughtCost }}
-                  dietaryTags={recipe.dietaryTags}
+                  recipe={{ ...recipe, title: draftTitle, freshIngredients, instructions: currentInstructions, prepTime: draftPrepTime, cookTime: draftCookTime, servings: draftServings,
+                    estimatedCostPerServing: recipeContentChanged || costsInvalidated ? null : recipe.estimatedCostPerServing,
+                    storeBoughtCost: recipeContentChanged || costsInvalidated ? null : recipe.storeBoughtCost }}
+                  dietaryTags={draftDietaryTags}
                   comparison={displayedComparison}
                   isLoadingNutrition={isLoadingNutrition}
                   onDeleteIngredient={isLoadingNutrition || isSaving ? undefined : handleDeleteIngredient}
                   onSubstituteIngredient={isLoadingNutrition || isSaving ? undefined : handleSubstituteIngredient}
+                  isRegeneratingWithSubstitute={isAdaptingImport || hasImportedAdaptation}
                 />
-                {ingredientsChanged && <p role="status" className="text-sm text-amber-800">Ingredients changed. Save your changes before calculating a new nutrition estimate.</p>}
+                {recipeContentChanged && <p role="status" className="text-sm text-amber-800">Recipe content changed. Save the adapted copy before calculating new nutrition or cost estimates.</p>}
                 {!displayedComparison?.freshNutrition && (
-                  <Button onClick={fetchNutrition} disabled={isLoadingNutrition || ingredientsChanged || isSaving} variant="outline">
+                  <Button onClick={fetchNutrition} disabled={isLoadingNutrition || recipeContentChanged || isSaving} variant="outline">
                     {isLoadingNutrition ? 'Calculating estimate…' : 'Get Nutrition Info'}
                   </Button>
                 )}
@@ -408,7 +533,7 @@ export function RecipeDetailModal({ recipe, onClose, onUpdate }: RecipeDetailMod
                   <h3 className="text-lg font-semibold text-gray-900">Cooking tools</h3>
             {/* Cooking Mode + Read Aloud */}
             <div className="flex flex-wrap items-center gap-2">
-              <Link href={`/cooking-mode/${recipe?.id}`}>
+              {!hasImportedAdaptation && <Link href={`/cooking-mode/${recipe?.id}`}>
                 <Button
                   size="sm"
                   className="bg-emerald-600 hover:bg-emerald-700 text-white"
@@ -416,7 +541,7 @@ export function RecipeDetailModal({ recipe, onClose, onUpdate }: RecipeDetailMod
                   <ChefHat className="h-4 w-4 mr-2" />
                   Start Cooking Mode
                 </Button>
-              </Link>
+              </Link>}
               <VoiceReader
                 label="Listen to Recipe"
                 getText={() =>
@@ -425,7 +550,7 @@ export function RecipeDetailModal({ recipe, onClose, onUpdate }: RecipeDetailMod
                     'Ingredients:',
                     ...freshIngredients,
                     'Instructions:',
-                    ...instructions.map(
+                    ...currentInstructions.map(
                       (step: string, index: number) => `Step ${index + 1}. ${step}`
                     ),
                   ]
@@ -443,7 +568,7 @@ export function RecipeDetailModal({ recipe, onClose, onUpdate }: RecipeDetailMod
                 <div className="flex items-center gap-2">
                   <Button
                     onClick={() => handleScaleRecipe(0.5)}
-                    disabled={isScaling || ingredientsChanged}
+                    disabled={isScaling || recipeContentChanged}
                     variant="outline"
                     size="sm"
                     className="flex-1"
@@ -452,7 +577,7 @@ export function RecipeDetailModal({ recipe, onClose, onUpdate }: RecipeDetailMod
                   </Button>
                   <Button
                     onClick={() => handleScaleRecipe(1)}
-                    disabled={isScaling || ingredientsChanged || scaleFactor === 1}
+                    disabled={isScaling || recipeContentChanged || scaleFactor === 1}
                     variant={scaleFactor === 1 ? 'default' : 'outline'}
                     size="sm"
                     className="flex-1"
@@ -461,7 +586,7 @@ export function RecipeDetailModal({ recipe, onClose, onUpdate }: RecipeDetailMod
                   </Button>
                   <Button
                     onClick={() => handleScaleRecipe(2)}
-                    disabled={isScaling || ingredientsChanged}
+                    disabled={isScaling || recipeContentChanged}
                     variant="outline"
                     size="sm"
                     className="flex-1"
@@ -470,7 +595,7 @@ export function RecipeDetailModal({ recipe, onClose, onUpdate }: RecipeDetailMod
                   </Button>
                   <Button
                     onClick={() => handleScaleRecipe(3)}
-                    disabled={isScaling || ingredientsChanged}
+                    disabled={isScaling || recipeContentChanged}
                     variant="outline"
                     size="sm"
                     className="flex-1"
@@ -520,7 +645,7 @@ export function RecipeDetailModal({ recipe, onClose, onUpdate }: RecipeDetailMod
                     ) : (
                       <>
                         <Save className="mr-2 h-4 w-4" />
-                        Save Changes
+                        {hasImportedAdaptation ? 'Save Adapted Copy' : 'Save Changes'}
                       </>
                     )}
                   </Button>
@@ -717,13 +842,13 @@ export function RecipeDetailModal({ recipe, onClose, onUpdate }: RecipeDetailMod
               <TabsContent value="chat" className="mt-6">
                 <RecipeChat
                   recipe={{
-                    title: recipe?.title ?? '',
+                    title: draftTitle,
                     ingredients: freshIngredients,
-                    instructions,
-                    prepTime: recipe?.prepTime,
-                    cookTime: recipe?.cookTime,
-                    servings: recipe?.servings,
-                    dietaryTags: recipe?.dietaryTags,
+                    instructions: currentInstructions,
+                    prepTime: draftPrepTime,
+                    cookTime: draftCookTime,
+                    servings: draftServings,
+                    dietaryTags: draftDietaryTags,
                   }}
                 />
               </TabsContent>

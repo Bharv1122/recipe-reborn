@@ -6,6 +6,7 @@ import { isValidMealPlanDate, splitPreferenceList } from '@/services/meal-plan-i
 import { useAuth } from '@/providers/auth-provider';
 import { Button, Card, Field, InlineError, Screen } from '@/components/ui';
 import { colors } from '@/theme';
+import type { MealPlanPreviewSummary } from '../../../../lib/meal-plan-preview';
 
 interface Plan { id: string; name: string; weekStartDate: string; description?: string | null; mealPlanRecipes: unknown[] }
 const days = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'] as const;
@@ -30,10 +31,11 @@ function currentWeekMonday() {
   return `${year}-${month}-${day}`;
 }
 
-export default function MealPlansScreen() {
+export default function MealPlansScreen({ embeddedTab = false }: { embeddedTab?: boolean }) {
   const { recipeId } = useLocalSearchParams<{ recipeId?: string }>();
   const router = useRouter();
-  const { user } = useAuth();
+  const { user, refreshAccount } = useAuth();
+  const [previews, setPreviews] = useState<MealPlanPreviewSummary[]>([]);
   const [plans, setPlans] = useState<Plan[]>([]);
   const [view, setView] = useState<'plans' | 'create'>('plans');
   const [showPreferences, setShowPreferences] = useState(false);
@@ -55,12 +57,27 @@ export default function MealPlansScreen() {
   const [message, setMessage] = useState<string | null>(null);
   const [addingPlanId, setAddingPlanId] = useState<string | null>(null);
   const addingRecipe = useRef(false);
+  const preferencesDirty = useRef(false);
+
+  useEffect(() => {
+    if (!user || preferencesDirty.current) return;
+    setAllergies((user.allergies ?? []).join(', '));
+    setDislikes((user.dislikedIngredients ?? []).join(', '));
+  }, [user]);
 
   const load = useCallback(async () => {
-    try { setPlans((await apiRequest<{ mealPlans: Plan[] }>('/api/mobile/meal-plans')).mealPlans); }
+    try {
+      const [saved, pending] = await Promise.allSettled([apiRequest<{ mealPlans: Plan[] }>('/api/mobile/meal-plans'), apiRequest<{ drafts: MealPlanPreviewSummary[] }>('/api/meal-plans/drafts')]);
+      if (saved.status === 'fulfilled') setPlans(saved.value.mealPlans);
+      if (pending.status === 'fulfilled') setPreviews(pending.value.drafts);
+      if (saved.status === 'rejected' || pending.status === 'rejected') setError('Some plans or previews could not load. Please reopen Meal plans to retry.');
+    }
     catch (value) { setError(value instanceof Error ? value.message : 'Could not load meal plans.'); }
   }, []);
-  useFocusEffect(useCallback(() => { load(); }, [load]));
+  useFocusEffect(useCallback(() => {
+    load();
+    refreshAccount().catch((value) => setError(value instanceof Error ? value.message : 'Could not refresh food preferences.'));
+  }, [load, refreshAccount]));
 
   useEffect(() => {
     if (!generating) return;
@@ -75,6 +92,15 @@ export default function MealPlansScreen() {
   const toggleDietary = (value: string) => {
     setSelectedDietary((current) => current.includes(value) ? current.filter((item) => item !== value) : [...current, value]);
   };
+  const savePreferenceDefaults = async () => {
+    setError(null); setMessage(null);
+    try {
+      await apiRequest('/api/user/preferences', { method: 'PUT', body: JSON.stringify({ allergies: splitPreferenceList(allergies), dislikedIngredients: splitPreferenceList(dislikes) }) });
+      preferencesDirty.current = false;
+      await refreshAccount();
+      setMessage('Saved as your Account defaults. New recipes and meal plans will use them.');
+    } catch (value) { setError(value instanceof Error ? value.message : 'Could not save Account preferences.'); }
+  };
 
   const generate = async () => {
     const servingsValue = Number.parseInt(servings, 10);
@@ -87,7 +113,7 @@ export default function MealPlansScreen() {
     }
     setGenerating(true); setElapsedSeconds(0); setError(null); setMessage(null);
     try {
-      const plan = await apiRequest<Plan>('/api/meal-plans/generate', {
+      const result = await apiRequest<{ draft: { id: string } }>('/api/meal-plans/drafts', {
         method: 'POST',
         body: JSON.stringify({
           weekStartDate, dietaryPreferences: selectedDietary, calorieTarget: calorieValue,
@@ -95,8 +121,7 @@ export default function MealPlansScreen() {
           servings: servingsValue, allergies: splitPreferenceList(allergies), dislikedIngredients: splitPreferenceList(dislikes),
         }),
       });
-      await load();
-      router.push({ pathname: '/meal-plans/[id]', params: { id: plan.id } });
+      router.push({ pathname: '/meal-plans/draft/[id]', params: { id: result.draft.id } });
     } catch (value) { setError(value instanceof Error ? value.message : 'Could not generate the weekly meal plan.'); }
     finally { setGenerating(false); setElapsedSeconds(0); }
   };
@@ -126,7 +151,7 @@ export default function MealPlansScreen() {
   };
 
   return <Screen>
-    <Stack.Screen options={{ headerShown: true, title: recipeId ? 'Add to meal plan' : 'Meal plans', headerTintColor: colors.green }} />
+    {!embeddedTab ? <Stack.Screen options={{ headerShown: true, title: recipeId ? 'Add to meal plan' : 'Meal plans', headerTintColor: colors.green }} /> : null}
     <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
       {!recipeId && view === 'plans' ? <Card>
         <Text style={styles.sectionTitle}>Your meal plans</Text>
@@ -137,7 +162,7 @@ export default function MealPlansScreen() {
         <Button label="Back to meal plans" secondary onPress={() => { setError(null); setView('plans'); }} />
         <Card>
         <Text style={styles.sectionTitle}>Generate a seven-day meal plan</Text>
-        <Text style={styles.body}>Choose the week, meals and servings. We will put the recipes together for you.</Text>
+        <Text style={styles.body}>Choose the week, meals and servings. Preview the meals, then save only the ones you want. Nothing is added to your saved plans automatically.</Text>
         <Text style={styles.label}>Week starting</Text>
         <Field accessibilityLabel="Week starting" placeholder="YYYY-MM-DD" value={weekStartDate} onChangeText={setWeekStartDate} autoCapitalize="none" />
         <Text style={styles.label}>Meals each day</Text>
@@ -150,15 +175,17 @@ export default function MealPlansScreen() {
         {showPreferences ? <>
         <Text style={styles.label}>Daily calorie target (optional)</Text>
         <Field accessibilityLabel="Daily calorie target" value={calorieTarget} onChangeText={setCalorieTarget} keyboardType="number-pad" placeholder="For example, 2000" />
-        <Text style={styles.label}>Allergies — never included</Text>
-        <Field accessibilityLabel="Allergies" value={allergies} onChangeText={setAllergies} placeholder="Shellfish, peanuts" multiline />
+        <Text style={styles.label}>Allergies to avoid</Text>
+        <Field accessibilityLabel="Allergies" value={allergies} onChangeText={(value) => { preferencesDirty.current = true; setAllergies(value); }} placeholder="Shellfish, peanuts" multiline />
         <Text style={styles.label}>Disliked ingredients — avoided</Text>
-        <Field accessibilityLabel="Disliked ingredients" value={dislikes} onChangeText={setDislikes} placeholder="Cilantro, olives" multiline />
-        <Text style={styles.note}>These start with your Account preferences. Changes here apply only to this plan.</Text>
+        <Field accessibilityLabel="Disliked ingredients" value={dislikes} onChangeText={(value) => { preferencesDirty.current = true; setDislikes(value); }} placeholder="Cilantro, olives" multiline />
+        <Text style={styles.note}>These start with your Account preferences. Changes here apply only to this plan unless you save them below. Account allergies always remain active.</Text>
+        <Text style={styles.note}>Always review generated recipes and product labels. These checks are not medical advice or a guarantee.</Text>
+        <Button label="Save these as Account defaults" secondary onPress={savePreferenceDefaults} />
         <Text style={styles.label}>Dietary preferences</Text>
         <View style={styles.wrap}>{dietaryOptions.map((value) => <Pressable accessibilityRole="checkbox" accessibilityState={{ checked: selectedDietary.includes(value) }} key={value} onPress={() => toggleDietary(value)} style={[styles.chip, selectedDietary.includes(value) && styles.active]}><Text style={selectedDietary.includes(value) ? styles.activeText : styles.chipText}>{value}</Text></Pressable>)}</View>
         </> : null}
-        {generating ? <View style={styles.generating}><Text style={styles.generatingTitle}>Creating {selectedMealTypes.length * 7} meals · {elapsedSeconds}s elapsed</Text><Text style={styles.note}>Safety and serving checks run before anything is saved.</Text></View> : null}
+        {generating ? <View style={styles.generating}><Text style={styles.generatingTitle}>Creating {selectedMealTypes.length * 7} meals · {elapsedSeconds}s elapsed</Text><Text style={styles.note}>Checking your preview. You choose what to save afterward.</Text></View> : null}
         <Button label={generating ? 'Generating weekly plan…' : 'Generate weekly plan'} onPress={generate} loading={generating} disabled={!selectedMealTypes.length} />
         </Card>
         <Button label={showEmptyPlan ? 'Hide empty-plan option' : 'Prefer to choose recipes yourself?'} secondary onPress={() => setShowEmptyPlan(!showEmptyPlan)} />
@@ -171,6 +198,7 @@ export default function MealPlansScreen() {
         <Text style={styles.body}>Next, choose the plan below. Nothing is added until you tap Add recipe.</Text>
       </Card> : null}
       <InlineError message={error} />{message ? <Text style={styles.success}>{message}</Text> : null}
+      {!recipeId && view === 'plans' ? previews.map(preview => <Pressable key={preview.id} accessibilityRole="button" accessibilityLabel={`Week of ${preview.weekStartDate.slice(0, 10)}, not saved`} accessibilityHint="Opens the meals for this week" onPress={() => router.push({ pathname: '/meal-plans/draft/[id]', params: { id: preview.id } })}><Card><Text style={styles.sectionTitle}>Not saved · Week of {preview.weekStartDate.slice(0, 10)}</Text><Text style={styles.body}>Preview available until {new Date(preview.expiresAt).toLocaleDateString()}</Text></Card></Pressable>) : null}
       {(recipeId || view === 'plans') ? plans.map((plan) => <Pressable accessibilityRole="button" accessibilityLabel={plan.name} accessibilityHint={recipeId ? 'Selects this meal plan' : 'Opens the meal plan'} accessibilityState={{ busy: addingPlanId === plan.id, disabled: addingPlanId !== null }} disabled={addingPlanId !== null} key={plan.id} onPress={() => recipeId ? setSelectedPlanId(plan.id) : choose(plan)}><Card><Text style={styles.sectionTitle}>{recipeId && selectedPlanId === plan.id ? `Selected: ${plan.name}` : plan.name}</Text><Text style={styles.body}>{addingPlanId === plan.id ? 'Adding recipe…' : `${new Date(plan.weekStartDate).toLocaleDateString(undefined, { timeZone: 'UTC' })} · ${plan.mealPlanRecipes.length} meals`}</Text></Card></Pressable>) : null}
       {recipeId && selectedPlanId ? <Button label={`Add recipe to ${day} ${mealType}`} loading={addingPlanId !== null} onPress={() => { const plan = plans.find((item) => item.id === selectedPlanId); if (plan) void choose(plan); }} /> : null}
       {recipeId && !plans.length ? <Card>

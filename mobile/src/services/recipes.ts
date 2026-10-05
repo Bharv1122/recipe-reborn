@@ -13,20 +13,23 @@ export async function getRecipe(id: string) {
 export async function saveGeneratedRecipe(originalIngredients: string, recipe: GeneratedRecipe, comparisonSnapshot?: RecipeComparisonSnapshot) {
   return apiRequest<{ recipe: Recipe }>('/api/mobile/recipes', {
     method: 'POST',
-    body: JSON.stringify({ originalIngredients, dietaryTags: [], ...recipe, comparisonSnapshot }),
+    body: JSON.stringify({ originalIngredients, dietaryTags: [], ...recipe, comparisonSnapshot, librarySource: 'generated' }),
   });
 }
 
 export async function generateRecipe(
   ingredients: string,
-  options: { source: 'label' | 'pantry' | 'dish' | 'random'; dietaryRestriction?: string; signal?: AbortSignal; generationId: string },
+  options: { source: 'label' | 'pantry' | 'dish' | 'random'; productName?: string; pantryTargetTitle?: string; dietaryRestriction?: string; signal?: AbortSignal; generationId: string },
 ): Promise<{ generationId: string; recipe: GeneratedRecipe }> {
   const generationId = options.generationId;
   const response = await apiResponse('/api/generate-recipe', {
     method: 'POST',
     body: JSON.stringify({
       ingredients,
+      measurementSystem: 'us',
       source: options.source,
+      productName: options.productName,
+      pantryTargetTitle: options.pantryTargetTitle,
       dietaryRestriction: options.dietaryRestriction || undefined,
       generationId,
     }),

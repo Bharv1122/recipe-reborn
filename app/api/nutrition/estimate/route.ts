@@ -1,7 +1,8 @@
 import { NextResponse } from 'next/server';
 import { getRequestUserId } from '@/lib/request-auth';
 import { rateLimit } from '@/lib/rate-limit';
-import { AI_API_KEY, AI_CHAT_URL, MODEL_FAST } from '@/lib/ai';
+import { MODEL_FAST } from '@/lib/ai';
+import { recipeChat } from '@/lib/ai-provider';
 import { extractJsonPayload } from '@/lib/ai-json';
 import { z } from 'zod';
 
@@ -51,10 +52,10 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Recipe is too large to estimate.' }, { status: 400 });
     }
 
-    const response = await fetch(AI_CHAT_URL, {
+    const response = await recipeChat({
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${AI_API_KEY}` },
-      signal: AbortSignal.timeout(45_000),
+      headers: { 'Content-Type': 'application/json' },
+      signal: request.signal,
       body: JSON.stringify({
         model: MODEL_FAST,
         messages: [
@@ -72,12 +73,12 @@ export async function POST(request: Request) {
         reasoning_effort: 'none',
         response_format: { type: 'json_schema', json_schema: { name: 'recipe_nutrition_estimate', strict: true, schema: nutritionJsonSchema } },
       }),
-    });
+    }, { totalMs: 45_000 });
 
     if (!response.ok) throw new Error(`AI request failed: ${response.status}`);
     const data = await response.json();
     const choice = data?.choices?.[0];
-    if (choice?.finish_reason !== 'stop') throw new Error('Nutrition provider did not complete its response');
+    if (choice?.finish_reason !== 'stop' || choice?.message?.refusal) throw new Error('Nutrition provider did not complete its response');
     const content = choice?.message?.content;
     if (typeof content !== 'string' || !content.trim()) throw new Error('Nutrition provider returned no content');
     const parsed = nutritionSchema.parse(JSON.parse(extractJsonPayload(content)));
@@ -96,6 +97,7 @@ export async function POST(request: Request) {
       sourceLabel: 'Estimated from the generated recipe',
     });
   } catch (error) {
+    if (request.signal.aborted) return new NextResponse(null, { status: 499 });
     // Do not log provider content: it can include the user's recipe text.
     console.error('Automatic nutrition estimate failed:', error instanceof Error ? error.name : 'Unknown error');
     return NextResponse.json({ error: 'Nutrition is temporarily unavailable. Please try again.' }, { status: 503 });

@@ -11,6 +11,7 @@ import { Loader2, ChefHat, Sparkles, Save, Link as LinkIcon, Camera, Upload, X, 
 import toast from 'react-hot-toast';
 import { RecipePresentation } from '@/components/recipe-presentation';
 import type { RecipeComparisonSnapshot } from '@/shared/recipe-comparison';
+import { importedRecipeLines } from '@/shared/recipe-import';
 import { VoiceChat } from './voice-chat';
 import { BarcodeScanner } from './barcode-scanner';
 import { PantryCheckDialog } from './pantry-check-dialog';
@@ -42,6 +43,26 @@ interface Recipe {
   servings: string;
   estimatedCostPerServing?: number;
   storeBoughtCost?: number;
+  dietaryTags?: string[];
+}
+
+type ImportAction =
+  | { type: 'substitute'; original: string; substitute: string }
+  | { type: 'remove'; original: string }
+  | { type: 'preferences'; oneRecipeDiet: string };
+
+interface FoodPreferences { allergies: string[]; dislikedIngredients: string[]; likedIngredients: string[] }
+
+function importSnapshot(recipe: Recipe, dietaryTags: string[] = recipe.dietaryTags ?? []) {
+  return {
+    title: recipe.title,
+    freshIngredients: recipe.freshIngredients,
+    instructions: recipe.instructions,
+    prepTime: recipe.prepTime || '',
+    cookTime: recipe.cookTime || '',
+    servings: recipe.servings || '',
+    dietaryTags,
+  };
 }
 
 interface DietaryButton {
@@ -68,7 +89,14 @@ export function RecipeGenerator({ savedRecipeCount = 0, recentIngredients = [], 
   const [recipeUrl, setRecipeUrl] = useState('');
   const [recipe, setRecipe] = useState<Recipe | null>(null);
   const [isGenerating, setIsGenerating] = useState(false);
+  const [isUnlockingPreview, setIsUnlockingPreview] = useState(false);
   const [isImporting, setIsImporting] = useState(false);
+  const [isAdaptingImport, setIsAdaptingImport] = useState(false);
+  const [isImportedRecipe, setIsImportedRecipe] = useState(false);
+  const [importSourceSnapshot, setImportSourceSnapshot] = useState<Recipe | null>(null);
+  const [importReviewNotes, setImportReviewNotes] = useState('');
+  const [foodPreferences, setFoodPreferences] = useState<FoodPreferences | null>(null);
+  const [oneRecipeDiet, setOneRecipeDiet] = useState('');
   const [isSaving, setIsSaving] = useState(false);
   const [appliedDietaryTags, setAppliedDietaryTags] = useState<string[]>([]);
   const [selectedImage, setSelectedImage] = useState<File | null>(null);
@@ -110,12 +138,27 @@ export function RecipeGenerator({ savedRecipeCount = 0, recentIngredients = [], 
   const resultRef = useRef<HTMLDivElement>(null);
   const generationAbortRef = useRef<AbortController | null>(null);
   const generationIdRef = useRef<string | null>(null);
+  const importAdaptationAbortRef = useRef<AbortController | null>(null);
+  const handoffAttemptedRef = useRef(false);
 
-  const isBusy = isGenerating || isExtracting;
+  const isBusy = isGenerating || isExtracting || isUnlockingPreview || isAdaptingImport;
+
+  useEffect(() => {
+    if (!isImportedRecipe || foodPreferences) return;
+    fetch('/api/user/preferences')
+      .then(async (response) => {
+        const data = await response.json().catch(() => null);
+        if (!response.ok) throw new Error(data?.error ?? 'Could not load food preferences');
+        setFoodPreferences(data);
+      })
+      .catch(() => toast.error('Could not load saved food preferences. Try again before applying them.'));
+  }, [isImportedRecipe, foodPreferences]);
 
   // Time-based status copy is intentionally honest: it shows elapsed time and
   // what the app is attempting, without promising a completion time.
-  const loadingMessages = [
+  const loadingMessages = isUnlockingPreview ? [
+    'Unlocking the exact recipe you previewed…',
+  ] : [
     isExtracting ? 'Reading the label…' : 'Reading the ingredients…',
     detectedAdditives.length > 0
       ? `Found ${detectedAdditives.length} additive${detectedAdditives.length === 1 ? '' : 's'} to leave behind…`
@@ -139,6 +182,7 @@ export function RecipeGenerator({ savedRecipeCount = 0, recentIngredients = [], 
 
   useEffect(
     () => () => {
+      importAdaptationAbortRef.current?.abort();
       const generationId = generationIdRef.current;
       if (generationId && navigator.sendBeacon) {
         navigator.sendBeacon(
@@ -222,28 +266,94 @@ export function RecipeGenerator({ savedRecipeCount = 0, recentIngredients = [], 
     return () => { disposed = true; clearTimeout(timeout); controller.abort(); };
   }, [recipe?.title, recipe?.freshIngredients, recipe?.servings]);
 
-  // Guest → signup handoff: a visitor who transformed a label on the landing
-  // page and then signed up lands here with their ingredients already loaded
-  // AND the generation already running — they typed the label and clicked
-  // "unlock" on the landing page; a third click here is where we were losing
-  // them. removeItem before firing means this runs at most once. (conversion)
+  // Guest → signup handoff: redeem the opaque, short-lived server token for
+  // the exact validated preview. Never trust recipe JSON from sessionStorage
+  // and never silently replace an expired/missing preview with a new AI call.
   useEffect(() => {
-    if (typeof window === 'undefined') return;
+    if (typeof window === 'undefined' || handoffAttemptedRef.current) return;
+    handoffAttemptedRef.current = true;
+    let disposed = false;
+    let token = '';
+    let stashedIngredients = '';
     try {
-      const stashed = window.sessionStorage.getItem('rr_guest_ingredients');
-      if (stashed && stashed.trim()) {
-        window.sessionStorage.removeItem('rr_guest_ingredients');
-        setIngredients(stashed);
-        setOriginalNutrition(null);
-        setInputMode('label');
-        setActiveTab('generate');
-        toast.success('Welcome! Your fresh recipe is being made right now…');
-        generateRecipe(undefined, stashed);
-      }
+      token = window.sessionStorage.getItem('rr_guest_handoff_token') ?? '';
+      stashedIngredients = window.sessionStorage.getItem('rr_guest_ingredients') ?? '';
     } catch {
-      // sessionStorage unavailable (private mode) — nothing to carry over
+      return;
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+
+    if (stashedIngredients.trim()) {
+      setIngredients(stashedIngredients);
+      setOriginalNutrition(null);
+      setInputMode('label');
+      setActiveTab('generate');
+      setDetectedAdditives(detectAdditives(stashedIngredients));
+    }
+
+    if (!token) {
+      if (stashedIngredients.trim()) {
+        window.sessionStorage.removeItem('rr_guest_ingredients');
+        toast.error('The preview unlock was missing. Your ingredients are ready below; choose Generate Fresh Recipe to make a new recipe.');
+      }
+      return;
+    }
+
+    const redeem = async () => {
+      setIsUnlockingPreview(true);
+      setShowSavePrompt(false);
+      try {
+        const response = await fetch('/api/guest/handoff/redeem', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ token }),
+        });
+        const data = await response.json().catch(() => null);
+        if (!response.ok) {
+          if ([400, 403, 409, 410, 422].includes(response.status)) {
+            window.sessionStorage.removeItem('rr_guest_handoff_token');
+            window.sessionStorage.removeItem('rr_guest_ingredients');
+          }
+          throw new Error(data?.error ?? 'We could not unlock that recipe preview.');
+        }
+        if (disposed) return;
+
+        const exactRecipe = data?.recipe as Recipe | undefined;
+        const originalIngredients = typeof data?.originalIngredients === 'string'
+          ? data.originalIngredients
+          : stashedIngredients;
+        if (!exactRecipe || !originalIngredients) {
+          throw new Error('The unlocked recipe preview was incomplete.');
+        }
+
+        window.sessionStorage.removeItem('rr_guest_handoff_token');
+        window.sessionStorage.removeItem('rr_guest_ingredients');
+        setIngredients(originalIngredients);
+        setDetectedAdditives(detectAdditives(originalIngredients));
+        setResultContext({
+          source: 'label',
+          originalIngredients,
+          originalNutrition: null,
+          detectedAdditives: detectAdditives(originalIngredients).map((item) => item.name),
+        });
+        setRecipe(exactRecipe);
+        setIsDemoRun(false);
+        setIsSaved(false);
+        setSavedRecipeId(null);
+        setNutrition(null);
+        void trackFunnelEvent('recipe_generated');
+        toast.success('Welcome! This is the exact recipe you previewed.');
+        setShowSavePrompt(true);
+      } catch (error) {
+        if (!disposed) {
+          toast.error(error instanceof Error ? error.message : 'We could not unlock that recipe preview.');
+        }
+      } finally {
+        if (!disposed) setIsUnlockingPreview(false);
+      }
+    };
+
+    void redeem();
+    return () => { disposed = true; };
   }, []);
 
   // Sets up and fires the example transformation — the fastest possible route
@@ -379,6 +489,9 @@ export function RecipeGenerator({ savedRecipeCount = 0, recentIngredients = [], 
     }
 
     setIsGenerating(true);
+    setIsImportedRecipe(false);
+    setImportSourceSnapshot(null);
+    setImportReviewNotes('');
     setRecipe(null);
     setIsSaved(false);
     setSavedRecipeId(null);
@@ -422,7 +535,7 @@ export function RecipeGenerator({ savedRecipeCount = 0, recentIngredients = [], 
   };
 
   const saveRecipe = async () => {
-    if (!recipe || isLoadingNutrition || isLoadingCost || isSaving || isRegeneratingWithSubstitute) return;
+    if (!recipe || isLoadingNutrition || isLoadingCost || isSaving || isRegeneratingWithSubstitute || isAdaptingImport) return;
 
     setIsSaving(true);
     setShowSavePrompt(false); // Close the prompt dialog
@@ -445,6 +558,10 @@ export function RecipeGenerator({ savedRecipeCount = 0, recentIngredients = [], 
           servings: recipe?.servings,
           estimatedCostPerServing: recipe?.estimatedCostPerServing,
           storeBoughtCost: recipe?.storeBoughtCost,
+          librarySource: isImportedRecipe ? 'imported' : 'generated',
+          ...(isImportedRecipe && importSourceSnapshot ? {
+            importSourceSnapshot: importSnapshot(importSourceSnapshot),
+          } : {}),
         }),
       });
 
@@ -475,6 +592,9 @@ export function RecipeGenerator({ savedRecipeCount = 0, recentIngredients = [], 
     }
 
     setIsImporting(true);
+    setIsImportedRecipe(false);
+    setImportSourceSnapshot(null);
+    setImportReviewNotes('');
     setRecipe(null);
     setDetectedAdditives([]);
 
@@ -499,7 +619,16 @@ export function RecipeGenerator({ savedRecipeCount = 0, recentIngredients = [], 
 
       const data = await response.json();
       setResultContext({ source: 'dish', originalIngredients: data.recipe.originalIngredients || data.recipe.title, originalNutrition: null, detectedAdditives: [] });
-      setRecipe(data.recipe);
+      const imported: Recipe = {
+        ...data.recipe,
+        freshIngredients: importedRecipeLines(data.recipe.freshIngredients),
+        instructions: importedRecipeLines(data.recipe.instructions),
+        dietaryTags: data.recipe.dietaryTags ?? [],
+      };
+      setRecipe(imported);
+      setImportSourceSnapshot(structuredClone(imported));
+      setIsImportedRecipe(true);
+      setImportReviewNotes(data.recipe.reviewNotes || '');
       setIngredients(data.recipe.originalIngredients);
       
       // Set dietary tags if any
@@ -682,6 +811,9 @@ export function RecipeGenerator({ savedRecipeCount = 0, recentIngredients = [], 
 
         setResultContext({ source: 'dish', originalIngredients: data.ingredients.join(', '), originalNutrition: null, detectedAdditives: [] });
         setRecipe(extractedRecipe);
+        setImportSourceSnapshot(structuredClone({ ...extractedRecipe, dietaryTags: data.dietaryTags ?? [] }));
+        setIsImportedRecipe(true);
+        setImportReviewNotes('');
         setIsDemoRun(false);
         setIsSaved(false);
         setSavedRecipeId(null);
@@ -707,8 +839,37 @@ export function RecipeGenerator({ savedRecipeCount = 0, recentIngredients = [], 
     }
   };
 
+  const adaptImportedRecipe = async (action: ImportAction) => {
+    if (!recipe || isAdaptingImport) return;
+    const controller = new AbortController();
+    importAdaptationAbortRef.current = controller;
+    setIsAdaptingImport(true);
+    try {
+      const response = await fetch('/api/import-recipe/adapt', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, signal: controller.signal,
+        body: JSON.stringify({
+          recipe: importSnapshot(recipe, appliedDietaryTags),
+          action,
+        }),
+      });
+      const data = await response.json().catch(() => null);
+      if (!response.ok) throw new Error(data?.error ?? 'The recipe could not be adapted.');
+      setRecipe(data.recipe);
+      setAppliedDietaryTags(data.recipe.dietaryTags ?? []);
+      setImportReviewNotes([data.changeSummary, ...(data.reviewNotes ?? [])].filter(Boolean).join('\n'));
+      setIsSaved(false); setSavedRecipeId(null); setNutrition(null);
+      toast.success('Adapted draft ready to review. Nothing has been saved.');
+    } catch (error) {
+      if (!controller.signal.aborted) toast.error(error instanceof Error ? error.message : 'The recipe could not be adapted.');
+    } finally {
+      if (importAdaptationAbortRef.current === controller) importAdaptationAbortRef.current = null;
+      setIsAdaptingImport(false);
+    }
+  };
+
   const handleDeleteIngredient = (index: number) => {
     if (!recipe) return;
+    if (isImportedRecipe) { void adaptImportedRecipe({ type: 'remove', original: recipe.freshIngredients[index] }); return; }
     
     const updatedIngredients = recipe.freshIngredients.filter((_, i) => i !== index);
     setRecipe({
@@ -724,6 +885,7 @@ export function RecipeGenerator({ savedRecipeCount = 0, recentIngredients = [], 
 
   const handleSubstituteIngredient = async (index: number, originalIngredient: string, newIngredient: string) => {
     if (!recipe) return;
+    if (isImportedRecipe) { await adaptImportedRecipe({ type: 'substitute', original: originalIngredient, substitute: newIngredient }); return; }
     
     setIsRegeneratingWithSubstitute(true);
     setSubstitutionInfo({ original: originalIngredient, substitute: newIngredient });
@@ -1349,7 +1511,7 @@ export function RecipeGenerator({ savedRecipeCount = 0, recentIngredients = [], 
               <Button
                 onClick={saveRecipe}
                 variant="outline"
-                disabled={isSaving || isLoadingNutrition || isLoadingCost || isRegeneratingWithSubstitute}
+                disabled={isSaving || isLoadingNutrition || isLoadingCost || isRegeneratingWithSubstitute || isAdaptingImport}
                 className="min-h-11 w-full border-emerald-700 text-emerald-800 hover:bg-emerald-50 focus-visible:ring-2 focus-visible:ring-emerald-700 focus-visible:ring-offset-2 sm:w-auto"
               >
                 {isSaving ? (
@@ -1367,6 +1529,36 @@ export function RecipeGenerator({ savedRecipeCount = 0, recentIngredients = [], 
             </div>
           </CardHeader>
           <CardContent className="pt-6 space-y-6">
+            {isImportedRecipe && (
+              <section className="space-y-3 rounded-xl border border-emerald-200 bg-emerald-50 p-4">
+                <div>
+                  <h3 className="font-semibold text-emerald-950">Adapt this imported recipe</h3>
+                  <p className="text-sm text-emerald-900">Use each ingredient’s Substitute or Remove control below. The full ingredients, directions, quantities, and times are updated together for review. Nothing changes until an adaptation succeeds, and nothing is saved until you choose Save Recipe.</p>
+                </div>
+                {importReviewNotes ? <p role="status" className="whitespace-pre-line rounded-lg bg-white p-3 text-sm text-amber-900">{importReviewNotes}</p> : null}
+                <div className="rounded-lg bg-white p-3 text-sm text-gray-700">
+                  <p className="font-medium">Apply my saved preferences to this recipe only</p>
+                  <p>Allergies to avoid: {foodPreferences?.allergies.join(', ') || 'none saved'}</p>
+                  <p>Dislikes: {foodPreferences?.dislikedIngredients.join(', ') || 'none saved'}</p>
+                  <p>Likes that may guide a substitute: {foodPreferences?.likedIngredients.join(', ') || 'none saved'}</p>
+                  <Input className="mt-2" value={oneRecipeDiet} onChange={(event) => setOneRecipeDiet(event.target.value)} placeholder="Optional one-recipe request, e.g. vegetarian" disabled={isAdaptingImport} />
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  <Button type="button" onClick={() => void adaptImportedRecipe({ type: 'preferences', oneRecipeDiet })} disabled={isAdaptingImport || !foodPreferences}>
+                    {isAdaptingImport ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Adapting…</> : 'Apply my preferences — this recipe only'}
+                  </Button>
+                  {isAdaptingImport ? <Button type="button" variant="outline" onClick={() => importAdaptationAbortRef.current?.abort()}>Cancel adaptation</Button> : null}
+                  <Button type="button" variant="outline" disabled={isAdaptingImport || !importSourceSnapshot} onClick={() => {
+                    if (!importSourceSnapshot) return;
+                    setRecipe(structuredClone(importSourceSnapshot));
+                    setAppliedDietaryTags(importSourceSnapshot.dietaryTags ?? []);
+                    setNutrition(null); setIsSaved(false); setSavedRecipeId(null);
+                    setImportReviewNotes('Restored the faithful imported source. Review it before saving.');
+                  }}>Revert to imported source</Button>
+                </div>
+                <p className="text-xs text-emerald-900">Imported-recipe adaptations do not use another monthly recipe generation. Always review the adapted recipe and product labels; allergy checks are bounded safeguards, not a medical guarantee.</p>
+              </section>
+            )}
             {isDemoRun && (
               <div className="flex items-start gap-3 rounded-xl border border-blue-200 bg-blue-50 p-4 text-blue-950">
                 <CheckCircle2 className="mt-0.5 h-5 w-5 shrink-0 text-blue-700" aria-hidden="true" />
@@ -1391,7 +1583,7 @@ export function RecipeGenerator({ savedRecipeCount = 0, recentIngredients = [], 
             />
 
             {/* Dietary Customization Buttons */}
-            <div className="pt-6 border-t">
+            {!isImportedRecipe && <div className="pt-6 border-t">
               <h3 className="text-lg font-semibold text-gray-900 mb-4">Customize This Recipe</h3>
               
               {/* Preset Dietary Options */}
@@ -1454,7 +1646,7 @@ export function RecipeGenerator({ savedRecipeCount = 0, recentIngredients = [], 
                   Describe any changes you&apos;d like to make to this recipe
                 </p>
               </div>
-            </div>
+            </div>}
 
             <section className="rounded-xl border border-orange-200 bg-orange-50 p-4 sm:flex sm:items-center sm:justify-between sm:gap-4">
               <div>

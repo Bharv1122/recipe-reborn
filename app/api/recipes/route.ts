@@ -3,6 +3,8 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth-options';
 import { prisma } from '@/lib/db';
 import { recipeComparisonSchema } from '@/lib/recipe-comparison-validation';
+import { isLibrarySource } from '@/lib/recipe-library';
+import { importedRecipeSnapshotSchema } from '@/lib/import-recipe-adaptation';
 
 export const dynamic = 'force-dynamic';
 
@@ -18,13 +20,15 @@ export async function GET(request: NextRequest) {
     const recipes = await prisma.recipe.findMany({
       where: {
         userId: session.user.id,
+        savedAt: { not: null },
       },
       orderBy: {
         createdAt: 'desc',
       },
+      include: { _count: { select: { mealPlanRecipes: true } } },
     });
 
-    return NextResponse.json({ recipes }, { status: 200 });
+    return NextResponse.json({ recipes: recipes.map(({ _count, ...recipe }) => ({ ...recipe, usedInMealPlans: _count.mealPlanRecipes > 0 })) }, { status: 200 });
   } catch (error) {
     console.error('Get recipes error:', error);
     return NextResponse.json(
@@ -63,6 +67,8 @@ export async function POST(request: NextRequest) {
       servings,
       estimatedCostPerServing,
       storeBoughtCost,
+      librarySource,
+      importSourceSnapshot,
     } = body;
 
     if (!title || !originalIngredients || !freshIngredients || !instructions) {
@@ -71,10 +77,17 @@ export async function POST(request: NextRequest) {
         { status: 400 }
       );
     }
+    const sourceSnapshot = importedRecipeSnapshotSchema.optional().safeParse(importSourceSnapshot);
+    if (!sourceSnapshot.success) {
+      return NextResponse.json({ error: 'Invalid imported recipe source snapshot' }, { status: 400 });
+    }
 
     const recipe = await prisma.recipe.create({
       data: {
         userId: session.user.id,
+        savedAt: new Date(),
+        librarySource: isLibrarySource(librarySource) && librarySource !== 'meal_plan' ? librarySource : 'generated',
+        ...(sourceSnapshot.data && { importSourceSnapshot: sourceSnapshot.data }),
         title,
         originalIngredients,
         freshIngredients: JSON.stringify(freshIngredients),

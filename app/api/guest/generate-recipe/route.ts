@@ -1,8 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { AI_CHAT_URL, AI_API_KEY, MODEL_SMART } from '@/lib/ai';
+import { MODEL_SMART } from '@/lib/ai';
+import { recipeChat, canRetryRecipeAI, BackupTransportError, ProviderConnectionError } from '@/lib/ai-provider';
 import { extractJsonPayload } from '@/lib/ai-json';
+import { RequestDeadlineError, withRequestDeadline } from '@/lib/request-deadline';
 import { checkGuestLimit } from '@/lib/guest-rate-limit';
 import { getClientIp } from '@/lib/rate-limit';
+import {
+  createGuestRecipeHandoff,
+  guestRecipeHandoffRecipeSchema,
+} from '@/lib/guest-recipe-handoff';
 
 export const dynamic = 'force-dynamic';
 
@@ -21,6 +27,30 @@ const NON_FOOD_ITEM =
   /\b(skewers?|toothpicks?|parchment(?: paper)?|aluminum foil|baking sheets?|mixing bowls?|whisks?|spatulas?|knives?|pans?|pots?|ramekins?|muffin liners?)\b/i;
 const PROCESSED_SHORTCUT =
   /\b(hot dogs?|frankfurters?|deli meats?|processed cheese|cheese powder|boxed (?:cake|brownie|pancake|waffle) mix|packaged (?:cookies?|biscuits?|crackers?))\b/i;
+
+// Up to four sequential model calls (first try, transient retry, JSON retry,
+// quality repair) share this one bound.
+const GUEST_DEADLINE_MS = 55_000;
+const BUSY_MESSAGE =
+  "Recipe generation is temporarily unavailable. Your ingredients are still here — please try again in a few minutes.";
+
+// Errors whose message was written for visitors and is safe to return.
+class GuestRecipeError extends Error {}
+class GuestBusyError extends Error {}
+
+type Completion = { choices?: Array<{ finish_reason?: string; message?: { refusal?: unknown; content?: unknown } }> };
+
+function isUnsafeStop(data: Completion) {
+  const choice = data?.choices?.[0];
+  return Boolean(choice?.message?.refusal) || choice?.finish_reason === 'content_filter';
+}
+
+// Only a clean stop is a finished answer; a missing or unknown reason is not.
+function finishedContent(data: Completion): string | null {
+  const choice = data?.choices?.[0];
+  const content = choice?.message?.content;
+  return choice?.finish_reason === 'stop' && typeof content === 'string' ? content : null;
+}
 
 function parseRecipe(content: string): GuestRecipe {
   return JSON.parse(extractJsonPayload(content));
@@ -46,6 +76,15 @@ function recipeQualityIssues(recipe: GuestRecipe): string[] {
   }
   if (!Array.isArray(recipe.instructions) || recipe.instructions.length < 2) {
     issues.push('The recipe needs complete step-by-step instructions.');
+  }
+  if (typeof recipe.prepTime !== 'string' || !recipe.prepTime.trim()) {
+    issues.push('The recipe needs a preparation time.');
+  }
+  if (typeof recipe.cookTime !== 'string' || !recipe.cookTime.trim()) {
+    issues.push('The recipe needs a cooking time.');
+  }
+  if (typeof recipe.servings !== 'string' || !recipe.servings.trim()) {
+    issues.push('The recipe needs a serving count.');
   }
 
   return issues;
@@ -110,131 +149,146 @@ For the cost fields, estimate using average US grocery prices: "estimatedCostPer
 
 Respond with raw JSON only. Do not include code blocks, markdown, or any other formatting.`;
 
-    const llmRequest = {
-      method: 'POST' as const,
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${AI_API_KEY}`,
-      },
-      body: JSON.stringify({
-        model: MODEL_SMART,
-        messages: [{ role: 'user', content: prompt }],
-        max_tokens: 6000,
-        response_format: { type: 'json_object' },
-      }),
-    };
-
-    let response = await fetch(AI_CHAT_URL, llmRequest);
-    // Retry only transient 5xx/network errors — NOT 429 (retrying into a
-    // quota wall just burns more of the shared Gemini budget)
-    if (!response.ok && response.status !== 429) {
-      response = await fetch(AI_CHAT_URL, llmRequest);
-    }
-    if (!response.ok) {
-      const errText = await response.text().catch(() => '');
-      console.error('Guest generation LLM failed:', response.status, errText.slice(0, 300));
-      if (response.status === 429) {
-        // Gemini quota is exhausted — degrade gracefully, push to signup
-        return NextResponse.json(
-          {
-            error: 'Busy',
-            message:
-              "Recipe Reborn is really popular right now — try again in a minute, or sign up free to skip the wait.",
-          },
-          { status: 503 }
-        );
-      }
-      throw new Error('AI request failed');
-    }
-
-    const data = await response.json();
-    const content = data.choices?.[0]?.message?.content ?? '';
-
-    let recipe: GuestRecipe;
-    try {
-      recipe = parseRecipe(content);
-    } catch (parseError) {
-      console.warn('Guest generation returned invalid JSON; requesting one compact retry.', {
-        length: content.length,
-        finishReason: data.choices?.[0]?.finish_reason,
-      });
-
-      const retryResponse = await fetch(AI_CHAT_URL, {
-        ...llmRequest,
+    // One deadline covers every model call below; the handoff write runs after it.
+    const recipe = await withRequestDeadline(request.signal, GUEST_DEADLINE_MS, async (signal) => {
+      const ask = (messages: Array<{ role: string; content: string }>) => recipeChat({
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        signal,
         body: JSON.stringify({
           model: MODEL_SMART,
-          messages: [
-            { role: 'user', content: prompt },
-            {
-              role: 'user',
-              content:
-                'The previous response was incomplete or invalid. Start over and return one complete, compact JSON object only. Use 6 to 10 ingredients and 5 to 7 concise instruction steps.',
-            },
-          ],
+          messages,
           max_tokens: 6000,
           response_format: { type: 'json_object' },
         }),
-      });
+      }, { totalMs: GUEST_DEADLINE_MS });
 
-      if (!retryResponse.ok) {
-        console.error('Guest generation JSON retry failed:', retryResponse.status);
-        throw new Error('Could not build a recipe from that — try a fuller ingredient list.');
+      let response = await ask([{ role: 'user', content: prompt }]);
+      // Retry only transient Gemini 5xx — NOT 429 (retrying into a quota wall
+      // just burns more of the shared budget) and never a failed backup answer,
+      // which would repeat the same paid call.
+      if (response.status >= 500 && canRetryRecipeAI(response)) {
+        await response.body?.cancel();
+        signal.throwIfAborted();
+        response = await ask([{ role: 'user', content: prompt }]);
+      }
+      if (!response.ok) {
+        console.error('Guest generation LLM failed:', response.status);
+        await response.body?.cancel();
+        // Provider quota is exhausted — degrade gracefully; the visitor keeps their input
+        throw new GuestBusyError();
       }
 
-      const retryData = await retryResponse.json();
-      const retryContent = retryData.choices?.[0]?.message?.content ?? '';
+      const data = await response.json();
+      // A refusal or safety stop is an answer, not malformed JSON: never re-ask.
+      if (isUnsafeStop(data)) throw new GuestRecipeError('Could not build a recipe from that — try a fuller ingredient list.');
+      // Truncation earns the one compact retry below; any other unfinished answer is final.
+      const finishReason = data.choices?.[0]?.finish_reason;
+      if (finishReason !== 'stop' && finishReason !== 'length') {
+        throw new GuestRecipeError('Could not build a recipe from that — try a fuller ingredient list.');
+      }
+      const content = finishedContent(data) ?? '';
+
+      let draft: GuestRecipe;
       try {
-        recipe = parseRecipe(retryContent);
+        draft = parseRecipe(content);
       } catch {
-        console.error('Guest generation JSON retry was invalid:', {
-          length: retryContent.length,
-          finishReason: retryData.choices?.[0]?.finish_reason,
+        console.warn('Guest generation returned invalid JSON; requesting one compact retry.', {
+          length: content.length,
+          finishReason: data.choices?.[0]?.finish_reason,
         });
-        throw new Error('Could not build a recipe from that — try a fuller ingredient list.');
+
+        const retryResponse = await ask([
+          { role: 'user', content: prompt },
+          {
+            role: 'user',
+            content:
+              'The previous response was incomplete or invalid. Start over and return one complete, compact JSON object only. Use 6 to 10 ingredients and 5 to 7 concise instruction steps.',
+          },
+        ]);
+
+        if (!retryResponse.ok) {
+          console.error('Guest generation JSON retry failed:', retryResponse.status);
+          await retryResponse.body?.cancel();
+          throw new GuestBusyError();
+        }
+
+        const retryData = await retryResponse.json();
+        const retryContent = finishedContent(retryData);
+        try {
+          if (isUnsafeStop(retryData) || retryContent === null) throw new Error('unfinished answer');
+          draft = parseRecipe(retryContent);
+        } catch {
+          console.error('Guest generation JSON retry was invalid:', {
+            length: retryContent?.length ?? 0,
+            finishReason: retryData.choices?.[0]?.finish_reason,
+          });
+          throw new GuestRecipeError('Could not build a recipe from that — try a fuller ingredient list.');
+        }
       }
+
+      const qualityIssues = recipeQualityIssues(draft);
+      if (qualityIssues.length > 0) {
+        const repairResponse = await ask([
+          { role: 'user', content: prompt },
+          { role: 'assistant', content: JSON.stringify(draft) },
+          {
+            role: 'user',
+            content: `Revise the JSON recipe before returning it. Fix every issue below:\n- ${qualityIssues.join('\n- ')}\nReturn raw JSON only.`,
+          },
+        ]);
+        if (!repairResponse.ok) {
+          console.error('Guest generation quality repair failed:', repairResponse.status);
+          await repairResponse.body?.cancel();
+          throw new GuestBusyError();
+        }
+
+        const repairData = await repairResponse.json();
+        const repairedContent = finishedContent(repairData);
+        if (isUnsafeStop(repairData) || repairedContent === null) throw new GuestRecipeError('Could not build a fully fresh recipe — try another ingredient list.');
+        draft = parseRecipe(repairedContent);
+
+        const remainingIssues = recipeQualityIssues(draft);
+        if (remainingIssues.length > 0) {
+          console.error('Guest generation failed quality checks:', remainingIssues);
+          throw new GuestRecipeError('Could not build a fully fresh recipe — try another ingredient list.');
+        }
+      }
+      return draft;
+    });
+
+    const validatedRecipe = guestRecipeHandoffRecipeSchema.safeParse(recipe);
+    if (!validatedRecipe.success) {
+      // Issue paths only: messages can quote model output.
+      console.error('Guest generation was complete but not safe to hand off:', validatedRecipe.error.issues.map((issue) => issue.path.join('.')));
+      throw new GuestRecipeError('Could not build a complete recipe — try another ingredient list.');
     }
 
-    const qualityIssues = recipeQualityIssues(recipe);
-    if (qualityIssues.length > 0) {
-      const repairRequest = {
-        ...llmRequest,
-        body: JSON.stringify({
-          model: MODEL_SMART,
-          messages: [
-            { role: 'user', content: prompt },
-            { role: 'assistant', content: JSON.stringify(recipe) },
-            {
-              role: 'user',
-              content: `Revise the JSON recipe before returning it. Fix every issue below:\n- ${qualityIssues.join('\n- ')}\nReturn raw JSON only.`,
-            },
-          ],
-          max_tokens: 6000,
-          response_format: { type: 'json_object' },
-        }),
-      };
+    const handoff = await createGuestRecipeHandoff({
+      originalIngredients: ingredients,
+      recipe: validatedRecipe.data,
+    });
 
-      const repairResponse = await fetch(AI_CHAT_URL, repairRequest);
-      if (!repairResponse.ok) {
-        console.error('Guest generation quality repair failed:', repairResponse.status);
-        throw new Error('Could not build a fully fresh recipe — try another ingredient list.');
-      }
-
-      const repairData = await repairResponse.json();
-      const repairedContent = repairData.choices?.[0]?.message?.content ?? '';
-      recipe = parseRecipe(repairedContent);
-
-      const remainingIssues = recipeQualityIssues(recipe);
-      if (remainingIssues.length > 0) {
-        console.error('Guest generation failed quality checks:', remainingIssues);
-        throw new Error('Could not build a fully fresh recipe — try another ingredient list.');
-      }
+    return NextResponse.json({
+      recipe: validatedRecipe.data,
+      remaining: limit.remaining,
+      handoffToken: handoff.token,
+      handoffExpiresAt: handoff.expiresAt.toISOString(),
+    }, {
+      headers: { 'Cache-Control': 'no-store' },
+    });
+  } catch (error) {
+    if (request.signal.aborted) return new NextResponse(null, { status: 499 });
+    if (error instanceof GuestBusyError || error instanceof BackupTransportError || error instanceof ProviderConnectionError) {
+      return NextResponse.json({ error: 'Busy', message: BUSY_MESSAGE }, { status: 503 });
     }
-
-    return NextResponse.json({ recipe, remaining: limit.remaining });
-  } catch (error: any) {
-    console.error('Guest generate error:', error);
+    if (error instanceof RequestDeadlineError || (error as { name?: string })?.name === 'TimeoutError') {
+      return NextResponse.json({ error: 'Timeout', message: 'That took too long — please try again.' }, { status: 504 });
+    }
+    // Only messages written for visitors are returned; raw errors can quote provider output.
+    console.error('Guest generate error:', error instanceof Error ? error.name : 'Unknown error');
     return NextResponse.json(
-      { error: error?.message || 'Failed to generate recipe' },
+      { error: error instanceof GuestRecipeError ? error.message : 'Failed to generate recipe' },
       { status: 500 }
     );
   }

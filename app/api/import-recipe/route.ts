@@ -1,253 +1,114 @@
+import { extractRecipe, RecipeExtractionProviderError } from '@/lib/recipe-extraction';
+import { BackupInputError, BackupTransportError, ProviderConnectionError } from '@/lib/ai-provider';
 import { NextRequest, NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/auth-options';
 import { prisma } from '@/lib/db';
-import { AI_CHAT_URL, AI_API_KEY, MODEL_SMART } from '@/lib/ai';
-import { extractJsonPayload } from '@/lib/ai-json';
+import { getRequestUserId } from '@/lib/request-auth';
+import { rateLimit } from '@/lib/rate-limit';
+import { limitAiRequest } from '@/lib/ai-rate-limit';
+import { ImportInputError, importFile, recipePage, type ImportPart } from '@/lib/recipe-import';
 import { resolvePartnerTrial } from '@/lib/partner-offer-server';
+import { findBlockedFoodInRecipe } from '@/lib/food-preferences';
+import { hasPremiumAccess } from '@/lib/entitlement';
+import { RequestDeadlineError, withRequestDeadline } from '@/lib/request-deadline';
 
 export const dynamic = 'force-dynamic';
+export const maxDuration = 60;
 
-// Tier limits
-const TIER_LIMITS = {
-  free: 3,
-  premium: 100,
-  pro: Infinity, // legacy fallback for grandfathered Pro subscribers; no longer sold
-};
+const TIER_LIMITS = { free: 3, premium: 100, pro: Infinity };
 
-// POST /api/import-recipe - Import recipe from URL
-export async function POST(req: NextRequest) {
-  try {
-    const session = await getServerSession(authOptions);
-    
-    if (!session?.user?.id) {
-      return NextResponse.json(
-        { error: 'Unauthorized' },
-        { status: 401 }
-      );
-    }
-
-    const body = await req.json();
-    const { url } = body;
-
-    if (!url || typeof url !== 'string') {
-      return NextResponse.json(
-        { error: 'Valid URL is required' },
-        { status: 400 }
-      );
-    }
-
-    // Validate URL format
-    try {
-      new URL(url);
-    } catch (e) {
-      return NextResponse.json(
-        { error: 'Invalid URL format' },
-        { status: 400 }
-      );
-    }
-
-    // Get user with subscription info and check limits
-    const user = await prisma.user.findUnique({
-      where: { id: session.user.id },
-      select: {
-        id: true,
-        subscriptionTier: true,
-        subscriptionStatus: true,
-        generationCount: true,
-        lastGenerationReset: true,
-        signupSource: true,
-        createdAt: true,
-        currentPeriodEnd: true,
-      },
-    });
-
-    if (!user) {
-      return NextResponse.json({ error: 'User not found' }, { status: 404 });
-    }
-
-    // Check if we need to reset monthly counter
-    const now = new Date();
-    const lastReset = new Date(user.lastGenerationReset);
-    const daysSinceReset = Math.floor(
-      (now.getTime() - lastReset.getTime()) / (1000 * 60 * 60 * 24)
-    );
-
-    if (daysSinceReset >= 30) {
-      // Reset counter after 30 days
-      await prisma.user.update({
-        where: { id: user.id },
-        data: {
-          generationCount: 0,
-          lastGenerationReset: now,
-        },
-      });
-      user.generationCount = 0;
-    }
-
-    // Check subscription limits — trial users get a reduced cap until their
-    // first real payment (prevents stockpiling recipes on a free trial).
-    // Imports draw on the same generationCount as generation, so they must use
-    // the same resolved allowance or a partner member hits a phantom wall here.
-    const isTrialing =
-      user.subscriptionTier !== 'free' && user.subscriptionStatus === 'trialing';
-
-    const { offer: partnerOffer, trialRecipeLimit: trialLimit } =
-      await resolvePartnerTrial(user);
-
-    const limit = isTrialing
-      ? trialLimit
-      : TIER_LIMITS[user.subscriptionTier as keyof typeof TIER_LIMITS] || TIER_LIMITS.free;
-
-    if (user.generationCount >= limit) {
-      return NextResponse.json(
-        {
-          error: 'Generation limit reached',
-          limit,
-          current: user.generationCount,
-          tier: user.subscriptionTier,
-          message: isTrialing
-            ? partnerOffer
-              // No card behind this trial, so it never converts on its own.
-              ? `Your ${partnerOffer.label} free trial includes ${trialLimit} recipes, and you've used them all. Subscribe to Premium for 100 a month.`
-              : `Your free trial includes ${trialLimit} recipes. Your full 100 per month unlocks when your trial converts to Premium.`
-            : user.subscriptionTier === 'free'
-              ? 'You have reached your free tier limit of 3 recipes per month. Upgrade to Premium for 100 recipes per month.'
-              : `You have reached your ${user.subscriptionTier} tier limit of ${limit} recipes this month.`,
-        },
-        { status: 403 }
-      );
-    }
-
-    // Increment generation count
-    await prisma.user.update({
-      where: { id: user.id },
-      data: {
-        generationCount: { increment: 1 },
-      },
-    });
-
-    const apiKey = AI_API_KEY;
-    if (!apiKey) {
-      return NextResponse.json(
-        { error: 'AI API key not configured' },
-        { status: 500 }
-      );
-    }
-
-    // Fetch the recipe page
-    let htmlContent;
-    try {
-      const pageResponse = await fetch(url, {
-        headers: {
-          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
-        }
-      });
-      
-      if (!pageResponse.ok) {
-        throw new Error('Failed to fetch recipe page');
-      }
-      
-      htmlContent = await pageResponse.text();
-    } catch (fetchError) {
-      console.error('Error fetching recipe page:', fetchError);
-      return NextResponse.json(
-        { error: 'Failed to fetch recipe from URL. The website may be blocking requests.' },
-        { status: 500 }
-      );
-    }
-
-    // Use AI to extract recipe information from HTML
-    const prompt = `Extract recipe information from this HTML content and return it in JSON format.
-
-HTML Content (first 10000 chars):
-${htmlContent.substring(0, 10000)}
-
-Please extract and return in this exact JSON format:
-{
-  "title": "Recipe title",
-  "ingredients": "Comma-separated list of ingredients with quantities",
-  "instructions": "Step-by-step cooking instructions",
-  "prepTime": "Prep time (e.g., 15 minutes)",
-  "cookTime": "Cook time (e.g., 30 minutes)",
-  "servings": "Number of servings (e.g., 4 servings)",
-  "dietaryTags": ["Array of dietary tags like Vegan, Gluten-Free, etc."]
+async function readSource(req: NextRequest, signal: AbortSignal): Promise<ImportPart> {
+  const contentType = req.headers.get('content-type') ?? '';
+  if (contentType.includes('multipart/form-data')) {
+    const formData = await req.formData().catch(() => null);
+    const file = formData?.get('file');
+    if (!(file instanceof File)) throw new ImportInputError('Choose a recipe photo or file.');
+    return importFile(file);
+  }
+  if (!contentType.includes('application/json')) {
+    throw new ImportInputError('Send a recipe website link, photo, or supported file.', 415);
+  }
+  const body = await req.json().catch(() => null) as { url?: unknown; text?: unknown } | null;
+  if (typeof body?.text === 'string') {
+    const text = body.text.trim();
+    if (!text || Buffer.byteLength(text) > 100 * 1024) throw new ImportInputError('Paste recipe text under 100 KB.');
+    return { text };
+  }
+  if (typeof body?.url !== 'string' || !body.url.trim()) throw new ImportInputError('Enter a valid HTTPS recipe link.');
+  return { text: await recipePage(body.url.trim(), 0, signal) };
 }
 
-If you cannot find specific information, use reasonable defaults. Return ONLY valid JSON, no markdown.`;
+export async function POST(req: NextRequest) {
+  try {
+    const userId = await getRequestUserId(req);
+    if (!userId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    const limited = await rateLimit(`import-recipe:${userId}`, 10, 60);
+    if (!limited.success) return NextResponse.json({ error: 'Too many imports. Wait a minute and try again.' }, { status: 429 });
 
-    const response = await fetch(AI_CHAT_URL, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${apiKey}`,
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+      select: {
+        id: true, subscriptionTier: true, subscriptionStatus: true, generationCount: true,
+        lastGenerationReset: true, signupSource: true, createdAt: true, currentPeriodEnd: true,
+        allergies: true, dislikedIngredients: true,
       },
-      body: JSON.stringify({
-        model: MODEL_SMART,
-        messages: [
-          {
-            role: 'system',
-            content: 'You are a recipe extraction assistant. Extract recipe information from HTML and return it in valid JSON format only.'
-          },
-          {
-            role: 'user',
-            content: prompt
-          }
-        ],
-        temperature: 0.3,
-        // gemini-2.5-flash thinking tokens count against this budget
-        max_tokens: 8000,
-      }),
     });
-
-    if (!response.ok) {
-      throw new Error('Failed to parse recipe');
+    if (!user) return NextResponse.json({ error: 'User not found' }, { status: 404 });
+    const now = new Date();
+    const resetBefore = new Date(now.getTime() - 30 * 86_400_000);
+    if (user.lastGenerationReset <= resetBefore) {
+      await prisma.user.updateMany({ where: { id: user.id, lastGenerationReset: { lte: resetBefore } }, data: { generationCount: 0, lastGenerationReset: now } });
+      const refreshed = await prisma.user.findUnique({ where: { id: user.id }, select: { generationCount: true } });
+      if (!refreshed) return NextResponse.json({ error: 'User not found' }, { status: 404 });
+      user.generationCount = refreshed.generationCount;
+    }
+    const tier = hasPremiumAccess(user, now) ? user.subscriptionTier : 'free';
+    const isTrialing = tier !== 'free' && user.subscriptionStatus === 'trialing';
+    const { offer, trialRecipeLimit } = await resolvePartnerTrial(user);
+    const limit = isTrialing ? trialRecipeLimit : TIER_LIMITS[tier as keyof typeof TIER_LIMITS] ?? TIER_LIMITS.free;
+    if (user.generationCount >= limit) {
+      return NextResponse.json({
+        error: 'Generation limit reached', limit, current: user.generationCount, tier: user.subscriptionTier,
+        message: isTrialing
+          ? offer ? `Your ${offer.label} free trial includes ${trialRecipeLimit} recipes, and you've used them all.` : `Your free trial includes ${trialRecipeLimit} recipes.`
+          : user.subscriptionTier === 'free' ? 'You have reached your free tier limit of 3 recipes per month.' : `You have reached your ${user.subscriptionTier} tier limit of ${limit} recipes this month.`,
+      }, { status: 403 });
     }
 
-    const data = await response.json();
-    const content = data.choices?.[0]?.message?.content;
-
-    if (!content) {
-      throw new Error('No content in response');
-    }
-
-    // Parse the JSON response
-    let recipeData;
-    try {
-      recipeData = JSON.parse(extractJsonPayload(content));
-    } catch (parseError) {
-      console.error('Failed to parse recipe JSON:', parseError);
-      return NextResponse.json(
-        { error: 'Failed to parse recipe data. The page format may not be supported.' },
-        { status: 500 }
-      );
-    }
-
-    // Validate required fields
-    if (!recipeData.title || !recipeData.ingredients || !recipeData.instructions) {
-      return NextResponse.json(
-        { error: 'Could not extract complete recipe information from the URL' },
-        { status: 400 }
-      );
-    }
-
-    return NextResponse.json({
-      recipe: {
-        title: recipeData.title,
-        originalIngredients: recipeData.ingredients,
-        freshIngredients: recipeData.ingredients,
-        instructions: recipeData.instructions,
-        prepTime: recipeData.prepTime || 'Not specified',
-        cookTime: recipeData.cookTime || 'Not specified',
-        servings: recipeData.servings || 'Not specified',
-        dietaryTags: recipeData.dietaryTags || [],
-      }
-    });
+    const aiLimit = await limitAiRequest(userId);
+    if (aiLimit) return aiLimit;
+    const recipe = await withRequestDeadline(req.signal, 55_000, async (signal) =>
+      extractRecipe(await readSource(req, signal), signal, req.headers.get('x-recipe-partial-review') === '1'));
+    const importedContent = {
+      title: recipe.title,
+      ingredients: recipe.freshIngredients.split('\n').filter(Boolean),
+      instructions: recipe.instructions,
+    };
+    const allergyConflict = findBlockedFoodInRecipe(importedContent, user.allergies, 'allergy');
+    const dislikeConflict = findBlockedFoodInRecipe(importedContent, user.dislikedIngredients, 'dislike');
+    recipe.reviewNotes = [
+      recipe.reviewNotes,
+      allergyConflict ? `Review carefully: the source appears to include an ingredient matching your saved allergy (${allergyConflict}). The import was kept faithful and was not rewritten.` : '',
+      dislikeConflict ? `Review: the source appears to include an ingredient matching your saved dislike (${dislikeConflict}). The import was kept faithful and was not rewritten.` : '',
+    ].filter(Boolean).join('\n');
+    if (req.signal.aborted) throw new DOMException('Recipe import canceled', 'AbortError');
+    // A recoverable partial read is not a completed import. Keep rate/AI limits,
+    // but don't charge recipe quota or pass it off as a saveable source recipe.
+    if (recipe.needsDirections) return NextResponse.json({ status: 'partial', recipe, quotaUsed: false });
+    const charged = Number.isFinite(limit)
+      ? await prisma.user.updateMany({ where: { id: user.id, generationCount: { lt: limit } }, data: { generationCount: { increment: 1 } } })
+      : await prisma.user.update({ where: { id: user.id }, data: { generationCount: { increment: 1 } } }).then(() => ({ count: 1 }));
+    if (charged.count !== 1) return NextResponse.json({ error: 'Generation limit reached' }, { status: 403 });
+    return NextResponse.json({ recipe });
   } catch (error) {
-    console.error('Error importing recipe:', error);
-    return NextResponse.json(
-      { error: 'Failed to import recipe from URL' },
-      { status: 500 }
-    );
+    if (error instanceof RequestDeadlineError) return NextResponse.json({ error: error.message }, { status: 504 });
+    if (error instanceof DOMException && error.name === 'AbortError') return NextResponse.json({ error: 'Recipe import canceled. Nothing was saved or charged.' }, { status: 499 });
+    if (error instanceof ImportInputError) return NextResponse.json({ error: error.message }, { status: error.status });
+    if (error instanceof BackupInputError) return NextResponse.json({ error: "This photo format isn't supported right now. Please use a JPEG, PNG or WebP photo." }, { status: 415 });
+    if (error instanceof RecipeExtractionProviderError || error instanceof BackupTransportError || error instanceof ProviderConnectionError) {
+      return NextResponse.json({ error: new RecipeExtractionProviderError().message }, { status: 503 });
+    }
+    if (error instanceof SyntaxError) return NextResponse.json({ error: 'The source did not contain a readable complete recipe.' }, { status: 422 });
+    console.error('[recipe-import] failed', error instanceof Error ? error.message : 'Unknown error');
+    return NextResponse.json({ error: 'The recipe could not be read. Try a clearer photo or another supported source.' }, { status: 422 });
   }
 }

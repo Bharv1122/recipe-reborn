@@ -73,6 +73,7 @@ export async function POST(req: Request) {
         name,
         weekStartDate: new Date(weekStartDate),
         description,
+        generationSettings: { allergies: [], dislikedIngredients: [], dietaryPreferences: [] },
       },
       include: {
         mealPlanRecipes: {

@@ -34,7 +34,12 @@ export async function POST(request: Request) {
     const tokens = await issueMobileTokenPair(user.id, parsed.data);
     return NextResponse.json({
       tokens,
-      user: { id: user.id, email: user.email, name: user.name },
+      user: {
+        id: user.id, email: user.email, name: user.name,
+        allergies: user.allergies,
+        dislikedIngredients: user.dislikedIngredients,
+        likedIngredients: user.likedIngredients,
+      },
     });
   } catch (error) {
     console.error('Mobile login error:', error);

@@ -8,13 +8,14 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent } from '@/components/ui/card';
-import { Loader2, Mail, Lock } from 'lucide-react';
+import { Loader2, Mail, Lock, Eye, EyeOff } from 'lucide-react';
 import toast from 'react-hot-toast';
 
 export function LoginForm({ callbackUrl = '/generator' }: { callbackUrl?: string }) {
   const router = useRouter();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const safeCallbackUrl =
     callbackUrl.startsWith('/') && !callbackUrl.startsWith('//') ? callbackUrl : '/generator';
@@ -80,15 +81,21 @@ export function LoginForm({ callbackUrl = '/generator' }: { callbackUrl?: string
               <Lock className="absolute left-3 top-2.5 h-5 w-5 text-gray-400" />
               <Input
                 id="password"
-                type="password"
+                type={showPassword ? 'text' : 'password'}
                 autoComplete="current-password"
                 placeholder="••••••••"
                 value={password}
                 onChange={(e) => setPassword(e?.target?.value ?? '')}
                 required
-                className="pl-10"
+                className="pl-10 pr-12"
                 disabled={isLoading}
               />
+              <button type="button" onClick={() => setShowPassword(value => !value)}
+                onMouseDown={event => event.preventDefault()} disabled={isLoading}
+                aria-label={showPassword ? 'Hide password' : 'Show password'} aria-pressed={showPassword}
+                className="absolute right-0 top-0 flex h-9 w-11 items-center justify-center text-gray-500 focus-visible:outline focus-visible:outline-2">
+                {showPassword ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
+              </button>
             </div>
           </div>
           <Button

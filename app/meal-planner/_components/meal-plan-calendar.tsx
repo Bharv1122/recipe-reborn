@@ -4,7 +4,7 @@ import { useState } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { ShoppingCart, Clock, Utensils, RefreshCw } from 'lucide-react';
+import { ShoppingCart, Clock, Utensils, RefreshCw, BookmarkPlus, Check } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { useRouter } from 'next/navigation';
 
@@ -16,6 +16,7 @@ interface Recipe {
   servings?: string;
   dietaryTags?: string[];
   calories?: number;
+  savedAt?: string | null;
 }
 
 interface MealPlanRecipe {
@@ -64,6 +65,7 @@ export function MealPlanCalendar({ plan, onUpdate }: MealPlanCalendarProps) {
   const router = useRouter();
   const [generating, setGenerating] = useState(false);
   const [replacingId, setReplacingId] = useState<string | null>(null);
+  const [savingId, setSavingId] = useState<string | null>(null);
   const visibleMealTypes = MEAL_TYPES.filter((mealType) =>
     plan.mealPlanRecipes.some((meal) => meal.mealType === mealType),
   );
@@ -120,7 +122,7 @@ export function MealPlanCalendar({ plan, onUpdate }: MealPlanCalendarProps) {
   };
 
   const handleReplaceMeal = async (entryId: string) => {
-    if (!window.confirm('Replace this meal with another recipe? The current recipe will stay saved in your recipes.')) return;
+    if (!window.confirm('Replace this meal with another recipe? Recipes you explicitly saved stay in My Saved Recipes.')) return;
     try {
       setReplacingId(entryId);
       const response = await fetch(`/api/meal-plans/${plan.id}/recipes/${entryId}/replace`, { method: 'POST' });
@@ -133,6 +135,21 @@ export function MealPlanCalendar({ plan, onUpdate }: MealPlanCalendarProps) {
     } finally {
       setReplacingId(null);
     }
+  };
+
+  const handleSaveRecipe = async (recipeId: string) => {
+    try {
+      setSavingId(recipeId);
+      const response = await fetch(`/api/recipes/${recipeId}`, {
+        method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ saveToLibrary: true }),
+      });
+      const body = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(body.error || 'Could not save this recipe.');
+      toast.success('Saved in My Saved Recipes');
+      onUpdate();
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Could not save this recipe.');
+    } finally { setSavingId(null); }
   };
 
   return (
@@ -221,6 +238,13 @@ export function MealPlanCalendar({ plan, onUpdate }: MealPlanCalendarProps) {
                                         </Badge>
                                       ))}
                                     </div>
+                                  )}
+                                  {mpr.recipe.savedAt ? (
+                                    <div className="flex items-center gap-1 text-xs font-medium text-emerald-700"><Check className="h-3.5 w-3.5" />Saved in My Saved Recipes</div>
+                                  ) : (
+                                    <Button type="button" variant="outline" size="sm" className="mt-2 h-auto min-h-9 w-full whitespace-normal px-2 py-2 text-xs" disabled={savingId !== null} onClick={() => handleSaveRecipe(mpr.recipe.id)}>
+                                      <BookmarkPlus className="mr-1.5 h-3.5 w-3.5" />{savingId === mpr.recipe.id ? 'Saving…' : 'Save to My Saved Recipes'}
+                                    </Button>
                                   )}
                                   <Button
                                     type="button"

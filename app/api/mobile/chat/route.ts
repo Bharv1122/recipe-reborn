@@ -2,14 +2,16 @@ import { NextResponse } from 'next/server';
 import { z } from 'zod';
 import { prisma } from '@/lib/db';
 import { getRequestUserId } from '@/lib/request-auth';
-import { AI_API_KEY, AI_CHAT_URL, MODEL_FAST } from '@/lib/ai';
+import { MODEL_FAST } from '@/lib/ai';
+import { recipeChat, hasRecipeAIKey, BackupTransportError, ProviderConnectionError } from '@/lib/ai-provider';
 import { limitAiRequest } from '@/lib/ai-rate-limit';
+import { US_COOKING_MEASURES } from '@/shared/cooking-measurements';
 
 const messageSchema = z.object({
   role: z.enum(['user', 'assistant']),
   content: z.string().trim().min(1).max(2000),
 });
-const requestSchema = z.object({ messages: z.array(messageSchema).min(1).max(20) });
+const requestSchema = z.object({ messages: z.array(messageSchema).min(1).max(20), measurementSystem: z.enum(['us']).optional() });
 
 export async function POST(request: Request) {
   let timeout: ReturnType<typeof setTimeout> | undefined;
@@ -24,7 +26,7 @@ export async function POST(request: Request) {
     if (aiLimited) return aiLimited;
     const parsed = requestSchema.safeParse(await request.json().catch(() => null));
     if (!parsed.success) return NextResponse.json({ error: 'Enter a cooking question.' }, { status: 400 });
-    if (!AI_API_KEY) return NextResponse.json({ error: 'AI Chef is temporarily unavailable.' }, { status: 503 });
+    if (!hasRecipeAIKey()) return NextResponse.json({ error: 'AI Chef is temporarily unavailable.' }, { status: 503 });
 
     const user = await prisma.user.findUnique({
       where: { id: userId },
@@ -42,15 +44,16 @@ export async function POST(request: Request) {
     if (request.signal.aborted) controller.abort();
     timeout = setTimeout(() => { timedOut = true; controller.abort(); }, 45_000);
     providerStarted = true;
-    const response = await fetch(AI_CHAT_URL, {
+    // The route timer above is authoritative; the transport bound is a backstop.
+    const response = await recipeChat({
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${AI_API_KEY}` },
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         model: MODEL_FAST,
         messages: [
           {
             role: 'system',
-            content: `You are Recipe Reborn's AI Chef. Give concise, practical cooking help, substitutions, meal ideas, and techniques. Favor recipes made from basic ingredients over prepared products. ${safetyContext}`,
+            content: `You are Recipe Reborn's AI Chef. Give concise, practical cooking help, substitutions, meal ideas, and techniques. Favor recipes made from basic ingredients over prepared products. ${safetyContext} ${parsed.data.measurementSystem === 'us' ? US_COOKING_MEASURES : ''}`,
           },
           ...parsed.data.messages,
         ],
@@ -59,7 +62,7 @@ export async function POST(request: Request) {
         reasoning_effort: 'none',
       }),
       signal: controller.signal,
-    });
+    }, { totalMs: 45_000 });
     if (!response.ok) return NextResponse.json(
       { error: 'AI Chef could not answer right now. Please try again.' },
       { status: response.status === 429 || response.status === 503 ? 503 : 502 },
@@ -71,13 +74,17 @@ export async function POST(request: Request) {
       { status: 502 },
     );
     const answer = choice?.message?.content;
-    if (choice?.finish_reason !== 'stop' || typeof answer !== 'string' || !answer.trim()) {
+    if (choice?.finish_reason !== 'stop' || choice?.message?.refusal || typeof answer !== 'string' || !answer.trim()) {
       return NextResponse.json({ error: 'AI Chef did not return a complete answer. Please try again.' }, { status: 502 });
     }
     return NextResponse.json({ message: { role: 'assistant', content: answer.trim() } });
-  } catch {
-    if (timedOut) return NextResponse.json({ error: 'AI Chef took too long to answer. Please try again.' }, { status: 504 });
+  } catch (error) {
+    if (timedOut || (error as { name?: string })?.name === 'TimeoutError') return NextResponse.json({ error: 'AI Chef took too long to answer. Please try again.' }, { status: 504 });
     if (request.signal.aborted) return NextResponse.json({ error: 'Question canceled.' }, { status: 499 });
+    if (error instanceof BackupTransportError || error instanceof ProviderConnectionError) {
+      console.error('[chef-chat] provider unavailable');
+      return NextResponse.json({ error: 'AI Chef could not answer right now. Please try again.' }, { status: 503 });
+    }
     // Never log provider payloads, questions, account preferences, or raw errors.
     console.error('[chef-chat] request failed', { stage: providerStarted ? 'provider' : 'account' });
     return NextResponse.json({ error: 'AI Chef could not answer right now. Please try again.' }, { status: providerStarted ? 502 : 500 });

@@ -20,7 +20,7 @@ async function main() {
   const [config, mealScreen, mealRoute, mealAddRoute, prismaSchema, generatorScreen, generatorRoute, shoppingRoute, scanScreen, labelRoute] = await Promise.all([
     readFile('mobile/app.config.ts', 'utf8'),
     readFile('mobile/src/app/meal-plans/index.tsx', 'utf8'),
-    readFile('app/api/meal-plans/generate/route.ts', 'utf8'),
+    readFile('app/api/meal-plans/drafts/route.ts', 'utf8'),
     readFile('app/api/mobile/meal-plans/[id]/recipes/route.ts', 'utf8'),
     readFile('prisma/schema.prisma', 'utf8'),
     readFile('mobile/src/app/generate.tsx', 'utf8'),
@@ -35,7 +35,7 @@ async function main() {
   for (const control of ['weekStartDate', 'selectedMealTypes', 'servings', 'calorieTarget', 'allergies', 'dislikes', 'selectedDietary']) {
     assert.match(mealScreen, new RegExp(control), `Missing meal-plan control: ${control}`);
   }
-  assert.match(mealScreen, /api\/meal-plans\/generate/);
+  assert.match(mealScreen, /api\/meal-plans\/drafts/);
   assert.match(mealRoute, /getRequestUserId\(req\)/, 'Meal generation must accept the existing secure native bearer token.');
   assert.match(mealScreen, /addingRecipe\.current/, 'Meal-plan adds must ignore repeated taps while a request is in flight.');
   assert.match(mealScreen, /disabled=\{addingPlanId !== null\}/, 'Meal-plan choices must be disabled while an add is in flight.');
@@ -49,12 +49,16 @@ async function main() {
   assert.match(generatorRoute, /source === 'random'/);
   assert.match(shoppingRoute, /bulkItemSchema/);
   assert.match(shoppingRoute, /prisma\.\$transaction/);
+  assert.match(scanScreen, /\['barcode', 'Scan barcode'\]/, 'Barcode scanning must be an explicit choice.');
+  assert.match(scanScreen, /\['label', 'Photograph ingredient label'\]/, 'Label photography must be an explicit choice.');
+  assert.match(scanScreen, /accessibilityState=\{\{ selected: mode === value, disabled: busy \}\}/, 'The scan mode must be visibly and accessibly selected.');
+  assert.doesNotMatch(scanScreen, /No barcode\? Photograph the ingredients/, 'Label photography must not be hidden as a barcode fallback.');
   assert.match(scanScreen, /onPress=\{generateFromBarcode\}/, 'A found barcode must hand its reviewed ingredients to generation.');
   assert.match(scanScreen, /label="Scan another" secondary/);
   assert.match(scanScreen, /onPress=\{mode === 'label' \? reviewLabel/);
   assert.match(scanScreen, /stageScanRecipeHandoff/);
   assert.match(generatorScreen, /takeScanRecipeHandoff/);
-  assert.match(generatorScreen, /value=\{ingredients\} onChangeText=\{setIngredients\}/, 'Scanned ingredients must remain editable before generation.');
+  assert.match(generatorScreen, /value=\{ingredients\} onChangeText=\{value => \{ setIngredients\(value\)/, 'Scanned ingredients must remain editable before generation.');
   assert.match(labelRoute, /getRequestUserId\(req\)/, 'Label extraction must accept the secure native bearer token.');
 
   assert.match(config, /icon:\s*'\.\/assets\/images\/recipe-reborn-icon\.png'/);

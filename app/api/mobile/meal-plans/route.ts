@@ -35,7 +35,8 @@ export async function POST(request: Request) {
     const parsed = createSchema.safeParse(await request.json().catch(() => null));
     if (!parsed.success) return NextResponse.json({ error: 'Name and a valid week start are required.' }, { status: 400 });
     const mealPlan = await prisma.mealPlan.create({
-      data: { userId, name: parsed.data.name, weekStartDate: new Date(parsed.data.weekStartDate), description: parsed.data.description || null },
+      data: { userId, name: parsed.data.name, weekStartDate: new Date(parsed.data.weekStartDate), description: parsed.data.description || null,
+        generationSettings: { allergies: [], dislikedIngredients: [], dietaryPreferences: [] } },
       include: { mealPlanRecipes: true },
     });
     return NextResponse.json({ mealPlan }, { status: 201 });

@@ -146,7 +146,7 @@ function hooks() {
   for (const [file, pattern] of [
     ['mobile/src/app/generate.tsx', /ReportContentAction target=\{\{ source: 'generated'/],
     ['mobile/src/app/recipes/[id].tsx', /ReportContentAction target=\{\{ source: 'saved', recipeId: recipe.id/],
-    ['mobile/src/app/chat.tsx', /message.role === 'assistant' \? <ReportContentAction target=\{\{ source: 'chat', message: message.content/],
+    ['mobile/src/app/chat.tsx', /message.role === 'assistant' \? <>[\s\S]*?<ReportContentAction target=\{\{ source: 'chat', message: message.content/],
   ]) assert.match(fs.readFileSync(file, 'utf8'), pattern, `Missing reporting entry point in ${file}`);
   console.log('PASS: generated recipes, saved recipes and assistant replies expose reporting entry points. No network, real reports or personal data used.');
 })().catch(error => { console.error(error); process.exitCode = 1; }).finally(() => {

@@ -71,19 +71,42 @@ model User {
   // Food preferences — applied to all AI generation (recipes + meal plans)
   allergies           String[] @default([])
   dislikedIngredients String[] @default([])
+  likedIngredients    String[] @default([])
 
-  accounts                Account[]
-  sessions                Session[]
-  recipes                 Recipe[]
-  folders                 Folder[]
-  collections             Collection[]
-  mealPlans               MealPlan[]
-  shoppingLists           ShoppingList[]
-  pantryInventory         PantryInventory?
-  generationCancellations GenerationCancellation[]
-  mobileRefreshTokens     MobileRefreshToken[]
-  mobilePushTokens        MobilePushToken[]
-  recipeReports           RecipeReport[]
+  accounts                    Account[]
+  sessions                    Session[]
+  recipes                     Recipe[]
+  folders                     Folder[]
+  collections                 Collection[]
+  mealPlans                   MealPlan[]
+  mealPlanDrafts              MealPlanDraft[]
+  shoppingLists               ShoppingList[]
+  pantryInventory             PantryInventory?
+  generationCancellations     GenerationCancellation[]
+  mobileRefreshTokens         MobileRefreshToken[]
+  mobilePushTokens            MobilePushToken[]
+  recipeReports               RecipeReport[]
+  redeemedGuestRecipeHandoffs GuestRecipeHandoff[]
+}
+
+// Short-lived server-side copy of a validated anonymous preview. The browser
+// receives only a random bearer token; redemption requires an authenticated
+// account and charges that account's recipe allowance once. The owning account
+// may retry until expiry if the first response is lost; other accounts cannot.
+model GuestRecipeHandoff {
+  id                  String    @id @default(cuid())
+  tokenHash           String    @unique
+  originalIngredients String?   @db.Text
+  recipe              Json?
+  expiresAt           DateTime
+  redeemedAt          DateTime?
+  redeemedByUserId    String?
+  createdAt           DateTime  @default(now())
+
+  redeemedByUser User? @relation(fields: [redeemedByUserId], references: [id], onDelete: SetNull)
+
+  @@index([expiresAt])
+  @@index([redeemedByUserId, redeemedAt])
 }
 
 // Authenticated in-app reports for AI-generated recipes. The recipe snapshot is
@@ -206,6 +229,14 @@ model Recipe {
   rating              Int?     @default(0)
   notes               String?  @db.Text
 
+  // Only recipes the user explicitly chose to keep appear in My Saved Recipes.
+  // Legacy rows remain visible until the user removes them; plan-generated
+  // recipes set savedAt to null and stay available through their meal plan.
+  savedAt              DateTime? @default(now())
+  librarySource        String    @default("legacy")
+  // Immutable faithful import snapshot used by explicit Revert to source.
+  importSourceSnapshot Json?
+
   // Sharing fields
   isPublic   Boolean @default(false)
   shareToken String? @unique
@@ -239,6 +270,7 @@ model Recipe {
   mealPlanRecipes   MealPlanRecipe[]
 
   @@index([userId])
+  @@index([userId, savedAt])
   @@index([folderId])
   @@index([shareToken])
   @@index([isPublic])
@@ -288,6 +320,7 @@ model MealPlan {
   name          String
   weekStartDate DateTime // Start of the week for this meal plan
   description   String?  @db.Text
+  generationSettings Json? // Original plan exclusions survive preview expiration.
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
 
@@ -312,11 +345,11 @@ model MealPlanRecipe {
   mealPlan MealPlan @relation(fields: [mealPlanId], references: [id], onDelete: Cascade)
   recipe   Recipe   @relation(fields: [recipeId], references: [id], onDelete: Cascade)
 
+  @@unique([mealPlanId, recipeId, day, mealType])
   @@index([mealPlanId])
   @@index([recipeId])
   @@index([day])
   @@index([mealType])
-  @@unique([mealPlanId, recipeId, day, mealType])
 }
 
 model ShoppingList {
@@ -374,4 +407,22 @@ model FunnelEvent {
   createdAt DateTime @default(now())
 
   @@index([eventName, createdAt])
+}
+
+// Temporary previews and durable generation receipts. No Recipe/MealPlan is
+// created until the owner explicitly saves. Expired payloads can be erased while
+// status and savedPlanId retain quota accounting.
+model MealPlanDraft {
+  id          String   @id @default(cuid())
+  userId      String
+  settings    Json
+  meals       Json?
+  status      String   @default("pending")
+  recipeIds   Json     @default("{}")
+  savedPlanId String?  @unique
+  createdAt   DateTime @default(now())
+  expiresAt   DateTime
+  user        User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  @@index([userId, createdAt])
+  @@index([expiresAt])
 }

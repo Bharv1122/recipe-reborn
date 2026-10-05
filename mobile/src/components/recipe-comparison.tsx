@@ -11,7 +11,7 @@ export function PackageNutritionReview({ value, onChange }: { value: OriginalNut
   const [open, setOpen] = useState(false);
   const [draftValues, setDraftValues] = useState(() => Object.fromEntries(NUTRIENT_FIELDS.map(({ key }) => [key, value.values[key] === null ? '' : String(value.values[key])])));
   return <>
-    <Button label={open ? 'Hide package nutrition' : value.reviewRequired ? 'Check scanned nutrition (optional)' : 'View package nutrition (optional)'} secondary onPress={() => setOpen(!open)} />
+    <Button label={open ? 'Close package nutrition' : 'Original package nutrition'} secondary onPress={() => setOpen(!open)} />
     {open ? <View style={styles.review}>
       <Text style={styles.note}>Check these values against the package. Leave missing values blank.</Text>
       <Text style={styles.label}>Serving size</Text>

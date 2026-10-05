@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -53,6 +53,9 @@ export function GenerateMealPlanDialog({ open, onOpenChange, onPlanGenerated }: 
   const [dislikes, setDislikes] = useState('');
   const [prefsLoaded, setPrefsLoaded] = useState(false);
   const [elapsedSeconds, setElapsedSeconds] = useState(0);
+  const prefsDirty = useRef(false);
+  const active = useRef(true);
+  useEffect(() => { active.current = true; return () => { active.current = false; }; }, []);
 
   // Pre-fill from the profile's saved food preferences (editable per plan)
   useEffect(() => {
@@ -60,7 +63,7 @@ export function GenerateMealPlanDialog({ open, onOpenChange, onPlanGenerated }: 
     fetch('/api/user/preferences')
       .then((res) => (res.ok ? res.json() : null))
       .then((prefs) => {
-        if (prefs) {
+        if (prefs && !prefsDirty.current) {
           setAllergies((prefs.allergies || []).join(', '));
           setDislikes((prefs.dislikedIngredients || []).join(', '));
         }
@@ -68,6 +71,10 @@ export function GenerateMealPlanDialog({ open, onOpenChange, onPlanGenerated }: 
       })
       .catch(() => setPrefsLoaded(true));
   }, [open, prefsLoaded]);
+
+  useEffect(() => {
+    if (!open) { setPrefsLoaded(false); prefsDirty.current = false; }
+  }, [open]);
 
   useEffect(() => {
     if (!loading) {
@@ -103,6 +110,21 @@ export function GenerateMealPlanDialog({ open, onOpenChange, onPlanGenerated }: 
     });
   };
 
+  const savePreferenceDefaults = async () => {
+    try {
+      const response = await fetch('/api/user/preferences', {
+        method: 'PUT', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ allergies: splitList(allergies), dislikedIngredients: splitList(dislikes) }),
+      });
+      const body = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(body.error || 'Could not save food preferences.');
+      setAllergies((body.allergies || []).join(', '));
+      setDislikes((body.dislikedIngredients || []).join(', '));
+      prefsDirty.current = false;
+      toast.success('Saved as your Account defaults');
+    } catch (error) { toast.error(error instanceof Error ? error.message : 'Could not save food preferences.'); }
+  };
+
   const handleGenerate = async () => {
     if (selectedMealTypes.length === 0) {
       toast.error('Select at least one meal type.');
@@ -111,7 +133,7 @@ export function GenerateMealPlanDialog({ open, onOpenChange, onPlanGenerated }: 
 
     try {
       setLoading(true);
-      const response = await fetch('/api/meal-plans/generate', {
+      const response = await fetch('/api/meal-plans/drafts', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -126,9 +148,10 @@ export function GenerateMealPlanDialog({ open, onOpenChange, onPlanGenerated }: 
         }),
       });
 
+      if (!active.current) return;
       if (response.ok) {
         const plan = await response.json();
-        onPlanGenerated(plan);
+        if (active.current) onPlanGenerated(plan.draft);
       } else {
         const error = await response.json();
         // 403 carries the Premium upsell message — show it, not a generic failure
@@ -153,7 +176,7 @@ export function GenerateMealPlanDialog({ open, onOpenChange, onPlanGenerated }: 
             Generate AI Meal Plan
           </DialogTitle>
           <DialogDescription>
-            Create a balanced weekly meal plan tailored to your preferences
+            Preview a week of meals. Save each meal you want; the plan is not saved automatically.
           </DialogDescription>
         </DialogHeader>
 
@@ -220,12 +243,12 @@ export function GenerateMealPlanDialog({ open, onOpenChange, onPlanGenerated }: 
 
           {/* Allergies & Dislikes (pre-filled from Account settings) */}
           <div className="space-y-2">
-            <Label htmlFor="allergies">Allergies (never included)</Label>
+            <Label htmlFor="allergies">Allergies to avoid</Label>
             <Input
               id="allergies"
               placeholder="e.g., shellfish, peanuts"
               value={allergies}
-              onChange={(e) => setAllergies(e.target.value)}
+              onChange={(e) => { prefsDirty.current = true; setAllergies(e.target.value); }}
             />
           </div>
 
@@ -235,11 +258,13 @@ export function GenerateMealPlanDialog({ open, onOpenChange, onPlanGenerated }: 
               id="dislikes"
               placeholder="e.g., cilantro, olives"
               value={dislikes}
-              onChange={(e) => setDislikes(e.target.value)}
+              onChange={(e) => { prefsDirty.current = true; setDislikes(e.target.value); }}
             />
             <p className="text-xs text-muted-foreground">
-              Pre-filled from your Account settings — edits here apply to this plan only.
+              Pre-filled from your Account settings — edits here apply to this plan only unless you save them below. Account allergies always remain active.
+              Always review generated recipes and product labels; these checks are not medical advice or a guarantee.
             </p>
+            <Button type="button" variant="outline" onClick={savePreferenceDefaults}>Save these as Account defaults</Button>
           </div>
 
           {/* Dietary Preferences */}
@@ -271,7 +296,7 @@ export function GenerateMealPlanDialog({ open, onOpenChange, onPlanGenerated }: 
               Creating {selectedMealTypes.length * 7} meals · {elapsedSeconds}s elapsed
             </p>
             <p className="mt-1 text-xs text-emerald-800">
-              The plan is checked for exact meal types, servings, and allergens before it is saved.
+              The plan is checked for exact meal types, servings, and allergens before you choose what to save.
             </p>
           </div>
         )}

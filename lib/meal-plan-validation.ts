@@ -1,4 +1,8 @@
 import { z } from 'zod';
+import { hasMetricCookingMeasures } from '../shared/cooking-measurements';
+import { findUnmeasuredIngredients } from '../shared/ingredient-quantities';
+import { hasBulkMeatPortion } from '../shared/meal-portions';
+import { expandedFoodTerms, findBlockedFoodInRecipe, normalizeFoodText } from './food-preferences';
 
 export const DAYS = [
   'monday',
@@ -43,6 +47,9 @@ export type MealPlanValidationCode =
   | 'allergen_detected'
   | 'disliked_ingredient'
   | 'prepared_shortcut'
+  | 'metric_units'
+  | 'missing_quantity'
+  | 'portion_mismatch'
   | 'duplicate_meal';
 
 export interface MealPlanValidationError {
@@ -56,12 +63,16 @@ export type MealPlanValidationResult =
   | { success: true; plan: ValidatedDayPlan[] }
   | { success: false; errors: MealPlanValidationError[] };
 
+/** Stored meal instructions are one string; step arrays are joined with newlines and share this total. */
+export const MEAL_INSTRUCTIONS_MAX_CHARS = 8000;
+
 const mealSchema = z.object({
   title: z.string().trim().min(1).max(160),
   ingredients: z.array(z.string().trim().min(1).max(500)).min(1).max(40),
   instructions: z.union([
-    z.string().trim().min(1).max(8000),
-    z.array(z.string().trim().min(1).max(1000)).min(1).max(30),
+    z.string().trim().min(1).max(MEAL_INSTRUCTIONS_MAX_CHARS),
+    z.array(z.string().trim().min(1).max(1000)).min(1).max(30)
+      .refine(steps => steps.join('\n').length <= MEAL_INSTRUCTIONS_MAX_CHARS),
   ]),
   prepTime: z.string().trim().max(50).optional().default(''),
   cookTime: z.string().trim().max(50).optional().default(''),
@@ -69,34 +80,6 @@ const mealSchema = z.object({
   dietaryTags: z.array(z.string().trim().min(1).max(50)).max(12).optional().default([]),
   estimatedCalories: z.union([z.number(), z.string(), z.null()]).optional().default(null),
 }).passthrough();
-
-const ALLERGEN_EXPANSIONS: Record<string, string[]> = {
-  fish: [
-    'fish', 'seafood', 'anchovy', 'anchovies', 'bass', 'bonito', 'carp', 'catfish',
-    'caviar', 'cod', 'dashi', 'flounder', 'grouper', 'haddock', 'halibut', 'herring',
-    'mackerel', 'mahi mahi', 'perch', 'pollock', 'salmon', 'sardine', 'sardines',
-    'snapper', 'sole', 'swordfish', 'tilapia', 'trout', 'tuna', 'fish sauce',
-    'worcestershire', 'surimi', 'roe',
-  ],
-  shellfish: [
-    'shellfish', 'crab', 'crayfish', 'crawfish', 'lobster', 'prawn', 'prawns',
-    'shrimp', 'scallop', 'scallops', 'clam', 'clams', 'mussel', 'mussels',
-    'oyster', 'oysters',
-  ],
-  peanut: ['peanut', 'peanuts', 'groundnut', 'groundnuts'],
-  'tree nut': [
-    'tree nut', 'tree nuts', 'almond', 'almonds', 'brazil nut', 'cashew', 'cashews',
-    'hazelnut', 'hazelnuts', 'macadamia', 'pecan', 'pecans', 'pistachio',
-    'pistachios', 'walnut', 'walnuts', 'marzipan', 'praline',
-  ],
-  dairy: ['dairy', 'milk', 'butter', 'buttermilk', 'casein', 'cheese', 'cream', 'ghee', 'whey', 'yogurt', 'yoghurt'],
-  milk: ['milk', 'butter', 'buttermilk', 'casein', 'cheese', 'cream', 'ghee', 'whey', 'yogurt', 'yoghurt'],
-  egg: ['egg', 'eggs', 'albumin', 'mayonnaise', 'meringue'],
-  wheat: ['wheat', 'flour', 'bread', 'breadcrumbs', 'couscous', 'farina', 'semolina', 'spelt'],
-  gluten: ['gluten', 'wheat', 'barley', 'rye', 'malt', 'farro', 'spelt', 'semolina'],
-  soy: ['soy', 'soya', 'soybean', 'soybeans', 'tofu', 'tempeh', 'edamame', 'miso', 'tamari'],
-  sesame: ['sesame', 'tahini', 'benne'],
-};
 
 // These patterns intentionally target prepared dishes and meal components, not
 // ordinary grocery staples such as bread, tortillas, canned beans or tomatoes,
@@ -112,48 +95,13 @@ const PREPARED_SHORTCUT_PATTERNS = [
 ];
 
 function normalizeText(value: string): string {
-  return value
-    .normalize('NFKD')
-    .replace(/[\u0300-\u036f]/g, '')
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, ' ')
-    .trim();
-}
-
-function includesWholeTerm(haystack: string, term: string): boolean {
-  const normalizedTerm = normalizeText(term);
-  if (!normalizedTerm) return false;
-  return ` ${haystack} `.includes(` ${normalizedTerm} `);
-}
-
-function termsForAllergy(allergy: string): string[] {
-  const normalized = normalizeText(allergy);
-  const terms = new Set<string>([normalized]);
-
-  for (const [category, expansions] of Object.entries(ALLERGEN_EXPANSIONS)) {
-    if (normalized === category || normalized.includes(category) || category.includes(normalized)) {
-      expansions.forEach((term) => terms.add(term));
-    }
-  }
-
-  return Array.from(terms).filter(Boolean);
+  return normalizeFoodText(value);
 }
 
 function detectAllergen(meal: ValidatedMeal, allergies: string[]): string | null {
   if (allergies.length === 0) return null;
 
-  const searchable = normalizeText([
-    meal.title,
-    ...meal.ingredients,
-    meal.instructions,
-  ].join(' '));
-
-  for (const allergy of allergies) {
-    const matched = termsForAllergy(allergy).find((term) => includesWholeTerm(searchable, term));
-    if (matched) return matched;
-  }
-
-  return null;
+  return findBlockedFoodInRecipe(meal, allergies, 'allergy');
 }
 
 function containsPreparedShortcut(meal: ValidatedMeal): boolean {
@@ -199,8 +147,8 @@ function titlesDescribeSameMeal(first: string, second: string): boolean {
 }
 
 /** Keep generation instructions aligned with the exclusions validation enforces. */
-export function expandBlockedIngredients(values: string[]): string[] {
-  return Array.from(new Set(values.flatMap(termsForAllergy)));
+export function expandBlockedIngredients(allergies: string[], dislikes: string[] = []): string[] {
+  return expandedFoodTerms(allergies, dislikes);
 }
 
 export type MealValidationResult =
@@ -213,6 +161,11 @@ export function validateMeal(
     servings: number;
     allergies: string[];
     dislikedIngredients?: string[];
+    usMeasures?: boolean;
+    /** Every non-seasoning ingredient states an amount. Defaults to usMeasures (the AI-generation path); edits and stored drafts leave both off. */
+    requireQuantities?: boolean;
+    /** Bulk meat sanity check for AI-generated meals; defaults to usMeasures. Never enabled by normal saves/edits. */
+    checkPortions?: boolean;
     day?: DayName;
     mealType?: MealType;
   },
@@ -242,11 +195,22 @@ export function validateMeal(
   if (detectAllergen(meal, options.allergies)) {
     return { success: false, error: { code: 'allergen_detected', message: 'The meal contains a blocked allergen term.', day: options.day, mealType: options.mealType } };
   }
-  if (detectAllergen(meal, options.dislikedIngredients ?? [])) {
+  if (findBlockedFoodInRecipe(meal, options.dislikedIngredients ?? [], 'dislike')) {
     return { success: false, error: { code: 'disliked_ingredient', message: 'The meal contains a disliked ingredient.', day: options.day, mealType: options.mealType } };
   }
   if (containsPreparedShortcut(meal)) {
     return { success: false, error: { code: 'prepared_shortcut', message: 'The meal relies on a prepared shortcut instead of basic ingredients.', day: options.day, mealType: options.mealType } };
+  }
+  if (options.usMeasures && hasMetricCookingMeasures([...meal.ingredients, meal.instructions])) {
+    return { success: false, error: { code: 'metric_units', message: 'Use U.S. cooking measures in ingredients and directions.', day: options.day, mealType: options.mealType } };
+  }
+  // Checks that amounts are stated, not that totals or nutrition are right.
+  if ((options.requireQuantities ?? options.usMeasures) && findUnmeasuredIngredients(meal.ingredients).length) {
+    return { success: false, error: { code: 'missing_quantity', message: 'Give every ingredient, including sides and grains, an amount for all servings combined, and say whether grains are cooked or dry.', day: options.day, mealType: options.mealType } };
+  }
+  // AI generation only. Existing user edits/saves must not be silently resized or blocked.
+  if ((options.checkPortions ?? options.usMeasures) && hasBulkMeatPortion(meal.ingredients, servingCount)) {
+    return { success: false, error: { code: 'portion_mismatch', message: 'Meat amounts look like a larger batch: more than 12 oz per serving. Recalculate all ingredients for the requested servings, keeping that serving count.', day: options.day, mealType: options.mealType } };
   }
   return { success: true, meal };
 }
@@ -291,7 +255,7 @@ export function parseMealPlanContent(content: string): unknown {
 
 export function validateMealPlan(
   value: unknown,
-  options: { mealTypes: MealType[]; servings: number; allergies: string[]; dislikedIngredients?: string[] },
+  options: { mealTypes: MealType[]; servings: number; allergies: string[]; dislikedIngredients?: string[]; usMeasures?: boolean; requireQuantities?: boolean; checkPortions?: boolean },
 ): MealPlanValidationResult {
   if (!Array.isArray(value)) {
     return {

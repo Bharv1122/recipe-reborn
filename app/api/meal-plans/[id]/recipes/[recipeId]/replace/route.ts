@@ -2,86 +2,26 @@ import { randomUUID } from 'node:crypto';
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
 import { getRequestUserId } from '@/lib/request-auth';
-import { AI_API_KEY, AI_CHAT_URL, MODEL_FAST, MODEL_SMART } from '@/lib/ai';
-import { validateMeal, type DayName, type MealType, type ValidatedMeal } from '@/lib/meal-plan-validation';
+import { hasRecipeAIKey } from '@/lib/ai-provider';
+import { replacementSettings } from '@/lib/meal-plan-settings';
+import { validateMeal, type DayName, type MealType } from '@/lib/meal-plan-validation';
+import { generateMealReplacement } from '@/lib/meal-plan-replacement';
 import { ENTITLEMENT_SELECT, hasPremiumAccess, premiumRequiredMessage } from '@/lib/entitlement';
+import { limitAiRequest } from '@/lib/ai-rate-limit';
+import { RequestDeadlineError, withRequestDeadline } from '@/lib/request-deadline';
 
-function parseMealObject(content: string): unknown {
-  let jsonText = content.trim();
-  const fenceMatch = jsonText.match(/```(?:json)?\s*([\s\S]*?)```/);
-  jsonText = fenceMatch ? fenceMatch[1] : jsonText.replace(/^```(?:json)?\s*/, '');
-  const start = jsonText.indexOf('{');
-  const end = jsonText.lastIndexOf('}');
-  if (start !== -1 && end > start) jsonText = jsonText.slice(start, end + 1);
-  const parsed = JSON.parse(jsonText.trim());
-  return parsed && typeof parsed === 'object' && 'meal' in parsed ? parsed.meal : parsed;
-}
-
-async function generateReplacement(options: {
-  day: string;
-  mealType: string;
-  servings: number;
-  allergies: string[];
-  dislikedIngredients: string[];
-  excludedTitles: string[];
-}): Promise<ValidatedMeal | null> {
-  const constraints = [
-    options.allergies.length ? `Never use these allergens or their derivatives: ${options.allergies.join(', ')}.` : '',
-    options.dislikedIngredients.length ? `Do not use these disliked ingredients: ${options.dislikedIngredients.join(', ')}.` : '',
-    `Do not repeat any of these recipes: ${options.excludedTitles.join('; ')}.`,
-  ].filter(Boolean).join('\n');
-  const prompt = `Create one different ${options.mealType} recipe for ${options.day}, with exactly ${options.servings} servings.
-${constraints}
-Use ordinary basic ingredients and cooking steps. Do not rely on boxed mixes, seasoning packets, canned soup, jarred meal sauces, frozen meals, rotisserie chicken, ready-made dough, or other prepared shortcuts.
-
-Return only one JSON object with title, ingredients (measured string array), instructions, prepTime, cookTime, servings, dietaryTags, and estimatedCalories.`;
-
-  for (const model of [MODEL_FAST, MODEL_SMART]) {
-    const response = await fetch(AI_CHAT_URL, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${AI_API_KEY}` },
-      body: JSON.stringify({
-        model,
-        messages: [
-          { role: 'system', content: 'Return one safe, practical, unique home-cooking recipe as valid JSON.' },
-          { role: 'user', content: prompt },
-        ],
-        temperature: 0.45,
-        max_tokens: 2200,
-        response_format: { type: 'json_object' },
-      }),
-    });
-    if (!response.ok) continue;
-    const data = await response.json();
-    const content = data.choices?.[0]?.message?.content;
-    if (typeof content !== 'string' || !content.trim()) continue;
-    try {
-      const validation = validateMeal(parseMealObject(content), {
-        servings: options.servings,
-        allergies: options.allergies,
-        dislikedIngredients: options.dislikedIngredients,
-        day: options.day as DayName,
-        mealType: options.mealType as MealType,
-      });
-      if (validation.success && !options.excludedTitles.some((title) => title.trim().toLowerCase() === validation.meal.title.trim().toLowerCase())) {
-        return validation.meal;
-      }
-    } catch {
-      // A malformed or unsafe answer is rejected before any database write.
-    }
-  }
-  return null;
-}
+export const maxDuration = 60;
+class ReplacementConflictError extends Error {}
 
 export async function POST(request: Request, props: { params: Promise<{ id: string; recipeId: string }> }) {
   try {
     const userId = await getRequestUserId(request);
     if (!userId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    if (!AI_API_KEY) return NextResponse.json({ error: 'Recipe replacement is temporarily unavailable.' }, { status: 503 });
+    if (!hasRecipeAIKey()) return NextResponse.json({ error: 'Recipe replacement is temporarily unavailable.' }, { status: 503 });
 
     const { id, recipeId } = await props.params;
     const [user, entry, titles] = await Promise.all([
-      prisma.user.findUnique({ where: { id: userId }, select: { ...ENTITLEMENT_SELECT, allergies: true, dislikedIngredients: true } }),
+      prisma.user.findUnique({ where: { id: userId }, select: { ...ENTITLEMENT_SELECT, allergies: true, dislikedIngredients: true, likedIngredients: true } }),
       prisma.mealPlanRecipe.findFirst({
         where: { id: recipeId, mealPlan: { id, userId } },
         include: { recipe: true },
@@ -96,24 +36,45 @@ export async function POST(request: Request, props: { params: Promise<{ id: stri
       return NextResponse.json({ error: 'Premium feature', message: premiumRequiredMessage(user, 'Meal replacement') }, { status: 403 });
     }
 
-    const meal = await generateReplacement({
-      day: entry.day,
-      mealType: entry.mealType,
+    const [plan] = await prisma.$queryRaw<Array<{ generationSettings: unknown }>>`
+      SELECT "generationSettings" FROM "MealPlan" WHERE id = ${id} AND "userId" = ${userId}`;
+    const settings = replacementSettings(plan?.generationSettings, user);
+    if (!settings) return NextResponse.json({
+      error: 'This older plan has no saved food preferences. Create a new meal preview before replacing a meal. Your current meal was kept.',
+    }, { status: 409 });
+
+    const aiLimit = await limitAiRequest(userId);
+    if (aiLimit) return aiLimit;
+    const meal = await withRequestDeadline(request.signal, 50_000, (signal) => generateMealReplacement({
+      day: entry.day as DayName,
+      mealType: entry.mealType as MealType,
       servings: entry.servings,
-      allergies: user.allergies,
-      dislikedIngredients: user.dislikedIngredients,
+      ...settings,
       excludedTitles: titles.map(({ recipe }) => recipe.title),
-    });
+      preferredIngredients: user.likedIngredients,
+      signal,
+    }));
     if (!meal) {
       return NextResponse.json({ error: 'No safe replacement was produced. Your current meal was kept.' }, { status: 422 });
     }
 
     const newRecipeId = randomUUID();
     const updatedEntry = await prisma.$transaction(async (tx) => {
+      // Account exclusions can change while the model runs. Lock and recheck
+      // them before writing so a newly added allergy cannot be missed.
+      const [currentProfile] = await tx.$queryRaw<Array<{ allergies: string[]; dislikedIngredients: string[] }>>`
+        SELECT allergies, "dislikedIngredients" FROM "User" WHERE id = ${userId} FOR SHARE`;
+      const currentSettings = currentProfile && replacementSettings(plan.generationSettings, currentProfile);
+      if (!currentSettings || !validateMeal({ ...meal, ingredients: meal.ingredients }, {
+        ...currentSettings, servings: entry.servings, day: entry.day as DayName,
+        mealType: entry.mealType as MealType, usMeasures: true,
+      }).success) throw new ReplacementConflictError();
       await tx.recipe.create({
         data: {
           id: newRecipeId,
           userId,
+          savedAt: null,
+          librarySource: 'meal_plan',
           title: meal.title,
           originalIngredients: meal.ingredients.join('\n'),
           freshIngredients: meal.ingredients.join('\n'),
@@ -129,13 +90,15 @@ export async function POST(request: Request, props: { params: Promise<{ id: stri
         where: { id: entry.id, recipeId: entry.recipeId },
         data: { recipeId: newRecipeId },
       });
-      if (replaced.count !== 1) throw new Error('The meal changed while a replacement was being generated.');
+      if (replaced.count !== 1) throw new ReplacementConflictError();
       return tx.mealPlanRecipe.findUnique({ where: { id: entry.id }, include: { recipe: true } });
     });
 
     return NextResponse.json({ entry: updatedEntry });
   } catch (error) {
-    console.error('[meal-replacement] failed', error);
-    return NextResponse.json({ error: 'Unable to replace this meal. Your current meal was kept.' }, { status: 500 });
+    if (error instanceof ReplacementConflictError) return NextResponse.json({ error: 'Your meal or food preferences changed. Your current meal was kept; please try again.' }, { status: 409 });
+    if (error instanceof RequestDeadlineError) return NextResponse.json({ error: error.message }, { status: 504 });
+    console.error('[meal-replacement] failed', { kind: error instanceof Error ? error.name : 'Unknown' });
+    return NextResponse.json({ error: 'Meal replacement is temporarily unavailable. Your current meal was kept. Please try again.' }, { status: 503 });
   }
 }

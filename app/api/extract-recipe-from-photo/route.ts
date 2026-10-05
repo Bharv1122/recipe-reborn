@@ -1,5 +1,6 @@
+import { recipeChat, hasRecipeAIKey, BackupInputError, BackupTransportError, ProviderConnectionError } from '@/lib/ai-provider';
 import { NextResponse } from 'next/server';
-import { AI_CHAT_URL, AI_API_KEY, MODEL_SMART } from '@/lib/ai';
+import { AI_API_KEY, MODEL_SMART } from '@/lib/ai';
 import { rateLimit } from '@/lib/rate-limit';
 import { extractJsonPayload } from '@/lib/ai-json';
 import { originalNutritionFromLabelScan } from '@/lib/nutrition-facts';
@@ -60,7 +61,7 @@ export async function POST(req: Request) {
 
     // Vision call — Gemini reads the label photo directly
     const apiKey = AI_API_KEY;
-    if (!apiKey) {
+    if (!hasRecipeAIKey()) {
       return NextResponse.json(
         { error: 'AI API configuration missing' },
         { status: 500 }
@@ -107,8 +108,9 @@ IMPORTANT RULES:
 - Infer dietary tags based on ingredients
 - Return ONLY the JSON, no other text`;
 
-    const response = await fetch(AI_CHAT_URL, {
+    const response = await recipeChat({
       method: 'POST',
+      signal: req.signal,
       headers: {
         'Content-Type': 'application/json',
         'Authorization': `Bearer ${apiKey}`,
@@ -141,47 +143,27 @@ IMPORTANT RULES:
     });
 
     if (!response.ok) {
-      const errorText = await response.text();
-      console.error('AI API Error Response:', errorText);
-      console.error('AI API Status:', response.status);
-      console.error('AI API Status Text:', response.statusText);
-      
-      // Try to parse error details
-      let errorMessage = 'Failed to analyze recipe photo. Please try again.';
-      try {
-        const errorData = JSON.parse(errorText);
-        errorMessage = errorData.error?.message || errorMessage;
-        console.error('Parsed error:', errorData);
-      } catch (e) {
-        console.error('Could not parse error response');
-      }
-      
-      return NextResponse.json(
-        { error: errorMessage },
-        { status: 500 }
-      );
+      console.error('[photo-extraction] provider status', response.status);
+      return NextResponse.json({ error: 'Photo reading is temporarily unavailable. Please try again.' }, { status: 503 });
     }
 
     const data = await response.json();
     const content = data.choices?.[0]?.message?.content;
 
-    if (!content) {
+    if (!content || data.choices?.[0]?.finish_reason !== 'stop' || data.choices?.[0]?.message?.refusal) {
       return NextResponse.json(
         { error: 'No recipe data extracted from photo' },
         { status: 500 }
       );
     }
 
-    if (data.choices?.[0]?.finish_reason === 'length') {
-      console.error('Photo extraction truncated at max_tokens; content length:', content.length);
-    }
 
     // Parse the JSON response
     let recipeData;
     try {
       recipeData = JSON.parse(extractJsonPayload(content));
-    } catch (parseError) {
-      console.error('Failed to parse AI response:', content);
+    } catch {
+      console.error('[photo-extraction] invalid JSON');
       return NextResponse.json(
         { error: 'Failed to parse recipe data. Please try with a clearer photo.' },
         { status: 500 }
@@ -224,7 +206,10 @@ IMPORTANT RULES:
       originalNutrition,
     });
   } catch (error) {
-    console.error('Error extracting recipe from photo:', error);
+    if (error instanceof BackupInputError) return NextResponse.json({ error: error.message }, { status: 415 });
+    if (error instanceof BackupTransportError || error instanceof ProviderConnectionError) return NextResponse.json({ error: 'Photo reading is temporarily unavailable. Please try again.' }, { status: 503 });
+    if (req.signal.aborted) return new NextResponse(null, { status: 499 });
+    console.error('[photo-extraction] request failed');
     return NextResponse.json(
       { error: 'An unexpected error occurred while processing your photo' },
       { status: 500 }

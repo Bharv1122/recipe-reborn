@@ -2,7 +2,9 @@ import type { OriginalNutrition } from '../../../shared/nutrition-facts';
 
 export type ScanRecipeHandoff = {
   source: 'label' | 'pantry';
-  origin: 'barcode' | 'label-photo' | 'pantry-photo';
+  origin: 'barcode' | 'label-photo' | 'pantry-photo' | 'import-ingredients';
+  productName?: string;
+  pantryTargetTitle?: string;
   ingredients: string;
   context: string;
   originalNutrition?: OriginalNutrition | null;
