@@ -2,6 +2,7 @@ import { recipeChat } from './ai-provider';
 import { MODEL_FAST, MODEL_SMART } from './ai';
 import { US_COOKING_MEASURES } from '../shared/cooking-measurements';
 import { INGREDIENT_QUANTITY_RULES } from '../shared/ingredient-quantities';
+import { MEAL_PORTION_RULES } from '../shared/meal-portions';
 import { validateMeal, type DayName, type MealType, type ValidatedMeal } from './meal-plan-validation';
 import { blockedIngredientInstruction, MealPlanProviderError } from './meal-plan-generation';
 
@@ -39,11 +40,12 @@ ${constraints}
 ${blockedIngredientInstruction(request)}
 Dietary preferences: ${request.dietaryPreferences.join(', ') || 'none'}.
 ${US_COOKING_MEASURES}
-${INGREDIENT_QUANTITY_RULES} Amounts cover all ${request.servings} serving${request.servings === 1 ? '' : 's'} together.
+${INGREDIENT_QUANTITY_RULES} ${MEAL_PORTION_RULES} Amounts cover all ${request.servings} serving${request.servings === 1 ? '' : 's'} together.
 Use ordinary basic ingredients and cooking steps. Do not rely on boxed mixes, seasoning packets, canned soup, jarred meal sauces, frozen meals, rotisserie chicken, ready-made dough, or other prepared shortcuts.
 
 Return only one JSON object with title, ingredients (measured string array), instructions, prepTime, cookTime, servings, dietaryTags, and estimatedCalories.`;
   const excluded = new Set(request.excludedTitles.map(mealTitleKey));
+  let repair = '';
 
   for (const model of [MODEL_FAST, MODEL_SMART]) {
     const response = await recipeChat({
@@ -53,7 +55,7 @@ Return only one JSON object with title, ingredients (measured string array), ins
         model,
         messages: [
           { role: 'system', content: 'Return one safe, practical, unique home-cooking recipe as valid JSON.' },
-          { role: 'user', content: prompt },
+          { role: 'user', content: prompt + repair },
         ],
         temperature: 0.45,
         max_tokens: 2200,
@@ -72,6 +74,7 @@ Return only one JSON object with title, ingredients (measured string array), ins
         usMeasures: true, day: request.day, mealType: request.mealType,
       });
       if (validation.success && !excluded.has(mealTitleKey(validation.meal.title))) return validation.meal;
+      if (!validation.success && validation.error.code === 'portion_mismatch') repair = `\nCorrect the previous portion error: ${validation.error.message}`;
     } catch {
       // A malformed or unsafe answer is rejected before any database write.
     }

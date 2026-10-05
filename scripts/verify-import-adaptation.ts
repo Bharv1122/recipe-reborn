@@ -40,6 +40,14 @@ async function main() {
   const sausageRequest = { recipe: sausageSource, action: { type: 'substitute' as const, original: sausageLine, substitute: 'ground beef' } };
   const beefVersion = { ...sausageSource, freshIngredients: ['1 pound ground beef', '1 pound potatoes, cut into 1-inch pieces', '2 bell peppers, cut into inch pieces'], instructions: ['Brown the ground beef. Roast the potatoes and peppers.'] };
   assert.deepEqual(validateAdaptedImport(beefVersion, sausageRequest, preferences), beefVersion);
+  for (const substitute of ['Ground beef with Italian seasoning', 'Ground beef (seasoned with fennel, garlic, and paprika)']) {
+    assert.deepEqual(validateAdaptedImport(beefVersion, { ...sausageRequest, action: { ...sausageRequest.action, substitute } }, preferences), beefVersion);
+  }
+  const turkey = { ...beefVersion, freshIngredients: ['1 pound Italian turkey sausage', '2 bell peppers'], instructions: ['Cook the turkey sausage and peppers.'] };
+  assert.deepEqual(validateAdaptedImport(turkey, { ...sausageRequest, action: { ...sausageRequest.action, substitute: 'Turkey Italian sausage' } }, preferences), turkey);
+  assert.throws(() => validateAdaptedImport({ ...beefVersion, freshIngredients: ['1 pound chicken', '1 tsp Italian seasoning'] }, { ...sausageRequest, action: { ...sausageRequest.action, substitute: 'ground beef with Italian seasoning' } }, preferences), /substitute is missing/);
+  assert.throws(() => validateAdaptedImport({ ...beefVersion, freshIngredients: ['1 cup wheat flour', '1 cup almonds'] }, { ...sausageRequest, action: { ...sausageRequest.action, substitute: 'flour (almond)' } }, preferences), /substitute is missing/);
+  assert.throws(() => validateAdaptedImport({ ...beefVersion, freshIngredients: ['1 cup milk with coconut oil'] }, { ...sausageRequest, action: { ...sausageRequest.action, substitute: 'coconut milk' } }, preferences), /substitute is missing/);
   assert.throws(() => validateAdaptedImport({ ...beefVersion, instructions: sausageSource.instructions }, sausageRequest, preferences), /replaced ingredient still appears/);
   const chickenLine = '4 oz boneless, skinless chicken breast, cut into strips';
   const chickenSource = { ...imported, freshIngredients: [chickenLine, '1 cup rice'], instructions: ['Cook the chicken breast. Serve with rice.'] };

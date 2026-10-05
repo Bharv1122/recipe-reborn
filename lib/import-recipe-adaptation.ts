@@ -87,6 +87,18 @@ function containsPhrase(values: string[], phrase: string): boolean {
   return text.includes(` ${phrase} `);
 }
 
+function hasSuggestedSubstitute(ingredients: string[], suggestion: string): boolean {
+  // Suggestions may include serving advice, not part of the ingredient's name.
+  // Preserve identity qualifiers such as flour (almond) and match one line only.
+  const name = (text: string) => text.replace(/\(\s*(?:seasoned|season|mixed|combined|prepared)\b[^)]*\)/gi, '')
+    .split(/\s+(?:(?:seasoned|mixed|combined)\s+)?with\s+/i)[0];
+  const words = identityWords(name(suggestion));
+  return words.length > 0 && ingredients.some(line => {
+    const actual = new Set(identityWords(name(line)));
+    return words.every(word => actual.has(word));
+  });
+}
+
 export function buildImportAdaptationPrompt(
   recipe: ImportedRecipeSnapshot,
   action: ImportAdaptationAction,
@@ -154,7 +166,7 @@ export function validateAdaptedImport(
   if (request.action.type === 'substitute') {
     const oldKey = identityPhrase(request.action.original);
     const substituteKey = identityPhrase(request.action.substitute);
-    if (!substituteKey || !containsPhrase(recipe.freshIngredients, substituteKey)) throw new Error('The substitute is missing from the adapted ingredient list');
+    if (!substituteKey || !hasSuggestedSubstitute(recipe.freshIngredients, request.action.substitute)) throw new Error('The substitute is missing from the adapted ingredient list');
     if (oldKey && !substituteKey.includes(oldKey) && containsPhrase([...recipe.freshIngredients, ...recipe.instructions], oldKey)) {
       throw new Error('The replaced ingredient still appears in the adapted recipe');
     }
