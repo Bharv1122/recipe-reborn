@@ -53,8 +53,22 @@ function singular(word: string): string {
   return word;
 }
 
+function identityWords(line: string): string[] {
+  return normalizeFoodText(line).split(' ').map(singular).filter((word) => word && !NON_IDENTITY.has(word) && !/^\d+$/.test(word));
+}
+
+const PREP_LEAD = new Set(('cut sliced diced chopped minced cubed halved quartered shredded grated torn ' +
+  'thinly finely roughly coarsely into drained rinsed peeled trimmed seeded cored softened melted beaten ' +
+  'patted divided plus to for at').split(' '));
+
 function identityPhrase(line: string): string {
-  const words = normalizeFoodText(line).split(' ').map(singular).filter((word) => word && !NON_IDENTITY.has(word) && !/^\d+$/.test(word));
+  // Keep name qualifiers ("boneless, skinless chicken breast"), not trailing preparation.
+  const parts = line.split(',');
+  const end = parts.findIndex((part, index) => index > 0 && PREP_LEAD.has(normalizeFoodText(part).split(' ')[0]));
+  const name = end > 0 ? parts.slice(0, end).join(',') : line;
+  const outside = identityWords(name.replace(/\([^)]*\)/g, ' '));
+  // Do not broaden a qualified single-word name such as "flour (almond)" to all flour.
+  const words = outside.length >= 2 ? outside : identityWords(name);
   return words.slice(-Math.min(3, words.length)).join(' ');
 }
 

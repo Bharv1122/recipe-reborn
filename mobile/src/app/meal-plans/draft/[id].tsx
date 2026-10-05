@@ -1,3 +1,4 @@
+import { mealDisplayRank } from '../../../../../shared/meal-display-order';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Alert, ScrollView, StyleSheet, Text } from 'react-native';
 import { Stack, useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
@@ -81,7 +82,7 @@ function DraftContent({ id }: { id: string }) {
       {error ? <Button label="Retry loading preview" secondary disabled={Boolean(busy)} onPress={load} /> : null}
       {!draft && !error ? <Text style={styles.body}>Loading preview…</Text> : null}
       {draft?.savedPlanId ? <Button label="Open saved plan" secondary onPress={() => router.push({ pathname: '/meal-plans/[id]', params: { id: draft.savedPlanId! } })} /> : null}
-      {draft?.days.flatMap(day => Object.entries(day.meals).filter(([, meal]) => meal).map(([mealType, meal]) => <MealPreviewCard
+      {draft?.days.flatMap(day => Object.entries(day.meals).sort(([a], [b]) => mealDisplayRank(a) - mealDisplayRank(b)).filter(([, meal]) => meal).map(([mealType, meal]) => <MealPreviewCard
         key={day.day + ':' + mealType} day={day.day} mealType={mealType} meal={meal!}
         savedId={draft.savedMeals[day.day + ':' + mealType]} busy={loading ? 'loading' : busy}
         editable={!draft.savedPlanId} onChange={changeMeal} onSave={save}

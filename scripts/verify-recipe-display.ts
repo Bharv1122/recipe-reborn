@@ -1,0 +1,17 @@
+import assert from 'node:assert/strict';
+import { displayInstructionSteps } from '../shared/instruction-display';
+import { mealDisplayRank } from '../shared/meal-display-order';
+const paragraph = 'Preheat oven to 400°F (200°C). Pat chicken thighs dry with paper towels. In a small bowl, mix avocado oil, oregano, thyme, garlic powder, salt, and pepper. Rub the mixture all over the chicken thighs. Place chicken thighs in a baking dish. Add potato cubes to the baking dish around the chicken. Roast for 20 minutes. Add green beans to the baking dish, toss with any pan juices, and roast for another 15-20 minutes, or until chicken is cooked through (internal temperature reaches 165°F/74°C) and potatoes are tender. Squeeze lemon juice over chicken and vegetables before serving. Serve with lemon wedges.';
+const source = [paragraph];
+assert.equal(displayInstructionSteps(source).length, 10);
+assert.equal(displayInstructionSteps(source).join(' '), paragraph);
+assert.deepEqual(source, [paragraph]);
+assert.deepEqual(displayInstructionSteps(['Mix. Bake.', 'Serve.']), ['Mix. Bake.', 'Serve.']);
+assert.deepEqual(displayInstructionSteps(['1. Mix. 2. Bake. 3. Serve.']), ['Mix.', 'Bake.', 'Serve.']);
+assert.deepEqual(displayInstructionSteps(['• Mix.\n• Bake.']), ['Mix.', 'Bake.']);
+assert.deepEqual(displayInstructionSteps(['1.5 cups broth are needed. Add 0.25 tsp. Salt is optional.']), ['1.5 cups broth are needed.', 'Add 0.25 tsp. Salt is optional.']);
+assert.deepEqual(displayInstructionSteps(['Use greens (e.g. Kale). Serve warm.']), ['Use greens (e.g. Kale).', 'Serve warm.']);
+const meals = ['dinner', 'breakfast', 'snack', 'lunch'];
+assert.deepEqual([...meals].sort((a,b) => mealDisplayRank(a)-mealDisplayRank(b)), ['breakfast','lunch','dinner','snack']);
+assert.equal(meals[0], 'dinner');
+console.log('Recipe display checks passed: exact paragraph, existing steps, numbering, bullets, decimal/abbreviation preservation, meal order, no mutation.');
