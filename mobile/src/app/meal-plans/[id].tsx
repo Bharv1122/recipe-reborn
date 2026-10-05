@@ -1,3 +1,4 @@
+import { mealDisplayRank } from '../../../../shared/meal-display-order';
 import { useEffect, useState } from 'react';
 import { Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
@@ -51,7 +52,7 @@ export default function MealPlanDetailScreen() {
       {!plan && !error ? <Card><Text style={styles.body}>Loading your weekly plan…</Text></Card> : null}
       {plan?.description ? <Card><Text style={styles.body}>{plan.description}</Text></Card> : null}
       {plan ? days.map((day) => {
-        const entries = plan.mealPlanRecipes.filter((entry) => entry.day.toLowerCase() === day);
+        const entries = plan.mealPlanRecipes.filter((entry) => entry.day.toLowerCase() === day).sort((a, b) => mealDisplayRank(a.mealType) - mealDisplayRank(b.mealType));
         if (!entries.length) return null;
         const dailyCalories = entries.reduce((total, entry) => total + (entry.recipe.calories || 0), 0);
         return <Card key={day}>

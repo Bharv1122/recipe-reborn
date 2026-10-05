@@ -35,6 +35,22 @@ async function main() {
   assert.equal(JSON.stringify(imported), originalJson, 'Validation must never mutate the faithful source draft.');
   assert.throws(() => validateAdaptedImport({ ...breastVersion, instructions: imported.instructions }, substitutionRequest, preferences), /replaced ingredient still appears/);
 
+  const sausageLine = '1 pound Italian sausage (pork or chicken), cut into 1-inch pieces';
+  const sausageSource = { ...imported, freshIngredients: [sausageLine, '1 pound potatoes, cut into 1-inch pieces', '2 bell peppers'], instructions: ['Roast the Italian sausage, potatoes and peppers.'] };
+  const sausageRequest = { recipe: sausageSource, action: { type: 'substitute' as const, original: sausageLine, substitute: 'ground beef' } };
+  const beefVersion = { ...sausageSource, freshIngredients: ['1 pound ground beef', '1 pound potatoes, cut into 1-inch pieces', '2 bell peppers, cut into inch pieces'], instructions: ['Brown the ground beef. Roast the potatoes and peppers.'] };
+  assert.deepEqual(validateAdaptedImport(beefVersion, sausageRequest, preferences), beefVersion);
+  assert.throws(() => validateAdaptedImport({ ...beefVersion, instructions: sausageSource.instructions }, sausageRequest, preferences), /replaced ingredient still appears/);
+  const chickenLine = '4 oz boneless, skinless chicken breast, cut into strips';
+  const chickenSource = { ...imported, freshIngredients: [chickenLine, '1 cup rice'], instructions: ['Cook the chicken breast. Serve with rice.'] };
+  const tofuRequest = { recipe: chickenSource, action: { type: 'substitute' as const, original: chickenLine, substitute: 'tofu' } };
+  const tofuVersion = { ...chickenSource, freshIngredients: ['4 oz tofu', '1 cup rice'], instructions: ['Cook the tofu. Serve with rice.'] };
+  assert.deepEqual(validateAdaptedImport(tofuVersion, tofuRequest, preferences), tofuVersion);
+  assert.throws(() => validateAdaptedImport({ ...tofuVersion, instructions: chickenSource.instructions }, tofuRequest, preferences), /replaced ingredient still appears/);
+  const flourSource = { ...imported, freshIngredients: ['1 cup flour (almond)', '2 tbsp coconut flour'], instructions: ['Mix the flours.'] };
+  const flourRemoved = { ...flourSource, freshIngredients: ['2 tbsp coconut flour'], instructions: ['Use the coconut flour.'] };
+  assert.deepEqual(validateAdaptedImport(flourRemoved, { recipe: flourSource, action: { type: 'remove', original: '1 cup flour (almond)' } }, preferences), flourRemoved);
+
   const butterSource: ImportedRecipeSnapshot = { ...imported, freshIngredients: ['2 tbsp butter', '1 cup rice'], instructions: ['Melt the butter.', 'Stir in the rice.'] };
   const peanutButterRequest = { recipe: butterSource, action: { type: 'substitute' as const, original: '2 tbsp butter', substitute: '2 tbsp peanut butter' } };
   const peanutButterVersion = { ...butterSource, freshIngredients: ['2 tbsp peanut butter', '1 cup rice'], instructions: ['Warm the peanut butter.', 'Stir in the rice.'] };

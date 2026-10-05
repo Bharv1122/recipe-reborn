@@ -1,3 +1,4 @@
+import { displayInstructionSteps } from '../../../shared/instruction-display';
 import { findUnmeasuredIngredients } from '../../../shared/ingredient-quantities';
 import { sourceHasDirections } from '../../../shared/recipe-import';
 import { useEffect, useRef, useState, type ReactNode } from 'react';
@@ -129,7 +130,7 @@ export function RecipeDetail({ initial, originalIngredients = '', packageNutriti
   };
   const adapt = async (action: ImportAdaptationAction, label: string, measurementsOnly = false) => {
     if (locked.current) return;
-    locked.current = true; setBusy(true); setError(null); setDialog(null); setMenu(null);
+    locked.current = true; setBusy(true); setError(null); setMessage(''); setDialog(null); setMenu(null);
     const controller = new AbortController(); request.current = controller;
     const timeout = setTimeout(() => controller.abort(), 65_000);
     try {
@@ -194,9 +195,9 @@ export function RecipeDetail({ initial, originalIngredients = '', packageNutriti
           <View style={styles.grow}><Text style={styles.body}>{ingredient}</Text>{ingredientAdditives([ingredient]).length ? <Text style={styles.note}>Listed additive: {ingredientAdditives([ingredient]).map(item => item.name).join(', ')}</Text> : null}</View>
           <Pressable accessibilityRole="button" accessibilityLabel={`Options for ${ingredient}`} disabled={busy || saving} onPress={() => { setMenu(ingredient); setDialog(null); setInput(''); }} style={styles.touch}><Text style={styles.symbol}>⋮</Text></Pressable>
         </View>)}
-        {message ? <View style={styles.undo}><Text accessibilityLiveRegion="polite" style={[styles.body, styles.grow]}>{message}</Text>{history.length ? <Pressable accessibilityRole="button" accessibilityLabel="Undo last recipe change" disabled={busy || saving} onPress={undo} style={styles.touch}><Text style={styles.link}>Undo</Text></Pressable> : null}</View> : null}
+        {message || history.length ? <View style={styles.undo}><Text accessibilityLiveRegion="polite" style={[styles.body, styles.grow]}>{message}</Text>{history.length ? <Pressable accessibilityRole="button" accessibilityLabel="Undo last recipe change" disabled={busy || saving} onPress={undo} style={styles.touch}><Text style={styles.link}>Undo</Text></Pressable> : null}</View> : null}
       </Card>
-      <Card><Text style={styles.heading}>Cooking instructions</Text>{recipe.instructions.map((step, index) => <View key={`${index}-${step}`} style={styles.step}><Text style={styles.stepNumber}>{index + 1}</Text><Text style={[styles.body, styles.grow]}>{step.replace(/^\d+[.)]\s*/, '')}</Text></View>)}</Card>
+      <Card><Text style={styles.heading}>Cooking instructions</Text>{displayInstructionSteps(recipe.instructions).map((step, index) => <View key={`${index}-${step}`} style={styles.step}><Text style={styles.stepNumber}>{index + 1}</Text><Text style={[styles.body, styles.grow]}>{step}</Text></View>)}</Card>
       <Button label="Edit recipe details" secondary disabled={busy || saving} onPress={() => { setEditDraft(importDraft(recipe)); setEditError(null); setDialog('edit'); }} />
       <Card>
         <View style={styles.row}><Text style={styles.heading}>Nutrition</Text>{key !== originalKey && currentNutrition.status === 'ready' ? <Text accessibilityLiveRegion="polite" style={styles.badge}>✓ Updated</Text> : null}</View>
@@ -268,4 +269,3 @@ const styles = StyleSheet.create({
   nav: { flexDirection: 'row', gap: 6 }, navItem: { flex: 1, minHeight: 54, alignItems: 'center', justifyContent: 'center', gap: 3, borderRadius: 12 }, navSelected: { backgroundColor: '#E8F5EC' },
   backdrop: { flex: 1, backgroundColor: '#0006', padding: 24, justifyContent: 'center' }, modal: { maxHeight: '85%', backgroundColor: colors.white, borderRadius: 20 }, modalContent: { padding: 20, gap: 14 },
 });
-
