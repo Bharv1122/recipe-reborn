@@ -17,8 +17,8 @@ async function test(name: string, run: () => void | Promise<void>) {
   console.log(`PASS ${name}`);
 }
 
-type Call = { model: string; prompt: string; repair: boolean };
-async function withProvider(reply: (call: Call, index: number) => unknown, check: (calls: Call[]) => Promise<void>) {
+type Call = { model: string; prompt: string; repair: boolean; reasoning: string };
+async function withProvider(reply: (call: Call, index: number) => unknown, check: (calls: Call[]) => Promise<void>, finishReason = 'stop') {
   const originalFetch = globalThis.fetch;
   const calls: Call[] = [];
   let fixtureError: unknown;
@@ -26,9 +26,9 @@ async function withProvider(reply: (call: Call, index: number) => unknown, check
     try {
       const body = JSON.parse(String(init?.body));
       const prompt = body.messages.find((message: { role: string }) => message.role === 'user')?.content ?? '';
-      const call = { model: body.model, prompt, repair: prompt.includes('Replace one rejected meal-plan entry') };
+      const call = { model: body.model, prompt, repair: prompt.includes('Replace one rejected meal-plan entry'), reasoning: body.reasoning_effort };
       calls.push(call);
-      return Response.json({ choices: [{ message: { content: JSON.stringify(reply(call, calls.length - 1)) }, finish_reason: 'stop' }] });
+      return Response.json({ choices: [{ message: { content: JSON.stringify(reply(call, calls.length - 1)) }, finish_reason: finishReason }] });
     } catch (error) {
       fixtureError = error;
       throw error;
@@ -155,6 +155,22 @@ async function main() {
   await test('Meal replacement returns no meal when every model omits the rice amount', () => withProvider(
     () => screenshotMeal('Chicken rice plate'),
     async () => { assert.equal(await generateMealReplacement({ ...replacement, signal: new AbortController().signal }), null); }));
+
+  await test('Change meal applies weekly exclusion guidance and disables thinking on both attempts', () => withProvider(
+    call => meal('Chicken rice plate', ['4 oz chicken breast', '1 cup cooked rice', call.model === MODEL_FAST ? '1 tbsp olive oil' : '1 tbsp avocado oil']),
+    async calls => {
+      const result = await generateMealReplacement({ ...replacement, allergies: ['fish', 'shellfish'],
+        dislikedIngredients: ['Olives', 'spinach', 'asparagus', 'Brussels sprouts', 'scrambled eggs', 'hot spicy stuff', 'fish'], signal: new AbortController().signal });
+      assert.ok(result);
+      assert.deepEqual(calls.map(call => call.model), [MODEL_FAST, MODEL_SMART]);
+      for (const call of calls) { assert.equal(call.reasoning, 'none'); assert.match(call.prompt, /never use olive oil/); }
+      assert.ok(result.ingredients.includes('1 tbsp avocado oil'));
+      assert.equal(result.servings, 1);
+    }));
+
+  await test('Change meal still rejects incomplete provider output', () => withProvider(
+    () => meal('Chicken rice plate'),
+    async () => { await assert.rejects(generateMealReplacement({ ...replacement, signal: new AbortController().signal }), /incomplete/); }, 'length'));
 
   console.log(`Ingredient quantity checks: ${cases} cases passed; mocked provider only. Amount presence is checked, not nutrition accuracy.`);
 }
