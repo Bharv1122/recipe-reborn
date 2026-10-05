@@ -44,7 +44,7 @@ function structuredFormat(name: string, schema: Record<string, unknown>) {
   return { type: 'json_schema', json_schema: { name, strict: true, schema } };
 }
 
-function blockedIngredientInstruction(options: GeneratePlanOptions): string {
+export function blockedIngredientInstruction(options: Pick<GeneratePlanOptions, 'allergies' | 'dislikedIngredients'>): string {
   const terms = expandBlockedIngredients(options.allergies, options.dislikedIngredients);
   if (!terms.length) return '';
   // Whole-word matching rejects "olive oil" when "olive" is blocked; models

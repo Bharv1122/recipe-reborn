@@ -3,7 +3,7 @@ import { MODEL_FAST, MODEL_SMART } from './ai';
 import { US_COOKING_MEASURES } from '../shared/cooking-measurements';
 import { INGREDIENT_QUANTITY_RULES } from '../shared/ingredient-quantities';
 import { validateMeal, type DayName, type MealType, type ValidatedMeal } from './meal-plan-validation';
-import { MealPlanProviderError } from './meal-plan-generation';
+import { blockedIngredientInstruction, MealPlanProviderError } from './meal-plan-generation';
 
 // One-meal AI replacement shared by saved plans and unsaved previews, so both
 // use the same prompt rules, model order, and validation.
@@ -36,6 +36,7 @@ export async function generateMealReplacement(request: ReplacementRequest & { si
   ].filter(Boolean).join('\n');
   const prompt = `Create one different ${request.mealType} recipe for ${request.day}, with exactly ${request.servings} servings.
 ${constraints}
+${blockedIngredientInstruction(request)}
 Dietary preferences: ${request.dietaryPreferences.join(', ') || 'none'}.
 ${US_COOKING_MEASURES}
 ${INGREDIENT_QUANTITY_RULES} Amounts cover all ${request.servings} serving${request.servings === 1 ? '' : 's'} together.
@@ -56,6 +57,7 @@ Return only one JSON object with title, ingredients (measured string array), ins
         ],
         temperature: 0.45,
         max_tokens: 2200,
+        reasoning_effort: 'none',
         response_format: { type: 'json_object' },
       }),
     });
