@@ -1,0 +1,20 @@
+import assert from 'node:assert/strict';
+import { hasBulkMeatPortion } from '../shared/meal-portions';
+import { validateMeal } from '../lib/meal-plan-validation';
+
+assert.equal(hasBulkMeatPortion(['1 pound Italian sausage (pork or chicken), cut into 1-inch pieces'], 1), true);
+assert.equal(hasBulkMeatPortion(['1 pound Italian sausage'], 4), false);
+assert.equal(hasBulkMeatPortion(['4 oz ground beef', '1 pound potatoes'], 1), false);
+assert.equal(hasBulkMeatPortion(['8 oz ground beef', '8 oz pork'], 1), true);
+assert.equal(hasBulkMeatPortion(['½ pound ground beef'], 1), false);
+assert.equal(hasBulkMeatPortion(['1½ pounds ground beef'], 1), true);
+assert.equal(hasBulkMeatPortion(['454 g ground beef'], 1), true);
+assert.equal(hasBulkMeatPortion(['1 pound chicken broth', '1 pound bone-in chicken thighs'], 1), false);
+const meal = { title: 'Sausage and peppers', ingredients: ['1 pound Italian sausage', '2 bell peppers'], instructions: 'Cook the sausage and peppers.', servings: 1 };
+const options = { servings: 1, allergies: [], usMeasures: true };
+const result = validateMeal(meal, options);
+assert.equal(result.success, false);
+if (!result.success) assert.equal(result.error.code, 'portion_mismatch');
+assert.equal(validateMeal({ ...meal, servings: 4 }, { ...options, servings: 4 }).success, true);
+assert.equal(validateMeal(meal, { servings: 1, allergies: [] }).success, true, 'Never block or resize an existing user save/edit through the generation check.');
+console.log('Meal portion checks passed: bulk meat, totals, fractions, units, exclusions and generation-only scope.');

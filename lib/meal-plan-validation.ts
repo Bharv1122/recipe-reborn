@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { hasMetricCookingMeasures } from '../shared/cooking-measurements';
 import { findUnmeasuredIngredients } from '../shared/ingredient-quantities';
+import { hasBulkMeatPortion } from '../shared/meal-portions';
 import { expandedFoodTerms, findBlockedFoodInRecipe, normalizeFoodText } from './food-preferences';
 
 export const DAYS = [
@@ -48,6 +49,7 @@ export type MealPlanValidationCode =
   | 'prepared_shortcut'
   | 'metric_units'
   | 'missing_quantity'
+  | 'portion_mismatch'
   | 'duplicate_meal';
 
 export interface MealPlanValidationError {
@@ -162,6 +164,8 @@ export function validateMeal(
     usMeasures?: boolean;
     /** Every non-seasoning ingredient states an amount. Defaults to usMeasures (the AI-generation path); edits and stored drafts leave both off. */
     requireQuantities?: boolean;
+    /** Bulk meat sanity check for AI-generated meals; defaults to usMeasures. Never enabled by normal saves/edits. */
+    checkPortions?: boolean;
     day?: DayName;
     mealType?: MealType;
   },
@@ -203,6 +207,10 @@ export function validateMeal(
   // Checks that amounts are stated, not that totals or nutrition are right.
   if ((options.requireQuantities ?? options.usMeasures) && findUnmeasuredIngredients(meal.ingredients).length) {
     return { success: false, error: { code: 'missing_quantity', message: 'Give every ingredient, including sides and grains, an amount for all servings combined, and say whether grains are cooked or dry.', day: options.day, mealType: options.mealType } };
+  }
+  // AI generation only. Existing user edits/saves must not be silently resized or blocked.
+  if ((options.checkPortions ?? options.usMeasures) && hasBulkMeatPortion(meal.ingredients, servingCount)) {
+    return { success: false, error: { code: 'portion_mismatch', message: 'Meat amounts look like a larger batch: more than 12 oz per serving. Recalculate all ingredients for the requested servings, keeping that serving count.', day: options.day, mealType: options.mealType } };
   }
   return { success: true, meal };
 }
@@ -247,7 +255,7 @@ export function parseMealPlanContent(content: string): unknown {
 
 export function validateMealPlan(
   value: unknown,
-  options: { mealTypes: MealType[]; servings: number; allergies: string[]; dislikedIngredients?: string[]; usMeasures?: boolean; requireQuantities?: boolean },
+  options: { mealTypes: MealType[]; servings: number; allergies: string[]; dislikedIngredients?: string[]; usMeasures?: boolean; requireQuantities?: boolean; checkPortions?: boolean },
 ): MealPlanValidationResult {
   if (!Array.isArray(value)) {
     return {
