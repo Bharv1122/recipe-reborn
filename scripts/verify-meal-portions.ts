@@ -10,6 +10,12 @@ assert.equal(hasBulkMeatPortion(['½ pound ground beef'], 1), false);
 assert.equal(hasBulkMeatPortion(['1½ pounds ground beef'], 1), true);
 assert.equal(hasBulkMeatPortion(['454 g ground beef'], 1), true);
 assert.equal(hasBulkMeatPortion(['1 pound chicken broth', '1 pound bone-in chicken thighs'], 1), false);
+for (const line of ['1 lb. ground beef', '1-1/2 pounds ground beef', '1–1/2 lbs. ground beef', '1 pound ground beef, 90% lean/10% fat', '1 pound ground beef (10 percent fat)']) {
+  assert.equal(hasBulkMeatPortion([line], 1), true, line);
+  assert.equal(hasBulkMeatPortion([line], 4), false, line);
+}
+assert.equal(hasBulkMeatPortion(['1 pound beef fat', '1 pound chicken fat'], 1), false, 'Cooking fats remain excluded.');
+assert.equal(hasBulkMeatPortion(['1-2 pounds ground beef'], 1), false, 'Do not guess amounts from ranges.');
 const meal = { title: 'Sausage and peppers', ingredients: ['1 pound Italian sausage', '2 bell peppers'], instructions: 'Cook the sausage and peppers.', servings: 1 };
 const options = { servings: 1, allergies: [], usMeasures: true };
 const result = validateMeal(meal, options);

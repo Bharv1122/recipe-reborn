@@ -43,6 +43,18 @@ async function main() {
   for (const substitute of ['Ground beef with Italian seasoning', 'Ground beef (seasoned with fennel, garlic, and paprika)']) {
     assert.deepEqual(validateAdaptedImport(beefVersion, { ...sausageRequest, action: { ...sausageRequest.action, substitute } }, preferences), beefVersion);
   }
+  for (const substitute of ['Ground beef with Italian sausage seasoning', 'Ground beef (seasoned with Italian sausage spices)']) {
+    const request = { ...sausageRequest, action: { ...sausageRequest.action, substitute } };
+    assert.deepEqual(validateAdaptedImport(beefVersion, request, preferences), beefVersion);
+    assert.throws(() => validateAdaptedImport({ ...beefVersion, freshIngredients: [...beefVersion.freshIngredients, sausageLine] }, request, preferences), /replaced ingredient still appears/);
+    assert.throws(() => validateAdaptedImport({ ...beefVersion, instructions: sausageSource.instructions }, request, preferences), /replaced ingredient still appears/);
+  }
+  for (const [substitute, ingredient] of [['Tofu, pressed and cubed', '14 oz firm tofu, cubed'], ['Greek yogurt (plain)', '1 cup Greek yogurt']]) {
+    const candidate = { ...beefVersion, freshIngredients: [ingredient], instructions: ['Cook gently.'] };
+    assert.deepEqual(validateAdaptedImport(candidate, { ...sausageRequest, action: { ...sausageRequest.action, substitute } }, preferences), candidate);
+  }
+  const almondVersion = { ...beefVersion, freshIngredients: ['1 cup almond flour'], instructions: ['Stir in the almond flour.'] };
+  assert.deepEqual(validateAdaptedImport(almondVersion, { ...sausageRequest, action: { ...sausageRequest.action, substitute: 'flour (almond)' } }, preferences), almondVersion);
   const turkey = { ...beefVersion, freshIngredients: ['1 pound Italian turkey sausage', '2 bell peppers'], instructions: ['Cook the turkey sausage and peppers.'] };
   assert.deepEqual(validateAdaptedImport(turkey, { ...sausageRequest, action: { ...sausageRequest.action, substitute: 'Turkey Italian sausage' } }, preferences), turkey);
   assert.throws(() => validateAdaptedImport({ ...beefVersion, freshIngredients: ['1 pound chicken', '1 tsp Italian seasoning'] }, { ...sausageRequest, action: { ...sausageRequest.action, substitute: 'ground beef with Italian seasoning' } }, preferences), /substitute is missing/);
@@ -63,6 +75,8 @@ async function main() {
   const peanutButterRequest = { recipe: butterSource, action: { type: 'substitute' as const, original: '2 tbsp butter', substitute: '2 tbsp peanut butter' } };
   const peanutButterVersion = { ...butterSource, freshIngredients: ['2 tbsp peanut butter', '1 cup rice'], instructions: ['Warm the peanut butter.', 'Stir in the rice.'] };
   assert.deepEqual(validateAdaptedImport(peanutButterVersion, peanutButterRequest, { allergies: [], dislikes: [], likes: [] }), peanutButterVersion, 'Shared words in a substitute must not cause a false old-reference rejection.');
+
+  assert.throws(() => validateAdaptedImport({ ...peanutButterVersion, freshIngredients: ['1 cup butternut squash', '2 tbsp butter'], instructions: ['Cook the butternut squash in butter.'] }, { ...peanutButterRequest, action: { ...peanutButterRequest.action, substitute: 'butternut squash' } }, preferences), /replaced ingredient still appears/, 'A partial word must not bypass removal of the original ingredient.');
 
   const removeRequest = { recipe: imported, action: { type: 'remove' as const, original: '1/2 cup fresh cilantro leaves' } };
   const noCilantro = { ...imported, freshIngredients: imported.freshIngredients.filter((item) => !item.includes('cilantro')), instructions: ['Brown the pork chops.', 'Roast the chicken thighs for 30 minutes.', 'Serve with rice.'] };

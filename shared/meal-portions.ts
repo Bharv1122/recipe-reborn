@@ -4,11 +4,12 @@ export function hasBulkMeatPortion(ingredients: readonly string[], servings: num
   if (!Number.isFinite(servings) || servings <= 0) return false;
   let ounces = 0;
   for (const line of ingredients) {
-    const normalized = line.replace(/(\d)?([¼½¾])/g, (_, whole, fraction: string) =>
+    const normalized = line.replace(/^(\s*\d+)[-–](\d+\/\d+)(?=\s)/, '$1 $2').replace(/(\d)?([¼½¾])/g, (_, whole, fraction: string) =>
       `${whole ? `${whole} ` : ''}${({ '¼': '1/4', '½': '1/2', '¾': '3/4' })[fraction]}`);
-    const match = normalized.match(/^\s*(\d+\s+\d+\/\d+|\d+\/\d+|\d+(?:\.\d+)?)\s*(pounds?|lbs?|ounces?|oz|grams?|g|kilograms?|kg)\b\s+(.+)$/i);
+    const match = normalized.match(/^\s*(\d+\s+\d+\/\d+|\d+\/\d+|\d+(?:\.\d+)?)\s*(pounds?|lbs?|ounces?|oz|grams?|g|kilograms?|kg)\b\.?\s+(.+)$/i);
     if (!match) continue;
-    const food = match[3];
+    // A lean/fat percentage describes the meat, not a separate cooking fat.
+    const food = match[3].replace(/\b\d+(?:\.\d+)?\s*(?:%|percent)\s*(?:lean|fat)\b/gi, '');
     if (!/\b(?:sausage|sausages|beef|pork|chicken|turkey|lamb|veal|venison|bison|steak)\b/i.test(food) ||
         /\b(?:broth|stock|gravy|fat|lard|tallow|bone[- ]in|whole|bones?|carcass)\b/i.test(food)) continue;
     const amount = match[1].split(/\s+/).reduce((sum, part) => {
