@@ -59,13 +59,17 @@ function identityWords(line: string): string[] {
 
 const PREP_LEAD = new Set(('cut sliced diced chopped minced cubed halved quartered shredded grated torn ' +
   'thinly finely roughly coarsely into drained rinsed peeled trimmed seeded cored softened melted beaten ' +
-  'patted divided plus to for at').split(' '));
+  'patted pressed divided plus to for at').split(' '));
 
-function identityPhrase(line: string): string {
+function ingredientNameBeforePreparation(line: string): string {
   // Keep name qualifiers ("boneless, skinless chicken breast"), not trailing preparation.
   const parts = line.split(',');
   const end = parts.findIndex((part, index) => index > 0 && PREP_LEAD.has(normalizeFoodText(part).split(' ')[0]));
-  const name = end > 0 ? parts.slice(0, end).join(',') : line;
+  return end > 0 ? parts.slice(0, end).join(',') : line;
+}
+
+function identityPhrase(line: string): string {
+  const name = ingredientNameBeforePreparation(line);
   const outside = identityWords(name.replace(/\([^)]*\)/g, ' '));
   // Do not broaden a qualified single-word name such as "flour (almond)" to all flour.
   const words = outside.length >= 2 ? outside : identityWords(name);
@@ -87,14 +91,18 @@ function containsPhrase(values: string[], phrase: string): boolean {
   return text.includes(` ${phrase} `);
 }
 
-function hasSuggestedSubstitute(ingredients: string[], suggestion: string): boolean {
-  // Suggestions may include serving advice, not part of the ingredient's name.
-  // Preserve identity qualifiers such as flour (almond) and match one line only.
-  const name = (text: string) => text.replace(/\(\s*(?:seasoned|season|mixed|combined|prepared)\b[^)]*\)/gi, '')
+function substituteIngredientName(text: string): string {
+  // Strip serving/preparation advice, but retain food qualifiers such as (almond).
+  const name = text.replace(/\(\s*(?:seasoned|season|mixed|combined|prepared)\b[^)]*\)/gi, '')
+    .replace(/\(\s*plain\s*\)/gi, '')
     .split(/\s+(?:(?:seasoned|mixed|combined)\s+)?with\s+/i)[0];
-  const words = identityWords(name(suggestion));
+  return ingredientNameBeforePreparation(name);
+}
+
+function hasSuggestedSubstitute(ingredients: string[], suggestion: string): boolean {
+  const words = identityWords(substituteIngredientName(suggestion));
   return words.length > 0 && ingredients.some(line => {
-    const actual = new Set(identityWords(name(line)));
+    const actual = new Set(identityWords(substituteIngredientName(line)));
     return words.every(word => actual.has(word));
   });
 }
@@ -165,9 +173,9 @@ export function validateAdaptedImport(
 
   if (request.action.type === 'substitute') {
     const oldKey = identityPhrase(request.action.original);
-    const substituteKey = identityPhrase(request.action.substitute);
+    const substituteKey = identityPhrase(substituteIngredientName(request.action.substitute));
     if (!substituteKey || !hasSuggestedSubstitute(recipe.freshIngredients, request.action.substitute)) throw new Error('The substitute is missing from the adapted ingredient list');
-    if (oldKey && !substituteKey.includes(oldKey) && containsPhrase([...recipe.freshIngredients, ...recipe.instructions], oldKey)) {
+    if (oldKey && !containsPhrase([substituteKey], oldKey) && containsPhrase([...recipe.freshIngredients, ...recipe.instructions], oldKey)) {
       throw new Error('The replaced ingredient still appears in the adapted recipe');
     }
   }
