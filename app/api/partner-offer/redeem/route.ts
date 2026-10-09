@@ -5,6 +5,7 @@ import { prisma } from '@/lib/db';
 import { rateLimit, getClientIp } from '@/lib/rate-limit';
 import { findPartnerOffer, isOfferLive, partnerTrialEndsAt } from '@/lib/partner-offers';
 import { resolvePartnerTrial } from '@/lib/partner-offer-server';
+import { redeemTesterReward } from '@/lib/tester-reward-server';
 
 export const dynamic = 'force-dynamic';
 
@@ -39,6 +40,11 @@ export async function POST(request: NextRequest) {
 
     if (!offer) {
       return NextResponse.json({ error: INVALID }, { status: 400 });
+    }
+
+    if (offer.requiresCompletion) {
+      const { status, ...result } = await redeemTesterReward(session.user.id);
+      return NextResponse.json(result, { status });
     }
 
     if (!isOfferLive(offer)) {
