@@ -19,6 +19,7 @@ for (const change of [ { feedbackReference: '' }, { approvedBy: 'tester' }, { co
   assert(!validTesterCompletion(JSON.stringify({ ...approval, ...change }), 'tester', now));
 }
 assert(!validTesterCompletion('invalid JSON', 'tester', now));
+assert(!validTesterCompletion(JSON.stringify({ ...approval, startedAt: new Date(completed.getTime() - 14 * 86400000 + 1).toISOString() }), 'tester', now));
 
 async function main() {
   let approved = false, used = false, capacity = 0, writes = 0, retries = 0;
@@ -47,6 +48,13 @@ async function main() {
   assert.equal((await redeemTesterReward('tester', db)).status, 409);
   assert.equal(writes, 0);
   user.stripeSubscriptionId = null;
+  user = { ...user, subscriptionTier: 'premium', subscriptionStatus: 'trialing', currentPeriodEnd: new Date(now.getTime() + 86400000) };
+  assert.equal((await redeemTesterReward('tester', db)).status, 409);
+  assert.equal(writes, 0);
+  user = { ...user, subscriptionTier: 'premium', subscriptionStatus: 'active', currentPeriodEnd: null };
+  assert.equal((await redeemTesterReward('tester', db)).status, 409);
+  assert.equal(writes, 0);
+  user = { ...user, subscriptionTier: 'free', subscriptionStatus: 'active' };
   capacity = 25;
   assert.equal((await redeemTesterReward('tester', db)).status, 409);
   assert.equal(writes, 0);
