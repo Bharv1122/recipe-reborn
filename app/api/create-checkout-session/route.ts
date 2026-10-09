@@ -5,6 +5,7 @@ import { stripe } from '@/lib/stripe';
 import { prisma } from '@/lib/db';
 import { resolvePartnerTrial } from '@/lib/partner-offer-server';
 import { buildTrialCheckoutSettings } from '@/lib/partner-checkout';
+import { findPartnerOffer } from '@/lib/partner-offers';
 
 export const dynamic = 'force-dynamic';
 
@@ -50,6 +51,12 @@ export async function POST(request: NextRequest) {
     }
     if (user.subscriptionTier !== 'free' && user.subscriptionStatus === 'active' && !user.currentPeriodEnd) {
       return NextResponse.json({ error: 'Premium is already included with your account.' }, { status: 409 });
+    }
+
+    if (findPartnerOffer(user.signupSource)?.requiresCompletion
+      && user.subscriptionStatus === 'trialing'
+      && user.currentPeriodEnd && user.currentPeriodEnd > new Date()) {
+      return NextResponse.json({ error: 'Your tester Premium reward is already active. No checkout is needed.' }, { status: 409 });
     }
 
     // Get or create Stripe customer

@@ -95,6 +95,12 @@ export default function PricingPage() {
   // create, so a partner member never reads "7-day" and then gets 30.
   const applyOffer = (tier: PricingTier): PricingTier => {
     if (!partnerOffer || tier.priceId === null) return tier;
+    if (partnerOffer.requiresCompletion) return {
+      ...tier,
+      features: tier.features.map((f) => f === '7-day free trial'
+        ? `${partnerOffer.rewardMonths} free months already active` : f),
+      buttonText: 'Use Your Premium Reward',
+    };
     return {
       ...tier,
       features: tier.features.map((f) =>
@@ -107,6 +113,10 @@ export default function PricingPage() {
   };
 
   const handleSubscribe = async (tier: PricingTier) => {
+    if (partnerOffer?.requiresCompletion) {
+      router.push('/generator');
+      return;
+    }
     if (tier.priceId === null) {
       // Free is an account-creation path for new visitors, not a login gate.
       router.push(session ? '/generator' : '/signup');

@@ -31,7 +31,7 @@ export function usePartnerOffer(): PartnerOffer | null {
         if (!data.authenticated) return;
 
         const fromApi = findPartnerOffer(data?.offer?.slug);
-        setOffer(fromApi && isOfferLive(fromApi) ? fromApi : null);
+        setOffer(fromApi && (fromApi.requiresCompletion || isOfferLive(fromApi)) ? fromApi : null);
       })
       .catch(() => {
         // Display-only; the pricing page must render regardless.
@@ -66,7 +66,9 @@ export function PartnerOfferBanner({
         <p className="font-semibold text-emerald-900">
           {offer.lifetime
             ? `${offer.label} — Premium, free for good`
-            : `Special, just for ${offer.label}: ${offer.trialDays} days free`}
+            : offer.rewardMonths
+              ? `Thank you for testing: ${offer.rewardMonths} months of Premium free`
+              : `Special, just for ${offer.label}: ${offer.trialDays} days free`}
         </p>
         <p className="text-sm text-emerald-800/80">
           {/* Payment is not mentioned because the trial involves no card and
@@ -80,17 +82,17 @@ export function PartnerOfferBanner({
           ) : (
             <>
               Full Premium — {offer.trialRecipeLimit} recipes a month, meal plans,
-              shopping lists, the lot. When the {offer.trialDays} days are up your
+              shopping lists, the lot. When the {offer.rewardMonths ? `${offer.rewardMonths} months` : `${offer.trialDays} days`} are up your
               account simply returns to the free plan.
             </>
           )}
         </p>
         {showCta && (
           <a
-            href="/signup"
+            href={offer.requiresCompletion ? '/generator' : '/signup'}
             className="mt-3 inline-block rounded-lg bg-emerald-600 px-5 py-2.5 font-semibold text-white transition-colors hover:bg-emerald-700"
           >
-            Claim your {offer.trialDays} days
+            {offer.requiresCompletion ? 'Use your Premium reward' : `Claim your ${offer.trialDays} days`}
           </a>
         )}
       </div>
