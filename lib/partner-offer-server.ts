@@ -58,7 +58,9 @@ export async function resolvePartnerTrial(user: {
 }): Promise<ResolvedTrial> {
   const offer = findPartnerOffer(user.signupSource);
 
-  if (!offer || !isOfferLive(offer)) {
+  // Once a completion reward is earned, its own end date controls access;
+  // closing new redemptions must not shorten an already granted reward.
+  if (!offer || (!offer.requiresCompletion && !isOfferLive(offer))) {
     return STANDARD;
   }
 

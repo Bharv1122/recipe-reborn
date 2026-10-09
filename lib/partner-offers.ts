@@ -16,6 +16,9 @@ export interface PartnerOffer {
   /** Shown to the visitor so the offer is visible, not a hidden surprise. */
   label: string;
   trialDays: number;
+  /** Completion rewards use calendar months and require an operator approval. */
+  rewardMonths?: number;
+  requiresCompletion?: boolean;
   /**
    * Recipes included in the trial. The standard 7-day trial caps at
    * TRIAL_RECIPE_LIMIT (15), which is generous over a week but thin over a
@@ -64,6 +67,19 @@ export interface PartnerOffer {
 }
 
 export const PARTNER_OFFERS: PartnerOffer[] = [
+  {
+    slug: 'testerthanks',
+    label: 'TESTERTHANKS',
+    trialDays: 60,
+    rewardMonths: 2,
+    requiresCompletion: true,
+    trialRecipeLimit: 100,
+    fullPremium: true,
+    directAccess: true,
+    expiresAt: '2027-12-31',
+    maxRedemptions: 25,
+    singleUse: true,
+  },
   {
     slug: '3dayfree',
     label: '3DAYFREE',
@@ -118,6 +134,15 @@ export const PARTNER_OFFERS: PartnerOffer[] = [
 ];
 
 export function partnerTrialEndsAt(offer: PartnerOffer, now = new Date()): Date {
+  if (offer.rewardMonths) {
+    const end = new Date(now);
+    const day = end.getUTCDate();
+    end.setUTCDate(1);
+    end.setUTCMonth(end.getUTCMonth() + offer.rewardMonths);
+    const lastDay = new Date(Date.UTC(end.getUTCFullYear(), end.getUTCMonth() + 1, 0)).getUTCDate();
+    end.setUTCDate(Math.min(day, lastDay));
+    return end;
+  }
   return new Date(now.getTime() + offer.trialDays * 86_400_000);
 }
 

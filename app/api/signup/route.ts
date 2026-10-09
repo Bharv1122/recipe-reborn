@@ -70,6 +70,10 @@ export async function POST(request: NextRequest) {
       typeof src === 'string' ? src : null,
     );
 
+    if (typedOffer?.requiresCompletion) {
+      return NextResponse.json({ error: 'TESTERTHANKS is a reward for completing the 14-day test. Sign up without this code; redeem it after Beth confirms completion.' }, { status: 400 });
+    }
+
     // Direct-access and lifetime offers land the account on Premium at signup.
     // Capacity is checked here too, otherwise signup could bypass redemption
     // limits.
