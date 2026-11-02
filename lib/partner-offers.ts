@@ -100,7 +100,7 @@ export const PARTNER_OFFERS: PartnerOffer[] = [
     trialRecipeLimit: 100,
     fullPremium: true,
     directAccess: true,
-    expiresAt: '2026-10-31',
+    expiresAt: '2026-11-20',
     maxRedemptions: 25,
     singleUse: true,
   },
