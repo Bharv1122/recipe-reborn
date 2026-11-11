@@ -1,8 +1,53 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { Prisma } from '@prisma/client';
+import type { PartnerOffer } from '@/lib/partner-offers';
 import bcrypt from 'bcryptjs';
 import { prisma } from '@/lib/db';
 import { rateLimit, getClientIp } from '@/lib/rate-limit';
 import { isOfferLive, partnerTrialEndsAt, resolveSignupAttribution } from '@/lib/partner-offers';
+
+async function createLifetimeSignup(email: string, password: string, offer: PartnerOffer) {
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    try {
+      return await prisma.$transaction(
+        async (tx) => {
+          const taken = await tx.user.count({
+            where: {
+              partnerOfferRedeemedCode: { equals: offer.slug, mode: 'insensitive' },
+            },
+          });
+          const offerGranted = taken < offer.maxRedemptions;
+          if (!offerGranted) return { user: null, offerGranted };
+
+          const grantedAt = new Date();
+
+          const user = await tx.user.create({
+            data: {
+              email,
+              password,
+              signupSource: offer.slug,
+              subscriptionTier: 'premium',
+              subscriptionStatus: 'active',
+              currentPeriodEnd: null,
+              partnerOfferRedeemedCode: offer.slug,
+              partnerOfferRedeemedAt: grantedAt,
+            },
+          });
+
+          return { user, offerGranted };
+        },
+        { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
+      );
+    } catch (error) {
+      const retryable =
+        error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2034';
+      if (retryable && attempt < 2) continue;
+      throw error;
+    }
+  }
+
+  throw new Error('Unable to safely redeem lifetime offer');
+}
 
 export async function POST(request: NextRequest) {
   try {
@@ -72,6 +117,20 @@ export async function POST(request: NextRequest) {
 
     if (typedOffer?.requiresCompletion) {
       return NextResponse.json({ error: 'TESTERTHANKS is a reward for completing the 14-day test. Sign up without this code; redeem it after Beth confirms completion.' }, { status: 400 });
+    }
+
+    if (typedOffer?.slug === 'steph' && isOfferLive(typedOffer)) {
+      const { user, offerGranted } = await createLifetimeSignup(email, hashedPassword, typedOffer);
+      if (!offerGranted || !user) {
+        return NextResponse.json(
+          { error: 'That code has already been used.' },
+          { status: 409 }
+        );
+      }
+      return NextResponse.json(
+        { message: 'User created successfully', user: { id: user.id, email: user.email } },
+        { status: 201 }
+      );
     }
 
     // Direct-access and lifetime offers land the account on Premium at signup.

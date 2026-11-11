@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { Prisma } from '@prisma/client';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth-options';
 import { prisma } from '@/lib/db';
@@ -10,6 +11,61 @@ import { redeemTesterReward } from '@/lib/tester-reward-server';
 export const dynamic = 'force-dynamic';
 
 const INVALID = 'That code is not recognised. Check the spelling and try again.';
+
+type LifetimeRedemptionResult = 'granted' | 'already-premium' | 'taken' | 'missing';
+
+async function redeemLifetimeOffer(
+  userId: string,
+  offer: NonNullable<ReturnType<typeof findPartnerOffer>>,
+): Promise<LifetimeRedemptionResult> {
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    try {
+      return await prisma.$transaction(
+        async (tx) => {
+          const current = await tx.user.findUnique({
+            where: { id: userId },
+            select: { subscriptionTier: true },
+          });
+
+          if (!current) return 'missing';
+          if (current.subscriptionTier !== 'free') return 'already-premium';
+
+          const taken = await tx.user.count({
+            where: {
+              partnerOfferRedeemedCode: { equals: offer.slug, mode: 'insensitive' },
+              id: { not: userId },
+            },
+          });
+
+          if (taken >= offer.maxRedemptions) return 'taken';
+
+          const redeemedAt = new Date();
+          await tx.user.update({
+            where: { id: userId },
+            data: {
+              signupSource: offer.slug,
+              subscriptionTier: 'premium',
+              subscriptionStatus: 'active',
+              currentPeriodEnd: null,
+              partnerOfferRedeemedCode: offer.slug,
+              partnerOfferRedeemedAt: redeemedAt,
+            },
+          });
+
+          return 'granted';
+        },
+        { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
+      );
+    } catch (error) {
+      const retryable =
+        error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2034';
+      if (retryable && attempt < 2) continue;
+      throw error;
+    }
+  }
+
+  return 'taken';
+}
 
 /**
  * Redeem a community code on an existing account.
@@ -120,6 +176,37 @@ export async function POST(request: NextRequest) {
           trialDays: offer.trialDays,
           trialRecipeLimit: offer.trialRecipeLimit,
           fullPremium: offer.fullPremium,
+        },
+      });
+    }
+
+    if (offer.slug === 'steph') {
+      const result = await redeemLifetimeOffer(user.id, offer);
+
+      if (result === 'missing') {
+        return NextResponse.json({ error: 'Account not found' }, { status: 404 });
+      }
+      if (result === 'already-premium') {
+        return NextResponse.json(
+          { error: 'Your account is already on Premium.' },
+          { status: 400 }
+        );
+      }
+      if (result === 'taken') {
+        return NextResponse.json(
+          { error: 'That code has already been used.' },
+          { status: 409 }
+        );
+      }
+
+      return NextResponse.json({
+        message: `${offer.label} — Premium unlocked for good. No trial, no card, nothing to renew.`,
+        offer: {
+          slug: offer.slug,
+          label: offer.label,
+          lifetime: true,
+          trialDays: 0,
+          trialRecipeLimit: offer.trialRecipeLimit,
         },
       });
     }

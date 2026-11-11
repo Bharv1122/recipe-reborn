@@ -68,6 +68,17 @@ export interface PartnerOffer {
 
 export const PARTNER_OFFERS: PartnerOffer[] = [
   {
+    slug: 'steph',
+    label: 'STEPH',
+    lifetime: true,
+    trialDays: 0,
+    trialRecipeLimit: 100,
+    fullPremium: true,
+    expiresAt: '2099-12-31',
+    maxRedemptions: 1,
+    singleUse: true,
+  },
+  {
     slug: 'testerthanks',
     label: 'TESTERTHANKS',
     trialDays: 60,
