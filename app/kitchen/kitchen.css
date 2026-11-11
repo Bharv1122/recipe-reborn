@@ -1,0 +1,606 @@
+/* Kitchen display mode (/kitchen/[recipeId]). Readable from across a counter:
+   dark, high-contrast, huge type, and tap targets you can hit with a knuckle.
+   Everything is prefixed rk- so nothing leaks into the rest of the app. */
+
+.rk-root {
+  --rk-bg: #0c1a13;
+  --rk-panel: #13261c;
+  --rk-raised: #1a3325;
+  --rk-line: #2b4a38;
+  --rk-text: #f4fbf6;
+  --rk-muted: #a9c2b3;
+  --rk-accent: #22c55e;
+  --rk-accent-ink: #052e16;
+  --rk-amount: #fcd34d;
+  position: fixed;
+  inset: 0;
+  z-index: 70; /* above the site header (50) and Ask Chef (40) */
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: max(12px, env(safe-area-inset-top)) max(16px, env(safe-area-inset-right)) max(12px, env(safe-area-inset-bottom))
+    max(16px, env(safe-area-inset-left));
+  background: var(--rk-bg);
+  color: var(--rk-text);
+  overflow: hidden;
+  font-size: 18px;
+  -webkit-tap-highlight-color: transparent;
+}
+.rk-root.is-alarming {
+  animation: rk-flash 1s ease-in-out infinite;
+}
+@keyframes rk-flash {
+  50% {
+    box-shadow: inset 0 0 0 10px #f59e0b;
+  }
+}
+
+.rk-top {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.rk-title {
+  flex: 1 1 240px;
+  min-width: 0;
+}
+.rk-title h1 {
+  font-size: clamp(1.2rem, 2.4vw, 1.9rem);
+  font-weight: 700;
+  line-height: 1.2;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.rk-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 14px;
+  color: var(--rk-muted);
+  font-size: 15px;
+}
+.rk-badge {
+  color: var(--rk-amount);
+  border: 1px solid #806a1f;
+  border-radius: 999px;
+  padding: 0 10px;
+}
+.rk-tools {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.rk-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-height: 52px;
+  padding: 10px 18px;
+  border-radius: 14px;
+  border: 2px solid var(--rk-line);
+  background: var(--rk-raised);
+  color: var(--rk-text);
+  font-weight: 600;
+  font-size: 17px;
+  line-height: 1.1;
+  text-decoration: none;
+  cursor: pointer;
+  touch-action: manipulation;
+  user-select: none;
+}
+.rk-btn:hover {
+  border-color: var(--rk-accent);
+}
+.rk-btn:focus-visible,
+.rk-chip:focus-visible,
+.rk-ingredient:focus-visible,
+.rk-dot:focus-visible {
+  outline: 4px solid var(--rk-amount);
+  outline-offset: 2px;
+}
+.rk-btn:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+.rk-btn[aria-pressed='true'] {
+  border-color: var(--rk-accent);
+  background: #14532d;
+}
+.rk-btn-quiet {
+  background: transparent;
+}
+.rk-btn-big {
+  min-height: clamp(76px, 11vh, 112px);
+  font-size: clamp(1.3rem, 2.6vw, 2rem);
+  border-radius: 20px;
+  flex: 1;
+}
+.rk-btn-primary {
+  background: var(--rk-accent);
+  border-color: var(--rk-accent);
+  color: var(--rk-accent-ink);
+  flex: 2;
+}
+.rk-btn-primary:hover {
+  background: #4ade80;
+}
+.rk-btn-timer {
+  min-height: 64px;
+  font-size: clamp(1.05rem, 2vw, 1.4rem);
+  border-color: #806a1f;
+}
+
+.rk-progress {
+  display: flex;
+  gap: 6px;
+}
+.rk-dot {
+  flex: 1;
+  height: 14px;
+  border-radius: 999px;
+  border: 0;
+  background: var(--rk-line);
+  cursor: pointer;
+  padding: 0;
+}
+.rk-dot.is-done {
+  background: #15803d;
+}
+.rk-dot.is-current {
+  background: var(--rk-accent);
+}
+
+.rk-body {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.rk-stage {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding: clamp(16px, 3vw, 36px);
+  background: var(--rk-panel);
+  border: 2px solid var(--rk-line);
+  border-radius: 24px;
+  touch-action: pan-y;
+}
+.rk-step-count {
+  font-size: clamp(1.1rem, 2.2vw, 1.6rem);
+  font-weight: 700;
+  color: var(--rk-accent);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+.rk-step {
+  /* Sized off the smaller of width/height so it fills tablets in both orientations. */
+  font-size: clamp(1.75rem, min(6.2vw, 7.2vh), 4.4rem);
+  line-height: 1.25;
+  font-weight: 600;
+  animation: rk-in 0.25s ease-out;
+}
+@keyframes rk-in {
+  from {
+    opacity: 0.3;
+    transform: translateY(6px);
+  }
+}
+.rk-amount {
+  background: none;
+  color: var(--rk-amount);
+  font-weight: 800;
+}
+.rk-uses {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+.rk-uses li {
+  font-size: clamp(1.05rem, 2vw, 1.5rem);
+  padding: 8px 16px;
+  border-radius: 999px;
+  background: var(--rk-raised);
+  border: 1px solid var(--rk-line);
+}
+.rk-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+.rk-toast {
+  font-size: clamp(1rem, 1.8vw, 1.3rem);
+  color: #dcfce7;
+  background: #14532d;
+  border-radius: 12px;
+  padding: 10px 14px;
+}
+.rk-finished {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+.rk-side {
+  display: none;
+  flex-direction: column;
+  gap: 12px;
+  min-height: 0;
+  overflow-y: auto;
+}
+.rk-side.is-open,
+.rk-side:has(.rk-timer) {
+  display: flex;
+}
+.rk-side:not(.is-open) .rk-panel[aria-label='Ingredients'] {
+  display: none;
+}
+.rk-panel {
+  background: var(--rk-panel);
+  border: 2px solid var(--rk-line);
+  border-radius: 20px;
+  padding: 16px;
+}
+.rk-panel-title {
+  font-size: 1.25rem;
+  font-weight: 700;
+  margin-bottom: 10px;
+}
+.rk-muted {
+  color: var(--rk-muted);
+  font-weight: 400;
+}
+.rk-small {
+  font-size: 15px;
+}
+.rk-timers {
+  list-style: none;
+  padding: 0;
+  margin: 0 0 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.rk-timer {
+  border: 2px solid var(--rk-line);
+  border-radius: 16px;
+  padding: 10px 12px;
+  background: var(--rk-raised);
+}
+.rk-timer.is-done {
+  border-color: #f59e0b;
+  background: #422006;
+}
+.rk-timer.is-paused .rk-timer-clock {
+  opacity: 0.6;
+}
+.rk-timer-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 8px;
+}
+.rk-timer-label {
+  font-size: 15px;
+  color: var(--rk-muted);
+}
+.rk-timer-clock {
+  font-size: clamp(1.8rem, 3.4vw, 2.6rem);
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+}
+.rk-timer-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-top: 6px;
+}
+.rk-timer-actions .rk-btn {
+  min-height: 48px;
+  flex: 1;
+  padding: 8px 10px;
+}
+.rk-quick {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.rk-chip {
+  min-height: 48px;
+  padding: 8px 14px;
+  border-radius: 999px;
+  border: 2px solid var(--rk-line);
+  background: transparent;
+  color: var(--rk-text);
+  font-weight: 600;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+.rk-ingredients {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.rk-ingredient {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  min-height: 56px;
+  padding: 8px 12px;
+  border-radius: 14px;
+  border: 2px solid transparent;
+  background: var(--rk-raised);
+  color: var(--rk-text);
+  font-size: 1.1rem;
+  text-align: left;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+.rk-ingredient.is-used {
+  border-color: #806a1f;
+}
+.rk-ingredient.is-checked {
+  opacity: 0.55;
+  text-decoration: line-through;
+}
+.rk-check {
+  flex: none;
+  width: 30px;
+  height: 30px;
+  border-radius: 8px;
+  border: 2px solid var(--rk-muted);
+  display: grid;
+  place-items: center;
+  font-weight: 800;
+  color: var(--rk-accent-ink);
+}
+.is-checked .rk-check {
+  background: var(--rk-accent);
+  border-color: var(--rk-accent);
+}
+
+.rk-nav {
+  display: flex;
+  gap: 12px;
+}
+.rk-foot {
+  text-align: center;
+  font-size: 13px;
+}
+
+/* Portrait / phones: ingredients open as an overlay sheet above the stage. */
+@media (orientation: portrait), (max-width: 899px) {
+  .rk-side.is-open {
+    position: absolute;
+    inset: max(8px, env(safe-area-inset-top)) 8px 8px;
+    z-index: 3;
+    background: var(--rk-bg);
+    border-radius: 20px;
+    box-shadow: 0 20px 60px #000c;
+    padding: 8px;
+  }
+  .rk-side.is-open .rk-panel[aria-label='Ingredients'] {
+    order: -1;
+  }
+  .rk-side:not(.is-open) .rk-close {
+    display: none;
+  }
+  .rk-close {
+    position: sticky;
+    top: 0;
+    z-index: 1;
+    order: -2;
+    min-height: 64px;
+    flex: none;
+  }
+  .rk-side:not(.is-open) {
+    max-height: 34vh;
+    flex: none;
+  }
+  .rk-side:not(.is-open) .rk-quick {
+    display: none;
+  }
+}
+
+/* Landscape tablets and smart displays: step on the left, timers + checklist on the right. */
+@media (orientation: landscape) and (min-width: 900px) {
+  .rk-body {
+    flex-direction: row;
+  }
+  .rk-side {
+    display: flex;
+  }
+  .rk-side:not(.is-open) .rk-panel[aria-label='Ingredients'] {
+    display: block;
+  }
+  .rk-close {
+    display: none;
+  }
+  .rk-side {
+    width: clamp(320px, 32vw, 460px);
+    flex: none;
+  }
+  .rk-only-portrait {
+    display: none;
+  }
+}
+
+@media (max-width: 560px) {
+  .rk-root {
+    font-size: 16px;
+    gap: 8px;
+  }
+  .rk-hide-small {
+    display: none;
+  }
+  .rk-btn-big {
+    font-size: 1.2rem;
+    padding: 8px;
+    white-space: nowrap;
+  }
+  .rk-stage {
+    padding: 16px;
+  }
+  .rk-timer {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 8px;
+  }
+  .rk-timer-head {
+    flex: 1;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0;
+  }
+  .rk-timer-clock {
+    font-size: 1.6rem;
+  }
+  .rk-timer-actions {
+    margin-top: 0;
+    flex-wrap: nowrap;
+  }
+  .rk-timer-actions .rk-btn {
+    min-height: 48px;
+    font-size: 14px;
+    padding: 6px 8px;
+  }
+  .rk-side:not(.is-open) .rk-panel {
+    padding: 10px;
+  }
+  .rk-side:not(.is-open) .rk-panel-title {
+    display: none;
+  }
+  .rk-tools .rk-btn {
+    min-height: 44px;
+    padding: 6px 12px;
+    font-size: 15px;
+  }
+  .rk-nav {
+    gap: 8px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .rk-step,
+  .rk-root.is-alarming {
+    animation: none;
+  }
+}
+
+/* WebXR page shell (/kitchen/[recipeId]/xr). The 3D scene itself lives in the canvas. */
+.rx-root {
+  --rk-bg: #0c1a13;
+  --rk-panel: #13261c;
+  --rk-raised: #1a3325;
+  --rk-line: #2b4a38;
+  --rk-text: #f4fbf6;
+  --rk-muted: #a9c2b3;
+  --rk-accent: #22c55e;
+  --rk-accent-ink: #052e16;
+  --rk-amount: #fcd34d;
+  position: fixed;
+  inset: 0;
+  z-index: 70;
+  overflow-y: auto;
+  background: var(--rk-bg);
+  color: var(--rk-text);
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+.rx-head {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 16px;
+}
+.rx-head h1 {
+  font-size: clamp(1.5rem, 3vw, 2.4rem);
+  font-weight: 700;
+}
+.rx-eyebrow {
+  color: var(--rk-accent);
+  font-size: 13px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+.rx-badge {
+  display: inline-block;
+  margin-top: 6px;
+}
+.rx-enter {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: min(100%, 380px);
+}
+.rx-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.rx-row .rk-btn {
+  flex: 1;
+}
+.rx-stage {
+  position: relative;
+  flex: none;
+  height: max(360px, 62vh);
+  border: 2px solid var(--rk-line);
+  border-radius: 20px;
+  overflow: hidden;
+  touch-action: none;
+  background: #0c1a13;
+}
+.rx-loading,
+.rx-fallback {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-content: center;
+  text-align: center;
+  gap: 8px;
+  color: var(--rk-muted);
+}
+.rx-help {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 16px;
+}
+.rx-help > div {
+  background: var(--rk-panel);
+  border: 2px solid var(--rk-line);
+  border-radius: 20px;
+  padding: 16px;
+}
+.rx-help h2 {
+  font-size: 1.2rem;
+  font-weight: 700;
+  margin-bottom: 8px;
+}
+.rx-help ul {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding-left: 18px;
+  list-style: disc;
+}
+.rx-help p {
+  margin-bottom: 10px;
+}
