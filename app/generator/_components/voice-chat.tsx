@@ -4,9 +4,15 @@ import { useState, useRef, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { Mic, MicOff, Loader2, Send, Trash2, Volume2, StopCircle } from 'lucide-react';
+import { Mic, Loader2, Send, Trash2, Volume2, StopCircle } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { motion, AnimatePresence } from 'framer-motion';
+import {
+  startVoiceRecording,
+  transcribeRecording,
+  type VoiceRecorderSession,
+  type VoiceRecording,
+} from '@/lib/browser-voice-recorder';
 
 interface Message {
   role: 'user' | 'assistant';
@@ -18,74 +24,56 @@ interface VoiceChatProps {
   onIngredientExtracted?: (ingredients: string) => void;
 }
 
-// The Web Speech API's SpeechRecognition interface isn't part of the
-// standard DOM lib typings (it's still non-standard / vendor-prefixed on
-// some browsers), so we declare the minimal shape we use here rather than
-// pulling in a third-party @types package. `any` is used for the event
-// payloads for the same reason.
-interface MinimalSpeechRecognition {
-  continuous: boolean;
-  interimResults: boolean;
-  lang: string;
-  start: () => void;
-  stop: () => void;
-  onresult: ((event: any) => void) | null;
-  onerror: ((event: any) => void) | null;
-  onend: (() => void) | null;
-}
-
-declare global {
-  interface Window {
-    SpeechRecognition?: new () => MinimalSpeechRecognition;
-    webkitSpeechRecognition?: new () => MinimalSpeechRecognition;
-  }
-}
-
 export function VoiceChat({ onIngredientExtracted }: VoiceChatProps) {
   const [messages, setMessages] = useState<Message[]>([]);
+  // "Starting" covers the wait for the browser's microphone permission prompt.
+  const [isStarting, setIsStarting] = useState(false);
   const [isRecording, setIsRecording] = useState(false);
   const [isTranscribing, setIsTranscribing] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
   const [audioLevel, setAudioLevel] = useState(0);
   const [recordingDuration, setRecordingDuration] = useState(0);
   const [mode, setMode] = useState<'quick' | 'conversational'>('quick');
-  const [showTranscribeFallbackNotice, setShowTranscribeFallbackNotice] = useState(false);
+  // The most recent voice problem, kept on screen after the toast disappears.
+  const [voiceNotice, setVoiceNotice] = useState<string | null>(null);
 
-  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
-  const audioChunksRef = useRef<Blob[]>([]);
-  const audioContextRef = useRef<AudioContext | null>(null);
-  const analyserRef = useRef<AnalyserNode | null>(null);
-  const animationFrameRef = useRef<number | null>(null);
+  // Voice input records the microphone in the browser (MediaRecorder) and
+  // sends the clip to /api/transcribe-audio. The browser's built-in speech
+  // recognition is not used here: it depends on an outside speech service
+  // that fails in ways this page cannot recover from.
+  const sessionRef = useRef<VoiceRecorderSession | null>(null);
   const recordingTimerRef = useRef<number | null>(null);
+  const uploadAbortRef = useRef<AbortController | null>(null);
+  const chatAbortRef = useRef<AbortController | null>(null);
+  // True from the moment a clip is handed off until its reply is finished.
+  // A ref (not state) so a fast double tap cannot slip past it.
+  const busyRef = useRef(false);
+  const mountedRef = useRef(false);
   const scrollAreaRef = useRef<HTMLDivElement>(null);
-  const speechRecognitionRef = useRef<MinimalSpeechRecognition | null>(null);
 
-  // Prefer the browser's built-in speech recognition (Chrome, Edge, Safari)
-  // over the MediaRecorder + server-transcription path. Computed once on
-  // mount since window.SpeechRecognition doesn't change at runtime.
-  const [isSpeechRecognitionSupported] = useState(() => {
-    if (typeof window === 'undefined') return false;
-    return Boolean(window.SpeechRecognition || window.webkitSpeechRecognition);
-  });
+  // Recorder callbacks run long after the render that created them, so they
+  // read the latest values through refs instead of stale copies.
+  const messagesRef = useRef(messages);
+  messagesRef.current = messages;
+  const modeRef = useRef(mode);
+  modeRef.current = mode;
+  const onIngredientExtractedRef = useRef(onIngredientExtracted);
+  onIngredientExtractedRef.current = onIngredientExtracted;
 
-  // Cleanup on unmount
+  // Leaving the Voice tab: switch the microphone off, discard any recording
+  // in progress (it is NOT uploaded) and cancel requests still in flight.
   useEffect(() => {
+    mountedRef.current = true;
     return () => {
-      if (animationFrameRef.current) {
-        cancelAnimationFrame(animationFrameRef.current);
-      }
-      if (recordingTimerRef.current) {
+      mountedRef.current = false;
+      sessionRef.current?.cancel();
+      sessionRef.current = null;
+      if (recordingTimerRef.current !== null) {
         clearInterval(recordingTimerRef.current);
+        recordingTimerRef.current = null;
       }
-      if (audioContextRef.current) {
-        audioContextRef?.current?.close();
-      }
-      if (mediaRecorderRef.current && mediaRecorderRef?.current?.state === 'recording') {
-        mediaRecorderRef?.current?.stop();
-      }
-      if (speechRecognitionRef.current) {
-        speechRecognitionRef?.current?.stop();
-      }
+      uploadAbortRef.current?.abort();
+      chatAbortRef.current?.abort();
     };
   }, []);
 
@@ -99,14 +87,26 @@ export function VoiceChat({ onIngredientExtracted }: VoiceChatProps) {
     }
   }, [messages]);
 
-  // Handles a final transcript, regardless of which input path produced it
-  // (browser SpeechRecognition or the MediaRecorder -> /api/transcribe-audio
-  // fallback). Mirrors the behavior that used to live inline in
-  // transcribeAudio: extract ingredients in Quick Mode, or send to the
-  // conversational chat API otherwise.
+  const showVoiceError = (message: string) => {
+    toast.error(message);
+    setVoiceNotice(message);
+  };
+
+  const resetRecordingUi = () => {
+    if (recordingTimerRef.current !== null) {
+      clearInterval(recordingTimerRef.current);
+      recordingTimerRef.current = null;
+    }
+    setIsStarting(false);
+    setIsRecording(false);
+    setAudioLevel(0);
+  };
+
+  // Handles a final transcript: extract ingredients in Quick Mode, or send
+  // it to the conversational chat API otherwise.
   const handleTranscript = async (transcribedText: string) => {
     if (!transcribedText?.trim()) {
-      toast.error('No speech detected. Please try again.');
+      showVoiceError('No speech detected. Please try again.');
       return;
     }
 
@@ -117,212 +117,97 @@ export function VoiceChat({ onIngredientExtracted }: VoiceChatProps) {
     };
     setMessages((prev) => [...(prev ?? []), userMessage]);
 
-    if (mode === 'quick') {
-      onIngredientExtracted?.(transcribedText);
+    if (modeRef.current === 'quick') {
+      onIngredientExtractedRef.current?.(transcribedText);
       toast.success('Ingredients extracted! Check the Generate tab.');
     } else {
-      await sendChatMessage([...messages, userMessage]);
+      await sendChatMessage([...messagesRef.current, userMessage]);
     }
   };
 
-  const startSpeechRecognition = () => {
-    const SpeechRecognitionCtor = window.SpeechRecognition || window.webkitSpeechRecognition;
-    if (!SpeechRecognitionCtor) return;
-
-    setShowTranscribeFallbackNotice(false);
-
-    const recognition = new SpeechRecognitionCtor();
-    recognition.continuous = false;
-    recognition.interimResults = true;
-    recognition.lang = 'en-US';
-
-    recognition.onresult = (event: any) => {
-      const results = event?.results;
-      if (!results || results.length === 0) return;
-      const lastResult = results[results.length - 1];
-      const transcript = lastResult?.[0]?.transcript ?? '';
-      if (lastResult?.isFinal) {
-        setIsTranscribing(true);
-        handleTranscript(transcript).finally(() => setIsTranscribing(false));
-      }
-    };
-
-    recognition.onerror = (event: any) => {
-      setIsRecording(false);
-      setAudioLevel(0);
-      if (recordingTimerRef.current) {
-        clearInterval(recordingTimerRef.current);
-        recordingTimerRef.current = null;
-      }
-      const errorType = event?.error;
-      if (errorType === 'not-allowed' || errorType === 'permission-denied') {
-        toast.error('Microphone access was denied. Please allow mic permissions and try again.');
-      } else if (errorType === 'no-speech') {
-        toast.error('No speech detected. Please try again.');
-      } else {
-        console.error('Speech recognition error:', errorType);
-        toast.error('Voice input hit a snag. Please try again or type your ingredients.');
-      }
-    };
-
-    recognition.onend = () => {
-      setIsRecording(false);
-      setAudioLevel(0);
-      if (recordingTimerRef.current) {
-        clearInterval(recordingTimerRef.current);
-        recordingTimerRef.current = null;
-      }
-    };
-
-    speechRecognitionRef.current = recognition;
+  const transcribeAndHandle = async (recording: VoiceRecording) => {
+    busyRef.current = true;
+    setIsTranscribing(true);
+    const controller = new AbortController();
+    uploadAbortRef.current = controller;
 
     try {
-      recognition.start();
-      setIsRecording(true);
-      setRecordingDuration(0);
-      recordingTimerRef.current = window.setInterval(() => {
-        setRecordingDuration((prev) => prev + 1);
-      }, 1000);
-      toast.success('Listening - speak clearly!');
-    } catch (error) {
-      console.error('Error starting speech recognition:', error);
-      toast.error('Failed to start voice input. Please try again.');
-      setIsRecording(false);
-    }
-  };
-
-  const stopSpeechRecognition = () => {
-    if (speechRecognitionRef.current) {
-      speechRecognitionRef?.current?.stop();
-    }
-  };
-
-  const startRecording = async () => {
-    if (isSpeechRecognitionSupported) {
-      startSpeechRecognition();
-      return;
-    }
-    await startMediaRecorderFallback();
-  };
-
-  const startMediaRecorderFallback = async () => {
-    try {
-      const stream = await navigator?.mediaDevices?.getUserMedia({ audio: true });
-
-      // Set up audio context for visualization
-      audioContextRef.current = new AudioContext();
-      const source = audioContextRef?.current?.createMediaStreamSource(stream);
-      analyserRef.current = audioContextRef?.current?.createAnalyser();
-      analyserRef.current.fftSize = 256;
-      source?.connect(analyserRef.current);
-
-      // Start audio level monitoring
-      const updateAudioLevel = () => {
-        if (!analyserRef.current) return;
-
-        const dataArray = new Uint8Array(analyserRef?.current?.frequencyBinCount ?? 0);
-        analyserRef?.current?.getByteFrequencyData(dataArray);
-        const average = dataArray?.reduce((a, b) => a + b, 0) / (dataArray?.length ?? 1);
-        setAudioLevel(average / 255); // Normalize to 0-1
-
-        animationFrameRef.current = requestAnimationFrame(updateAudioLevel);
-      };
-      updateAudioLevel();
-
-      // Set up MediaRecorder
-      const mediaRecorder = new MediaRecorder(stream);
-      mediaRecorderRef.current = mediaRecorder;
-      audioChunksRef.current = [];
-
-      mediaRecorder.addEventListener('dataavailable', (event) => {
-        if (event?.data?.size > 0) {
-          audioChunksRef?.current?.push(event.data);
-        }
-      });
-
-      mediaRecorder.addEventListener('stop', async () => {
-        if (animationFrameRef.current) {
-          cancelAnimationFrame(animationFrameRef.current);
-        }
-        if (recordingTimerRef.current) {
-          clearInterval(recordingTimerRef.current);
-        }
-
-        const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
-        stream?.getTracks()?.forEach((track) => track?.stop());
-        await transcribeAudio(audioBlob);
-      });
-
-      mediaRecorder.start();
-      setIsRecording(true);
-      setRecordingDuration(0);
-
-      // Start recording duration timer
-      recordingTimerRef.current = window.setInterval(() => {
-        setRecordingDuration((prev) => prev + 1);
-      }, 1000);
-
-      toast.success('Recording started - speak clearly!');
+      const transcribedText = await transcribeRecording(recording, { signal: controller.signal });
+      if (!mountedRef.current) return;
+      setIsTranscribing(false);
+      await handleTranscript(transcribedText);
     } catch (error: any) {
-      console.error('Error starting recording:', error);
-      if (error?.name === 'NotAllowedError' || error?.name === 'PermissionDeniedError') {
-        toast.error('Microphone access was denied. Please allow mic permissions and try again.');
-      } else {
-        toast.error('Failed to access microphone. Please check permissions.');
-      }
+      // Aborted because the user left the page: nothing to report.
+      if (!mountedRef.current || error?.name === 'AbortError') return;
+      console.error('Transcription error:', error?.message);
+      showVoiceError(error?.message || 'Failed to transcribe audio. Please try again or type your ingredients.');
+    } finally {
+      if (uploadAbortRef.current === controller) uploadAbortRef.current = null;
+      busyRef.current = false;
+      if (mountedRef.current) setIsTranscribing(false);
     }
+  };
+
+  const startRecording = () => {
+    // Ignore extra taps while a recording or a reply is already under way.
+    if (sessionRef.current || busyRef.current) return;
+
+    setVoiceNotice(null);
+    setIsStarting(true);
+
+    // Every callback first checks that it belongs to the current recording,
+    // so a cancelled or replaced session can never update the page late.
+    const session = startVoiceRecording({
+      onStart: () => {
+        if (sessionRef.current !== session) return;
+        setIsStarting(false);
+        setIsRecording(true);
+        setRecordingDuration(0);
+        recordingTimerRef.current = window.setInterval(() => {
+          setRecordingDuration((prev) => prev + 1);
+        }, 1000);
+        toast.success('Recording started - speak clearly!');
+      },
+      onLevel: (level) => {
+        if (sessionRef.current === session) setAudioLevel(level);
+      },
+      onComplete: (recording) => {
+        if (sessionRef.current !== session) return;
+        sessionRef.current = null;
+        resetRecordingUi();
+        if (recording.reason === 'max-duration') {
+          toast('Recording stopped at the one-minute limit.');
+        }
+        void transcribeAndHandle(recording);
+      },
+      onError: (error) => {
+        if (sessionRef.current !== session) return;
+        sessionRef.current = null;
+        resetRecordingUi();
+        showVoiceError(error.message);
+      },
+    });
+    sessionRef.current = session;
   };
 
   const stopRecording = () => {
-    if (isSpeechRecognitionSupported) {
-      stopSpeechRecognition();
+    const session = sessionRef.current;
+    if (!session) return;
+    if (session.state === 'starting') {
+      // Still waiting on the permission prompt: nothing recorded, so cancel.
+      session.cancel();
+      sessionRef.current = null;
+      resetRecordingUi();
       return;
     }
-    if (mediaRecorderRef.current && mediaRecorderRef?.current?.state === 'recording') {
-      mediaRecorderRef?.current?.stop();
-      setIsRecording(false);
-      setAudioLevel(0);
-    }
-  };
-
-  const transcribeAudio = async (audioBlob: Blob) => {
-    setIsTranscribing(true);
-
-    try {
-      const formData = new FormData();
-      formData.append('audio', audioBlob, 'recording.webm');
-
-      const response = await fetch('/api/transcribe-audio', {
-        method: 'POST',
-        body: formData,
-      });
-
-      if (!response?.ok) {
-        // The transcribe-audio endpoint returns 501 on purpose while it's
-        // being upgraded (Phase 3a: Gemini audio). This is the expected
-        // fallback path for browsers without SpeechRecognition support, so
-        // show a friendly inline notice instead of a toast/console error.
-        if (response?.status === 501) {
-          setShowTranscribeFallbackNotice(true);
-          return;
-        }
-        const errorData = await response?.json();
-        throw new Error(errorData?.error ?? 'Failed to transcribe audio');
-      }
-
-      const data = await response.json();
-      const transcribedText = data?.text ?? '';
-      await handleTranscript(transcribedText);
-    } catch (error: any) {
-      console.error('Transcription error:', error);
-      toast.error(error?.message ?? 'Failed to transcribe audio');
-    } finally {
-      setIsTranscribing(false);
-    }
+    // Finishes the clip; onComplete above then sends it for transcription.
+    session.stop();
   };
 
   const sendChatMessage = async (messageHistory: Message[]) => {
     setIsProcessing(true);
+    const controller = new AbortController();
+    chatAbortRef.current = controller;
 
     try {
       const apiMessages = messageHistory?.map?.((msg) => ({
@@ -339,6 +224,7 @@ export function VoiceChat({ onIngredientExtracted }: VoiceChatProps) {
           messages: apiMessages,
           mode: 'conversational',
         }),
+        signal: controller.signal,
       });
 
       if (!response?.ok) {
@@ -361,7 +247,7 @@ export function VoiceChat({ onIngredientExtracted }: VoiceChatProps) {
 
       while (true) {
         const result = await reader?.read();
-        if (result?.done) break;
+        if (!result || result.done) break;
 
         partialRead += decoder.decode(result?.value, { stream: true });
         const lines = partialRead?.split('\n') ?? [];
@@ -397,10 +283,13 @@ export function VoiceChat({ onIngredientExtracted }: VoiceChatProps) {
         }
       }
     } catch (error) {
+      // Aborted because the user left the page: nothing to report.
+      if (controller.signal.aborted) return;
       console.error('Chat error:', error);
       toast.error('Failed to get AI response');
     } finally {
-      setIsProcessing(false);
+      if (chatAbortRef.current === controller) chatAbortRef.current = null;
+      if (mountedRef.current) setIsProcessing(false);
     }
   };
 
@@ -415,6 +304,8 @@ export function VoiceChat({ onIngredientExtracted }: VoiceChatProps) {
     return `${mins}:${secs?.toString()?.padStart(2, '0')}`;
   };
 
+  const isBusy = isStarting || isRecording || isTranscribing || isProcessing;
+
   return (
     <div className="space-y-4">
       {/* Mode Selection */}
@@ -423,7 +314,7 @@ export function VoiceChat({ onIngredientExtracted }: VoiceChatProps) {
           variant={mode === 'quick' ? 'default' : 'outline'}
           onClick={() => setMode('quick')}
           className={mode === 'quick' ? 'bg-emerald-600 hover:bg-emerald-700' : ''}
-          disabled={isRecording || isTranscribing || isProcessing}
+          disabled={isBusy}
         >
           <Send className="mr-2 h-4 w-4" />
           Quick Mode
@@ -432,7 +323,7 @@ export function VoiceChat({ onIngredientExtracted }: VoiceChatProps) {
           variant={mode === 'conversational' ? 'default' : 'outline'}
           onClick={() => setMode('conversational')}
           className={mode === 'conversational' ? 'bg-emerald-600 hover:bg-emerald-700' : ''}
-          disabled={isRecording || isTranscribing || isProcessing}
+          disabled={isBusy}
         >
           <Volume2 className="mr-2 h-4 w-4" />
           Conversational Mode
@@ -450,14 +341,13 @@ export function VoiceChat({ onIngredientExtracted }: VoiceChatProps) {
         </CardContent>
       </Card>
 
-      {/* Fallback notice: shown when browser SpeechRecognition isn't available
-          and the server-side transcription endpoint (/api/transcribe-audio)
-          is returning its expected 501 (full voice support lands in Phase 3a). */}
-      {showTranscribeFallbackNotice && (
+      {/* The last voice problem (microphone, recording or transcription),
+          cleared when the next recording starts. */}
+      {voiceNotice && (
         <Card className="bg-amber-50 border-amber-200">
           <CardContent className="pt-4">
-            <p className="text-sm text-amber-800">
-              🎙️ Voice input works in Chrome, Edge, or Safari — or just type your ingredients below.
+            <p className="text-sm text-amber-800" role="alert">
+              🎙️ {voiceNotice}
             </p>
           </CardContent>
         </Card>
@@ -472,7 +362,7 @@ export function VoiceChat({ onIngredientExtracted }: VoiceChatProps) {
               variant="ghost"
               size="sm"
               onClick={clearChat}
-              disabled={isRecording || isTranscribing || isProcessing}
+              disabled={isBusy}
             >
               <Trash2 className="h-4 w-4 mr-1" />
               Clear
@@ -571,8 +461,9 @@ export function VoiceChat({ onIngredientExtracted }: VoiceChatProps) {
               {/* Microphone Button */}
               <Button
                 size="lg"
-                onClick={isRecording ? stopRecording : startRecording}
+                onClick={isRecording || isStarting ? stopRecording : startRecording}
                 disabled={isTranscribing || isProcessing}
+                aria-label={isRecording ? 'Stop recording' : isStarting ? 'Cancel recording' : 'Start recording'}
                 className={`relative w-32 h-32 rounded-full ${
                   isRecording
                     ? 'bg-red-500 hover:bg-red-600'
@@ -581,7 +472,7 @@ export function VoiceChat({ onIngredientExtracted }: VoiceChatProps) {
               >
                 {isRecording ? (
                   <StopCircle className="h-12 w-12" />
-                ) : isTranscribing || isProcessing ? (
+                ) : isStarting || isTranscribing || isProcessing ? (
                   <Loader2 className="h-12 w-12 animate-spin" />
                 ) : (
                   <Mic className="h-12 w-12" />
@@ -597,7 +488,14 @@ export function VoiceChat({ onIngredientExtracted }: VoiceChatProps) {
                     <span className="animate-pulse">●</span>
                     Recording: {formatDuration(recordingDuration)}
                   </p>
-                  <p className="text-sm text-gray-600">Tap the button to stop</p>
+                  <p className="text-sm text-gray-600">Tap the button to stop (1 minute max)</p>
+                </div>
+              ) : isStarting ? (
+                <div className="space-y-2">
+                  <p className="text-lg font-semibold text-emerald-600">Starting microphone...</p>
+                  <p className="text-sm text-gray-600">
+                    Choose Allow if your browser asks. Tap the button to cancel.
+                  </p>
                 </div>
               ) : isTranscribing ? (
                 <div className="space-y-2">

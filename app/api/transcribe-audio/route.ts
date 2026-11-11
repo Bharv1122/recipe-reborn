@@ -6,9 +6,8 @@ import { transcribeAudio } from '@/lib/audio-transcription';
 
 export const dynamic = 'force-dynamic';
 
-// 10 MB is plenty for a voice clip (~10 min of opus audio) and keeps the
-// base64 payload to Gemini well under request limits.
-const MAX_AUDIO_BYTES = 10 * 1024 * 1024;
+// Leave room for multipart overhead under the hosting platform's 4.5 MB limit.
+const MAX_AUDIO_BYTES = 4 * 1024 * 1024;
 
 // Phone recordings use M4A; browsers may produce WebM or Ogg even when a
 // client labels them differently. Sniff the bytes to send the true format.
