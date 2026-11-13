@@ -23,7 +23,12 @@ export const recipeComparisonSchema = z.object({
     values,
     basisLabel: label,
     sourceLabel: label,
-    servingsPerContainer: z.number().finite().positive().nullable(),
+    // Older installed clients use zero (or omit this field) when a scan cannot
+    // read the package count. Unknown package metadata is not a missing recipe.
+    servingsPerContainer: z.preprocess(
+      (value) => value === 0 || value === undefined ? null : value,
+      z.number().finite().positive().nullable(),
+    ),
     source: z.enum(['label_scan', 'barcode', 'typed']),
     accuracy: z.literal('exact'),
     // A missing review flag must not turn scanned data into confirmed data.

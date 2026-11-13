@@ -106,6 +106,24 @@ async function main() {
     const reopenedScan = await GET(new Request('http://localhost'), { params: Promise.resolve({ id: createdScan.id }) });
     assert.equal((await reopenedScan.json()).recipe.comparisonSnapshot.originalNutrition.servingsPerContainer, expectedCount);
   }
+  // Installed clients can send unknown optional metadata as null or a zero
+  // package serving count. Exercise the wire payload, not the updated helper.
+  for (const count of [0, null, undefined]) {
+    const response = await POST(send({ ...recipe,
+      prepTime: null, cookTime: null, servings: null,
+      estimatedCostPerServing: null, storeBoughtCost: null, dietaryTags: null,
+      comparisonSnapshot: { ...snapshot, originalNutrition: { ...snapshot.originalNutrition, servingsPerContainer: count } },
+    }));
+    assert.equal(response.status, 201, 'Unknown optional metadata must not block a complete recipe.');
+    const saved = (await response.json()).recipe;
+    assert.equal(saved.comparisonSnapshot.originalNutrition.servingsPerContainer, null);
+    assert.deepEqual(saved.dietaryTags, []);
+    assert.deepEqual(JSON.parse(saved.instructions), recipe.instructions);
+  }
+  for (const field of ['title', 'originalIngredients', 'freshIngredients', 'instructions']) {
+    const response = await POST(send({ ...recipe, [field]: null }));
+    assert.equal(response.status, 400, 'Required recipe content must still be validated.');
+  }
   delete scope.__comparisonDb;
   delete scope.__comparisonOwner;
   console.log('Comparison regression checks passed: save/reopen, validation, ownership, legacy saves, estimate invalidation and scanned serving-count normalization/persistence. Database is a test double; deployment/device QA is separate.');
