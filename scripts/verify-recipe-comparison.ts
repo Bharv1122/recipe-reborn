@@ -3,6 +3,7 @@ import { createRequire } from 'node:module';
 import { build } from 'esbuild';
 import { recipeComparisonSchema } from '../lib/recipe-comparison-validation';
 import { originalNutritionFromLabelScan } from '../shared/nutrition-facts';
+import { normalizeImportedRecipe } from '../lib/recipe-import';
 
 // Execute the real handlers against a JSON-round-tripping repository double.
 // No live database, user account, model or network request is used.
@@ -124,6 +125,21 @@ async function main() {
     const response = await POST(send({ ...recipe, [field]: null }));
     assert.equal(response.status, 400, 'Required recipe content must still be validated.');
   }
+  // Photo extraction accepts metadata up to 100 characters; saving must accept
+  // that same reviewed source without truncating handwritten annotations.
+  for (const length of [80, 81, 100]) {
+    const metadata = 'Handwritten timing note: '.padEnd(length, 'x');
+    const extracted = normalizeImportedRecipe({ title: 'Recipe card soup', ingredients: ['2 carrots', '2 cups water'], instructions: ['Chop carrots.', 'Simmer until tender.'], prepTime: metadata, cookTime: metadata, servings: metadata });
+    const source = { title: extracted.title, freshIngredients: extracted.freshIngredients.split('\n'), instructions: extracted.instructions.split('\n'), prepTime: extracted.prepTime, cookTime: extracted.cookTime, servings: extracted.servings, dietaryTags: extracted.dietaryTags };
+    const response = await POST(send({ ...source, originalIngredients: extracted.originalIngredients, librarySource: 'imported', importSourceSnapshot: source }));
+    assert.equal(response.status, 201, 'A photo import accepted for review must also be saveable.');
+    const saved = (await response.json()).recipe;
+    const reopened = await GET(new Request('http://localhost'), { params: Promise.resolve({ id: saved.id }) });
+    const persisted = (await reopened.json()).recipe;
+    assert.equal(persisted.prepTime, metadata);
+    assert.deepEqual(persisted.importSourceSnapshot, source);
+  }
+  assert.equal((await POST(send({ ...recipe, prepTime: 'x'.repeat(101) }))).status, 400);
   delete scope.__comparisonDb;
   delete scope.__comparisonOwner;
   console.log('Comparison regression checks passed: save/reopen, validation, ownership, legacy saves, estimate invalidation and scanned serving-count normalization/persistence. Database is a test double; deployment/device QA is separate.');

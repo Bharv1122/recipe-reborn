@@ -2,7 +2,6 @@ import { z } from 'zod';
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
 import { MobileAuthError, requireMobileUserId } from '@/lib/mobile-auth';
-import { optionalRecipeMetadataSchema } from '@/lib/recipe-metadata-validation';
 import { recipeComparisonSchema } from '@/lib/recipe-comparison-validation';
 import { LIBRARY_SOURCES } from '@/lib/recipe-library';
 import { importedRecipeSnapshotSchema } from '@/lib/import-recipe-adaptation';
@@ -10,7 +9,8 @@ import { importedRecipeSnapshotSchema } from '@/lib/import-recipe-adaptation';
 export const dynamic = 'force-dynamic';
 
 // JSON clients represent unavailable optional fields as null as well as omission.
-const optionalMetadata = z.preprocess(value => value === null ? undefined : value, optionalRecipeMetadataSchema);
+// Match photo-import review limits, including longer handwritten timing notes.
+const optionalMetadata = z.preprocess(value => value === null ? undefined : value, importedRecipeSnapshotSchema.shape.prepTime.optional());
 const optionalCost = z.number().nonnegative().finite().nullish().transform(value => value ?? undefined);
 
 const saveSchema = z.object({
