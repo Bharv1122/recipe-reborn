@@ -39,7 +39,8 @@
     "react-native-screens": "~4.26.0",
     "react-native-web": "~0.21.0",
     "react-native-webview": "13.16.1",
-    "react-native-worklets": "0.10.1"
+    "react-native-worklets": "0.10.1",
+    "decode-uri-component": "file:vendor/decode-uri-component"
   },
   "devDependencies": {
     "@types/react": "~19.2.2",
@@ -56,5 +57,14 @@
     "typecheck": "tsc --noEmit",
     "verify": "npm run typecheck && npm run lint && npx expo export --platform android && npx expo export --platform ios"
   },
-  "private": true
+  "private": true,
+  "overrides": {
+    "decode-uri-component": "$decode-uri-component",
+    "@expo/fingerprint": {
+      "minimatch": "^11.0.8"
+    },
+    "@typescript-eslint/typescript-estree": {
+      "minimatch": "^11.0.8"
+    }
+  }
 }

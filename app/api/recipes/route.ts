@@ -3,13 +3,13 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth-options';
 import { prisma } from '@/lib/db';
 import { recipeComparisonSchema } from '@/lib/recipe-comparison-validation';
-import { isLibrarySource } from '@/lib/recipe-library';
+import { recipeSaveSchema } from '@/lib/recipe-save-validation';
 import { importedRecipeSnapshotSchema } from '@/lib/import-recipe-adaptation';
 
 export const dynamic = 'force-dynamic';
 
 // Get all recipes for the logged-in user
-export async function GET(request: NextRequest) {
+export async function GET() {
   try {
     const session = await getServerSession(authOptions);
 
@@ -47,7 +47,11 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const body = await request.json().catch(() => null);
+    const parsed = recipeSaveSchema.safeParse(await request.json().catch(() => null));
+    if (!parsed.success) {
+      return NextResponse.json({ error: 'Invalid recipe details', fields: [...new Set(parsed.error.issues.map(issue => String(issue.path[0] ?? 'recipe')))] }, { status: 400 });
+    }
+    const body = parsed.data;
     if (!body || typeof body !== 'object' || Array.isArray(body)) {
       return NextResponse.json({ error: 'Invalid recipe details' }, { status: 400 });
     }
@@ -86,7 +90,7 @@ export async function POST(request: NextRequest) {
       data: {
         userId: session.user.id,
         savedAt: new Date(),
-        librarySource: isLibrarySource(librarySource) && librarySource !== 'meal_plan' ? librarySource : 'generated',
+        librarySource: librarySource,
         ...(sourceSnapshot.data && { importSourceSnapshot: sourceSnapshot.data }),
         title,
         originalIngredients,

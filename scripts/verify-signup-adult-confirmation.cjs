@@ -8,6 +8,7 @@ const esbuild = require('esbuild');
 const created = [];
 let lookups = 0;
 const dependencies = {
+  '@prisma/client': { Prisma: { TransactionIsolationLevel: { Serializable: 'Serializable' } } },
   'next/server': { NextResponse: { json: (body, init) => Response.json(body, init) } },
   bcryptjs: { hash: async () => 'synthetic-password-hash' },
   '@/lib/db': { prisma: { user: {

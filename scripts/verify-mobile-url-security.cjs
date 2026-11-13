@@ -1,0 +1,18 @@
+const assert = require('node:assert/strict');
+const { performance } = require('node:perf_hooks');
+const query = require('../mobile/node_modules/query-string');
+const decode = require('../mobile/vendor/decode-uri-component');
+const { createRequire } = require('node:module');
+const fingerprintRequire = createRequire(require.resolve('../mobile/node_modules/@expo/fingerprint/package.json'));
+const { minimatch } = fingerprintRequire('minimatch');
+assert.equal(query.parse('name=carrot%20soup').name, 'carrot soup');
+assert.equal(query.stringify({ name: 'carrot soup' }), 'name=carrot%20soup');
+assert.equal(query.parse('name=caf%C3%A9').name, 'café');
+assert.equal(query.parse('name=carrot+soup').name, 'carrot soup');
+assert.equal(minimatch('src/app/index.tsx', 'src/**/*.tsx'), true);
+for (const input of ['%E0%A4%A', '%C2', '%FF%FE', '%25%41', '%G1', '']) assert.equal(typeof decode(input), 'string');
+const malicious = '%FF%41'.repeat(20000);
+const start = performance.now();
+assert.equal(decode(malicious), '%FFA'.repeat(20000));
+assert(performance.now() - start < 2000, 'Malformed URL decoding must remain bounded');
+console.log('PASS patched decoder supports query-string/Expo 57 and bounded malformed input; fingerprint glob compatibility passed.');

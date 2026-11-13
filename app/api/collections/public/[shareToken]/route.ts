@@ -22,14 +22,20 @@ export async function GET(req: NextRequest, props: { params: Promise<{ shareToke
         shareToken: params.shareToken,
         isPublic: true,
       },
-      include: {
+      // Public links expose display fields only, not owner IDs or internal
+      // collection/join metadata.
+      select: {
+        id: true,
+        name: true,
+        description: true,
+        viewCount: true,
         user: {
           select: {
             name: true,
           },
         },
         collectionRecipes: {
-          include: {
+          select: {
             recipe: {
               select: {
                 id: true,

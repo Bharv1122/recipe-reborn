@@ -1,0 +1,8 @@
+{
+  "name": "decode-uri-component",
+  "version": "0.5.1",
+  "description": "Upstream 0.5.1 security fix with CommonJS export for Expo 57 query-string",
+  "license": "MIT",
+  "main": "index.js",
+  "type": "commonjs"
+}

@@ -115,6 +115,12 @@ async function main() {
       assert.equal((await route.save(request(input))).status, 401);
       assert.equal((await route.nutrition(new Request('http://localhost'), params(row.id))).status, 401);
     });
+    await check('malformed and oversized recipe content cannot reach storage', async () => {
+      for (const change of [{ title: ' ' }, { title: 'x'.repeat(201) }, { freshIngredients: [] }, { freshIngredients: 'not an array' }, { instructions: [] }, { instructions: [{}] }, { instructions: ['x'.repeat(3001)] }, { dietaryTags: [42] }, { prepTime: 'x'.repeat(101) }, { estimatedCostPerServing: -1 }]) {
+        assert.equal((await route.save(request({ ...input, ...change }))).status, 400);
+      }
+      assert.equal(state.writes.length, 0);
+    });
     await check('notes/rating and equivalent JSON preserve exact nutrition and costs', async () => {
       const row = await save();
       const response = await route.edit(request({ notes: 'Try cinnamon', rating: 5, freshIngredients: JSON.stringify(input.freshIngredients, null, 2) }, 'PATCH'), params(row.id));

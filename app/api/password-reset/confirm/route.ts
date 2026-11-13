@@ -67,15 +67,26 @@ export async function POST(request: NextRequest) {
 
     // Update the password and burn the token together — a partial success here
     // would either lock the user out or leave a reusable link alive.
-    await prisma.$transaction([
-      prisma.user.update({
+    const changed = await prisma.$transaction(async (tx) => {
+      // Claim the exact unexpired token atomically. Concurrent requests that
+      // read it above must not both be able to choose a new password.
+      const consumed = await tx.verificationToken.deleteMany({
+        where: { token: record.token, identifier: record.identifier, expires: { gt: new Date() } },
+      });
+      if (consumed.count !== 1) return false;
+      await tx.user.update({
         where: { id: user.id },
         data: { password: hashedPassword },
-      }),
-      prisma.verificationToken.deleteMany({
+      });
+      await tx.verificationToken.deleteMany({
         where: { identifier: record.identifier },
-      }),
-    ]);
+      });
+      await tx.mobileRefreshToken.updateMany({
+        where: { userId: user.id, revokedAt: null }, data: { revokedAt: new Date() },
+      });
+      return true;
+    });
+    if (!changed) return NextResponse.json({ error: INVALID_TOKEN_MESSAGE }, { status: 400 });
 
     // Returning the email lets the client sign in immediately. Safe to expose:
     // whoever redeemed the token already controls that inbox.
