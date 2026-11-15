@@ -199,6 +199,12 @@ export class XrKitchen {
     this.environment.add(glow);
     this.scene.add(this.environment);
     this.scene.background = new THREE.Color(0x07110e);
+    // The panels are unlit, but the hand-joint spheres use a standard material
+    // and render black without light.
+    this.scene.add(new THREE.HemisphereLight(0xffffff, 0x334155, 2.2));
+    const key = new THREE.DirectionalLight(0xffffff, 1.4);
+    key.position.set(0.5, 1, 0.8);
+    this.scene.add(key);
   }
 
   /** Panels sit in an arc at seated arm's reach, a little below eye level. */
@@ -606,6 +612,10 @@ export class XrKitchen {
       if (this.timers.length) {
         this.right.invalidate();
         if (this.wristShown) this.wrist.invalidate();
+        // The step card shows its own countdown while that step's timer runs.
+        if (this.screen === 'cook' && this.timers.some((t) => t.stepIndex === this.step)) {
+          this.main.invalidate();
+        }
       }
     }
     if (this.screen === 'reveal' && now - this.revealStart < 2200) this.main.invalidate();
