@@ -31,10 +31,15 @@ export function XrKitchenClient() {
     // three.js touches window/document, so load it only in the browser.
     void import('../_lib/kitchen').then(async ({ XrKitchen: Kitchen }) => {
       if (cancelled || !containerRef.current) return;
-      instance = new Kitchen(containerRef.current, {
-        onSessionChange: (isActive) => setActive(isActive),
-        onStateChange: (summary) => setResume(summary),
-      });
+      const showHands = new URLSearchParams(window.location.search).get('hands') === 'visible';
+      instance = new Kitchen(
+        containerRef.current,
+        {
+          onSessionChange: (isActive) => setActive(isActive),
+          onStateChange: (summary) => setResume(summary),
+        },
+        showHands
+      );
       kitchenRef.current = instance;
       window.__rrKitchen = instance;
       setReady(true);

@@ -81,7 +81,7 @@ type Pointer = {
   line: THREE.Line;
   cursor: THREE.Mesh;
   tip: THREE.Mesh;
-  pressTarget: { panel: Panel; id: string } | null;
+  pressTarget: { panel: Panel; id: string; at: number } | null;
   drag: { panel: Panel; offset: THREE.Vector3 } | null;
   lastPokeZ: Map<Panel, number>;
   lastPokeAt: number;
@@ -126,7 +126,9 @@ export class XrKitchen {
 
   constructor(
     private readonly container: HTMLElement,
-    private readonly events: KitchenEvents = {}
+    private readonly events: KitchenEvents = {},
+    /** Draw tracked hand joints even in passthrough (used for emulator capture). */
+    private readonly alwaysShowHands = false
   ) {
     this.renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
@@ -346,7 +348,7 @@ export class XrKitchen {
     this.renderer.setClearColor(0x000000, ar ? 0 : 1);
     for (const p of this.pointers) {
       p.hand.children.forEach((child) => {
-        if (child.userData.isHandModel) child.visible = !ar;
+        if (child.userData.isHandModel) child.visible = !ar || this.alwaysShowHands;
       });
     }
     session.addEventListener('end', () => {
@@ -470,7 +472,7 @@ export class XrKitchen {
       this.click();
       return;
     }
-    p.pressTarget = { panel: hit.panel, id: hit.button.id };
+    p.pressTarget = { panel: hit.panel, id: hit.button.id, at: performance.now() };
   }
 
   private onSelectEnd(p: Pointer) {
@@ -482,9 +484,12 @@ export class XrKitchen {
     p.pressTarget = null;
     if (!target) return;
     const hit = this.hitFromPointer(p);
-    // Fire on release, and only if the ray is still on the same button, so a
-    // pinch that drifts off a button does not trigger it by accident.
-    if (hit?.button && hit.button.id === target.id) this.press(hit.panel, target.id);
+    // Fire on release if the ray is still on the same button. Pinching nudges
+    // a hand ray a little, so a quick tap (under half a second) still counts
+    // even if it slid off; a long pinch that wandered away does not.
+    const stillOn = hit?.button && hit.button.id === target.id;
+    const quickTap = performance.now() - target.at < 500;
+    if (stillOn || quickTap) this.press(target.panel, target.id);
   }
 
   private press(panel: Panel, id: string) {
