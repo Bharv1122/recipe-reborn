@@ -104,6 +104,13 @@ Record on a Quest 3 if you have one: open recipereborn.com/xr in the Quest
 browser, press **Enter mixed reality**, and record with the headset's built-in
 capture. If not, the rules allow emulator footage.
 
+A captioned emulator recording (2:46, silent) is already made as a fallback:
+`recipe-reborn-kitchen-emulator-demo.mp4` in the project files. It was captured
+in Meta's Immersive Web Emulator with a synthetic room standing in for
+passthrough, and the timer finish is sped up (the caption says so). Real Quest
+footage of a real kitchen will score better on Polish & Presentation, so use
+the script below if you can record one.
+
 - **0:00–0:15** Hook. A messy-handed cook, a phone smeared with flour. Caption:
   "Cooking with a phone means washing your hands every step."
 - **0:15–0:35** Put on the headset, open recipereborn.com/xr, Enter mixed
