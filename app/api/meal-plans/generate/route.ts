@@ -7,6 +7,7 @@ import { MODEL_FAST } from '@/lib/ai';
 import { generateValidatedPlan, MealPlanSafetyError, MealPlanProviderError } from '@/lib/meal-plan-generation';
 import { DEFAULT_TRIAL_DAYS } from '@/lib/partner-offers';
 import { resolvePartnerTrial } from '@/lib/partner-offer-server';
+import { resolveMealPlanPreferences } from '@/lib/meal-plan-preferences';
 import {
   MEAL_TYPES,
   normalizeMealTypes,
@@ -21,8 +22,8 @@ const requestSchema = z.object({
   dietaryPreferences: z.array(z.string().trim().min(1).max(80)).max(20).default([]),
   calorieTarget: z.number().int().min(500).max(10000).optional(),
   servings: z.number().int().min(1).max(8).default(2),
-  allergies: z.array(z.string().trim().min(1).max(100)).max(30).default([]),
-  dislikedIngredients: z.array(z.string().trim().min(1).max(100)).max(50).default([]),
+  allergies: z.array(z.string().trim().min(1).max(100)).max(30).optional(),
+  dislikedIngredients: z.array(z.string().trim().min(1).max(100)).max(50).optional(),
   mealTypes: z.array(z.enum(MEAL_TYPES)).min(1).max(MEAL_TYPES.length),
 });
 
@@ -62,6 +63,7 @@ export async function POST(req: Request) {
       select: {
         allergies: true,
         dislikedIngredients: true,
+        likedIngredients: true,
         subscriptionTier: true,
         subscriptionStatus: true,
         signupSource: true,
@@ -102,12 +104,16 @@ export async function POST(req: Request) {
       }
     }
 
-    const allergies = allergiesOverride.length > 0
-      ? allergiesOverride
-      : profile?.allergies ?? [];
-    const dislikedIngredients = dislikesOverride.length > 0
-      ? dislikesOverride
-      : profile?.dislikedIngredients ?? [];
+    // Omitted = use Account defaults; an explicit empty dislike list means a
+    // one-plan override. Account allergies are always retained and may only be
+    // made stricter for a plan, never silently weakened.
+    const { allergies, dislikedIngredients } = resolveMealPlanPreferences(
+      {
+        allergies: profile?.allergies ?? [],
+        dislikedIngredients: profile?.dislikedIngredients ?? [],
+      },
+      { allergies: allergiesOverride, dislikedIngredients: dislikesOverride },
+    );
     const profileMs = Math.round(performance.now() - profileStartedAt);
 
     const aiStartedAt = performance.now();
@@ -121,6 +127,7 @@ export async function POST(req: Request) {
         servings,
         allergies,
         dislikedIngredients,
+        preferredIngredients: profile?.likedIngredients ?? [],
       });
     } catch (error) {
       if (error instanceof MealPlanProviderError) {
@@ -175,6 +182,8 @@ export async function POST(req: Request) {
         data: preparedMeals.map(({ meal, recipeId }) => ({
           id: recipeId,
           userId,
+          savedAt: null,
+          librarySource: 'meal_plan',
           title: meal.title,
           originalIngredients: meal.ingredients.join('\n'),
           freshIngredients: meal.ingredients.join('\n'),

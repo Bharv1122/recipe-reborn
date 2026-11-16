@@ -44,6 +44,14 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'User not found' }, { status: 404 });
     }
 
+    // Do not create a second paid subscription for an existing member.
+    if (user.stripeSubscriptionId && ['active', 'trialing', 'past_due'].includes(user.subscriptionStatus)) {
+      return NextResponse.json({ error: 'You already have a subscription. Manage it through the service where you purchased it.' }, { status: 409 });
+    }
+    if (user.subscriptionTier !== 'free' && user.subscriptionStatus === 'active' && !user.currentPeriodEnd) {
+      return NextResponse.json({ error: 'Premium is already included with your account.' }, { status: 409 });
+    }
+
     // Get or create Stripe customer
     let customerId = user.stripeCustomerId;
 

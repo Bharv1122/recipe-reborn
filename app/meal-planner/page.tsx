@@ -33,6 +33,7 @@ interface MealPlan {
       servings?: string;
       dietaryTags?: string[];
       calories?: number;
+      savedAt?: string | null;
     };
   }>;
 }

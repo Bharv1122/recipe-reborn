@@ -1,0 +1,41 @@
+Verdict: No clear blocking defects found in the supplied code. The main remaining issues are medium-severity handling gaps around Gemini terminal states and abort/timeout error classification.
+
+Findings:
+
+1. Medium: safety-blocked / empty Gemini responses are returned as successful empty transcription.
+   File: app/api/transcribe-audio/route.ts
+   Lines: 153-159
+   Trigger: Gemini returns no usable `candidates[0].content.parts`, e.g. safety block, prompt block, empty model response, or missing candidate.
+   Impact: Client receives HTTP 200 `{ text: "" }`, indistinguishable from “no discernible speech,” even when transcription failed or was blocked.
+   Suggested fix: Inspect `promptFeedback.blockReason`, `candidates[0].finishReason`, and absence of candidates/parts. Return a user-facing retry/type fallback error for blocked/empty unexpected responses.
+
+2. Medium: truncated Gemini output is not detected.
+   File: app/api/transcribe-audio/route.ts
+   Lines: 135-138, 153-159
+   Trigger: Gemini returns `finishReason: "MAX_TOKENS"` with partial text because `maxOutputTokens` is capped at 1000.
+   Impact: API returns HTTP 200 with silently truncated transcription.
+   Suggested fix: Check `candidates[0].finishReason`; if `MAX_TOKENS`, return an explicit error or include a truncation signal instead of silently accepting partial text.
+
+3. Medium: 45-second timeout and client abort collapse into generic HTTP 500.
+   File: app/api/transcribe-audio/route.ts
+   Lines: 107-112, 160-164, 166-168
+   Trigger: `setTimeout(() => controller.abort(), 45_000)` fires, or `request.signal` aborts while Gemini fetch is in flight.
+   Impact: User receives generic “Internal server error”; logs show `Transcription error`. Timeout is not distinguished from provider/server failure or client cancellation.
+   Suggested fix: Track whether the timeout fired and catch `AbortError` separately. Return 504 for timeout with “Transcription timed out” messaging. For client abort, avoid noisy error logging if possible.
+
+Lower-priority residual limitations:
+
+- File: app/api/transcribe-audio/route.ts lines 20-23, 39-45, 48-54.
+  Format detection is pragmatic but shallow. EBML is assumed WebM, RIFF is assumed WAV without checking `WAVE`, and unknown bytes fall back to WebM. This is probably acceptable for trusted browser/mobile captures, and reported live M4A/WAV/WebM/Ogg tests passed, but malformed or unusual containers may be mislabeled.
+
+- File: app/api/transcribe-audio/route.ts line 106.
+  MP4/M4A is sent as `audio/m4a`. Since owner reports live M4A passed, this is not a blocker. Still, if Gemini expects `audio/mp4` in some cases, Android/browser `audio/mp4` recordings could be safer if preserved or normalized to a documented accepted MIME.
+
+- File: app/api/transcribe-audio/route.ts lines 65-66.
+  Rate limiting is applied before validating upload presence/size and before checking malformed form data. This may consume quota for bad requests. Probably acceptable, but it can make retry UX harsher.
+
+Authentication/rate limiting: No blocking auth bypass found. Unauthorized requests are rejected before rate limiting/provider access.
+
+Cleanup: Timeout is cleared and the request abort listener is removed in `finally`; no cleanup blocker found.
+
+Overall: Acceptable to ship if empty/blocked/truncated Gemini responses and timeout UX are considered tolerable. For robustness, address the three medium findings above.

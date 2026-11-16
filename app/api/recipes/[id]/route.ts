@@ -5,6 +5,7 @@ import { prisma } from '@/lib/db';
 import { z } from 'zod';
 import { recipeComparisonSchema } from '@/lib/recipe-comparison-validation';
 import { parseStoredRecipeList } from '@/lib/recipe-list';
+import { removeFromLibraryUpdate, saveToLibraryUpdate } from '@/lib/recipe-library';
 
 export const dynamic = 'force-dynamic';
 
@@ -22,6 +23,7 @@ const recipeUpdateSchema = z.object({
       return false;
     }
   }, 'Fresh ingredients must be a JSON array of strings'),
+  saveToLibrary: z.literal(true).optional(),
 });
 
 // Get a single recipe
@@ -84,7 +86,7 @@ export async function PATCH(request: NextRequest, props: { params: Promise<{ id:
       );
     }
 
-    const { rating, notes, folderId, winePairing, freshIngredients } = update.data;
+    const { rating, notes, folderId, winePairing, freshIngredients, saveToLibrary } = update.data;
     const comparison = recipeComparisonSchema.safeParse(recipe.comparisonSnapshot);
     // Compare parsed lists so harmless JSON whitespace does not discard estimates.
     const ingredientsChanged = freshIngredients !== undefined &&
@@ -108,6 +110,7 @@ export async function PATCH(request: NextRequest, props: { params: Promise<{ id:
         ...(folderId !== undefined && { folderId }),
         ...(winePairing !== undefined && { winePairing }),
         ...(freshIngredients !== undefined && { freshIngredients }),
+        ...(saveToLibrary && saveToLibraryUpdate(recipe.savedAt, recipe.librarySource)),
         // An ingredient change invalidates the saved homemade estimate, not the package facts.
         ...(ingredientsChanged
           ? {
@@ -129,7 +132,7 @@ export async function PATCH(request: NextRequest, props: { params: Promise<{ id:
   }
 }
 
-// Delete a recipe
+// Remove from My Saved Recipes without deleting plan, collection, or shopping references.
 export async function DELETE(request: NextRequest, props: { params: Promise<{ id: string }> }) {
   const params = await props.params;
   try {
@@ -150,20 +153,16 @@ export async function DELETE(request: NextRequest, props: { params: Promise<{ id
       return NextResponse.json({ error: 'Recipe not found' }, { status: 404 });
     }
 
-    await prisma.recipe.delete({
-      where: {
-        id: params?.id,
-      },
-    });
+    await prisma.recipe.update({ where: { id: params.id }, data: removeFromLibraryUpdate() });
 
     return NextResponse.json(
-      { message: 'Recipe deleted successfully' },
+      { message: 'Recipe removed from My Saved Recipes' },
       { status: 200 }
     );
   } catch (error) {
-    console.error('Delete recipe error:', error);
+    console.error('Remove saved recipe error:', error);
     return NextResponse.json(
-      { error: 'Failed to delete recipe' },
+      { error: 'Failed to remove saved recipe' },
       { status: 500 }
     );
   }

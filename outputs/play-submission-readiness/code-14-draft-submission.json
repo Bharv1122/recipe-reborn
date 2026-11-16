@@ -1,0 +1,32 @@
+{
+  "checkedAt": "2026-09-24T04:07:31.810Z",
+  "id": "d9a9464e-5460-4602-84b9-0e59f612b34b",
+  "status": "FINISHED",
+  "platform": "ANDROID",
+  "projectId": "56cc462a-d0a6-4cc7-8ca8-907bcb76f2fd",
+  "androidConfig": {
+    "track": "alpha",
+    "releaseStatus": "DRAFT",
+    "changesNotSentForReviewFromApi": null
+  },
+  "changesNotSentForReviewEvidence": {
+    "value": true,
+    "confirmedByExactLaunchSummary": true,
+    "cliQueryLimitation": "Installed submit:view GraphQL fragment omits this boolean; launch summary and validated submitted profile explicitly show true."
+  },
+  "createdAt": "2026-09-24T04:04:33.168Z",
+  "completedAt": "2026-09-24T04:07:06.318Z",
+  "error": null,
+  "build": {
+    "id": "bc75c794-1646-4a98-85b7-38c2073fd009",
+    "package": "com.recipereborn.app",
+    "versionCode": "14",
+    "profile": "play-internal"
+  },
+  "note": "EAS submission status concerns upload processing; a draft does not establish Play review, rollout or tester availability. Signed log URLs and credential fields intentionally excluded.",
+  "profileFile": "mobile/eas.json",
+  "profileFileSha256": "6AAB647E193EE024CB10F0AE5B334FDA41A2E616C223BFFA51043AADCC2FB377",
+  "verifierCorrection": "Initial local guard assumed lower-case API enum and queried review boolean. Installed query returns DRAFT and omits boolean; exact launch summary plus source mapping proves submitted true. No release-setting change or resubmission occurred.",
+  "separateConsoleObservation": "Root refreshed Recipe Publishing overview after the upload and observed Changes in review containing only Data safety / Complete Data safety questionnaire, with no app-release row. Root performed no Send for review click. This separate review state must not be conflated with code14 release status DRAFT.",
+  "actualSubmitWorkerFlagEvidence": "outputs/play-submission-readiness/code-14-draft-submit-log-evidence.json"
+}

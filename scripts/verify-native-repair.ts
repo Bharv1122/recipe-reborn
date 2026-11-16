@@ -49,6 +49,10 @@ async function main() {
   assert.match(generatorRoute, /source === 'random'/);
   assert.match(shoppingRoute, /bulkItemSchema/);
   assert.match(shoppingRoute, /prisma\.\$transaction/);
+  assert.match(scanScreen, /\['barcode', 'Scan barcode'\]/, 'Barcode scanning must be an explicit choice.');
+  assert.match(scanScreen, /\['label', 'Photograph ingredient label'\]/, 'Label photography must be an explicit choice.');
+  assert.match(scanScreen, /accessibilityState=\{\{ selected: mode === value, disabled: busy \}\}/, 'The scan mode must be visibly and accessibly selected.');
+  assert.doesNotMatch(scanScreen, /No barcode\? Photograph the ingredients/, 'Label photography must not be hidden as a barcode fallback.');
   assert.match(scanScreen, /onPress=\{generateFromBarcode\}/, 'A found barcode must hand its reviewed ingredients to generation.');
   assert.match(scanScreen, /label="Scan another" secondary/);
   assert.match(scanScreen, /onPress=\{mode === 'label' \? reviewLabel/);

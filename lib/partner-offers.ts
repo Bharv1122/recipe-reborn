@@ -115,6 +115,20 @@ export const PARTNER_OFFERS: PartnerOffer[] = [
     expiresAt: '2099-12-31',
     maxRedemptions: 1,
   },
+  {
+    // One-person lifetime comp. This grants Premium directly instead of
+    // creating a $0 Stripe subscription that could later lapse or be revoked
+    // by a failed renewal/webhook.
+    slug: 'hunter',
+    label: 'Hunter',
+    lifetime: true,
+    trialDays: 0, // ignored for lifetime comps
+    trialRecipeLimit: 100,
+    fullPremium: true,
+    expiresAt: '2099-12-31',
+    maxRedemptions: 1,
+    singleUse: true,
+  },
 ];
 
 export function partnerTrialEndsAt(offer: PartnerOffer, now = new Date()): Date {

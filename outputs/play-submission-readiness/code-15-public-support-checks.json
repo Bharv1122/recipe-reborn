@@ -1,0 +1,27 @@
+{
+  "checkedAt": "2026-09-24T04:53:20.2221064Z",
+  "method": "Signed-in browser navigation with visible document verification",
+  "privacy": {
+    "optionalPhotoAndVoiceDisclosure": true,
+    "lastUpdated": "September 23, 2026",
+    "GeminiDisclosure": true,
+    "contentReportRetentionAndDeletionDisclosure": true,
+    "url": "https://recipereborn.com/privacy",
+    "supportEmail": true,
+    "result": "PASS"
+  },
+  "accountDeletion": {
+    "url": "https://recipereborn.com/account-deletion",
+    "mobileInstructions": true,
+    "result": "PASS",
+    "billingCancellationInstructions": true,
+    "externalEmailRequest": true
+  },
+  "support": {
+    "resetDeletionPrivacyTermsLinks": true,
+    "url": "https://recipereborn.com/support",
+    "result": "PASS",
+    "supportEmail": true
+  },
+  "earlierShellAttempt": "PowerShell HTTPS handshake failed locally; no HTTP result. Browser pages subsequently loaded normally without security warnings."
+}

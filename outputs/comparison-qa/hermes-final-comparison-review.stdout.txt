@@ -1,0 +1,26 @@
+Verdict: The focused race appears closed.
+
+Code review findings:
+- Save is blocked in both UI buttons via disabled={nutritionStatus === 'pending'}.
+- Save is also blocked in the handler via:
+  if (!recipe || !source || savingRef.current || nutritionStatus === 'pending') return;
+  so a physical double-tap, stale press event, or disabled-button inconsistency should not bypass the pending state.
+- RecipeComparison sets status to pending when an estimate attempt starts.
+- Success sets fresh nutrition and status ready.
+- Explicit failure/timeout sets status failed, leaving freshNutrition null.
+- Timeout sets settled before aborting, so the later abort rejection or late promise settlement cannot flip state afterward.
+- Cleanup sets active = false and aborts, so an old component/request should not contaminate a later recipe.
+- Retry correctly returns status to pending before the new attempt.
+
+New actionable code defects found:
+- None in the supplied focused code for the save-while-nutrition-pending race.
+
+Non-blocking implementation note:
+- RecipeComparison’s effect depends on onNutrition and onStatusChange. In this GenerateScreen usage those are React state setters and stable, so it is fine. If future callers pass inline callbacks, they could accidentally restart the nutrition request on rerender. Not a current defect in the shown path.
+
+Release prerequisites / confidence limits:
+- The listed tests are strong for the component/service race, including handler-level rejection and late-response isolation.
+- Because they are service-double tests, I would still treat one simulator/physical-device smoke test as a release prerequisite: slow/timeout nutrition request, verify both visible Save buttons stay disabled while pending, then become usable after failure/success.
+- Also smoke-test rapid tapping around the transition from pending to failed/ready.
+
+Concise verdict: Approve the focused fix. The original race is closed in the supplied code; no new actionable code defects found.

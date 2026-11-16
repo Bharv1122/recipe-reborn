@@ -1,0 +1,22 @@
+
+Looking up credentials configuration for com.recipereborn.app...
+√ Google Service Account Key already set up.
+
+Project ID:                     56cc462a-d0a6-4cc7-8ca8-907bcb76f2fd
+Release track:                  alpha
+Changes not sent for a review:  true
+Release status:                 DRAFT
+Google Service Account Key:     
+    Key Source   :  EAS servers
+    Account Email:  recipe-reborn-eas-submit@nifty-realm-454921-k4.iam.gserviceaccount.com
+Rollout:                        undefined
+Build:                          
+    Build ID    :  bc75c794-1646-4a98-85b7-38c2073fd009
+    Build Date  :  9/23/2026, 8:02:48 PM
+    App Version :  1.0.0
+    Version code:  14
+
+- Scheduling Android submission
+√ Scheduled Android submission
+
+Submission details: https://expo.dev/accounts/reciperebornmobile/projects/recipereborn/submissions/d9a9464e-5460-4602-84b9-0e59f612b34b

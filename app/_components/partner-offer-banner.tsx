@@ -90,7 +90,7 @@ export function PartnerOfferBanner({
             href="/signup"
             className="mt-3 inline-block rounded-lg bg-emerald-600 px-5 py-2.5 font-semibold text-white transition-colors hover:bg-emerald-700"
           >
-            Claim your {offer.trialDays} days
+            {offer.lifetime ? 'Claim lifetime Premium' : `Claim your ${offer.trialDays} days`}
           </a>
         )}
       </div>
@@ -101,5 +101,7 @@ export function PartnerOfferBanner({
 /** "7-day free trial" / "30-day free trial", matching what checkout will do. */
 export function useTrialLabel(): string {
   const offer = usePartnerOffer();
-  return `${offer?.trialDays ?? DEFAULT_TRIAL_DAYS}-day free trial`;
+  return offer?.lifetime
+    ? 'Lifetime Premium'
+    : `${offer?.trialDays ?? DEFAULT_TRIAL_DAYS}-day free trial`;
 }

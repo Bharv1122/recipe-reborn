@@ -23,10 +23,12 @@ async function generateReplacement(options: {
   allergies: string[];
   dislikedIngredients: string[];
   excludedTitles: string[];
+  preferredIngredients: string[];
 }): Promise<ValidatedMeal | null> {
   const constraints = [
     options.allergies.length ? `Never use these allergens or their derivatives: ${options.allergies.join(', ')}.` : '',
     options.dislikedIngredients.length ? `Do not use these disliked ingredients: ${options.dislikedIngredients.join(', ')}.` : '',
+    options.preferredIngredients.length ? `When practical, favor these liked ingredients without overriding exclusions: ${options.preferredIngredients.join(', ')}.` : '',
     `Do not repeat any of these recipes: ${options.excludedTitles.join('; ')}.`,
   ].filter(Boolean).join('\n');
   const prompt = `Create one different ${options.mealType} recipe for ${options.day}, with exactly ${options.servings} servings.
@@ -80,7 +82,7 @@ export async function POST(request: Request, props: { params: Promise<{ id: stri
 
     const { id, recipeId } = await props.params;
     const [user, entry, titles] = await Promise.all([
-      prisma.user.findUnique({ where: { id: userId }, select: { subscriptionTier: true, allergies: true, dislikedIngredients: true } }),
+      prisma.user.findUnique({ where: { id: userId }, select: { subscriptionTier: true, allergies: true, dislikedIngredients: true, likedIngredients: true } }),
       prisma.mealPlanRecipe.findFirst({
         where: { id: recipeId, mealPlan: { id, userId } },
         include: { recipe: true },
@@ -102,6 +104,7 @@ export async function POST(request: Request, props: { params: Promise<{ id: stri
       allergies: user.allergies,
       dislikedIngredients: user.dislikedIngredients,
       excludedTitles: titles.map(({ recipe }) => recipe.title),
+      preferredIngredients: user.likedIngredients,
     });
     if (!meal) {
       return NextResponse.json({ error: 'No safe replacement was produced. Your current meal was kept.' }, { status: 422 });
@@ -113,6 +116,8 @@ export async function POST(request: Request, props: { params: Promise<{ id: stri
         data: {
           id: newRecipeId,
           userId,
+          savedAt: null,
+          librarySource: 'meal_plan',
           title: meal.title,
           originalIngredients: meal.ingredients.join('\n'),
           freshIngredients: meal.ingredients.join('\n'),

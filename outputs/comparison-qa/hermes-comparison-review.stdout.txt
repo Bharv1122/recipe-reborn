@@ -1,0 +1,84 @@
+Proven code defects
+
+1. Severity: Medium
+   File/line:
+   - mobile/src/app/generate.tsx:71-75
+   - mobile/src/app/generate.tsx:95
+   - mobile/src/app/generate.tsx:103
+   - mobile/src/app/recipes/[id].tsx:62-63
+
+   Trigger:
+   On native GenerateScreen, after a recipe is generated, the user taps either “Save to My recipes” button before RecipeComparison’s homemade nutrition estimate has completed and called onNutrition.
+
+   Consequence:
+   save() persists comparisonSnapshot.freshNutrition as the current state value, which is initially null:
+
+   mobile/src/app/generate.tsx:71-75
+   result = await saveGeneratedRecipe(..., {
+     version: 1,
+     source,
+     originalNutrition: source === 'label' ? originalNutrition : null,
+     freshNutrition,
+   });
+
+   The save buttons are enabled whenever recipe exists and saving is false; they are not gated on nutrition estimation completion:
+
+   mobile/src/app/generate.tsx:95
+   mobile/src/app/generate.tsx:103
+
+   The saved detail screen then intentionally disables estimating on mount:
+
+   mobile/src/app/recipes/[id].tsx:62-63
+   savedNutrition={recipe.comparisonSnapshot.freshNutrition}
+   estimateOnMount={false}
+
+   So the saved recipe reopens without making another estimate request, but also without the homemade estimate that the new persistence flow is supposed to save.
+
+   Recommended correction:
+   Make the native save path wait for or require the first homemade nutrition estimate before saving the comparison snapshot, or explicitly model estimate failure separately.
+
+   Practical options:
+   - Have RecipeComparison expose nutrition status to GenerateScreen, then disable both save buttons until freshNutrition is available or the estimate has definitively failed.
+   - If save is pressed while estimation is pending, await the same estimate before POSTing.
+   - If estimation fails and saving should still be allowed, persist freshNutrition: null intentionally only after failure, not merely because the user saved quickly.
+
+   Add a regression test that saves immediately after generation while the nutrition estimate request is still pending and verifies the recipe is not persisted with a null freshNutrition snapshot unless the estimate actually failed.
+
+Hypotheses / non-findings
+
+- No proven code defect found for preserving null nutrient numbers. The validation schema allows nullable nutrient values, and the displayed comparison treats null as unavailable.
+- No proven code defect found for keeping package scan nutrition unconfirmed until review. Scanned label facts set reviewRequired: true, and the display suppresses package facts while reviewRequired is true.
+- No proven code defect found for legacy records without comparisonSnapshot. The native detail screen only renders RecipeComparison when recipe?.comparisonSnapshot is truthy.
+- PostgreSQL JSONB roundtrip, unapplied migration behavior, and physical-device behavior are release prerequisites, not proven code defects from the supplied source alone.
+
+Targeted missing tests
+
+1. Native save-before-estimate race:
+   Generate recipe, keep /api/nutrition/estimate pending, tap Save, verify save is blocked or waits; verify persisted comparisonSnapshot.freshNutrition is not null after a successful estimate.
+
+2. Native estimate-failure save behavior:
+   Force /api/nutrition/estimate to fail, then verify whether saving is allowed and, if allowed, that freshNutrition: null is intentional and the detail screen shows the “No homemade nutrition estimate was saved” state.
+
+3. Saved detail no re-estimate:
+   Open a saved recipe with comparisonSnapshot.freshNutrition populated and verify /api/nutrition/estimate is not called.
+
+4. Saved detail legacy snapshot absent:
+   Open a recipe with comparisonSnapshot null/undefined and verify the detail screen does not crash and does not call /api/nutrition/estimate.
+
+5. Label scan confirmation:
+   Save a label-generated recipe with originalNutrition.reviewRequired: true and verify package nutrition values are not shown as confirmed on detail.
+
+6. Label review confirmation:
+   Confirm package facts in PackageNutritionReview, save, reopen detail, and verify original package facts appear from the snapshot without another estimate request.
+
+7. Null and zero nutrient persistence:
+   Save/reopen snapshots containing 0 and null nutrient values and verify 0 remains displayed as 0 while null remains unavailable/“—”.
+
+8. Web ingredient edit invalidation:
+   PATCH freshIngredients to a changed JSON array and verify comparisonSnapshot.freshNutrition becomes null while originalNutrition is preserved.
+
+9. Web non-ingredient edits:
+   PATCH notes/rating/folder/winePairing only and verify comparisonSnapshot is unchanged.
+
+10. Semantically unchanged web ingredients:
+   PATCH freshIngredients with the same ingredient array and verify the saved estimate is not invalidated.

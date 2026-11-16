@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { expandedFoodTerms, findBlockedFoodInRecipe, normalizeFoodText } from './food-preferences';
 
 export const DAYS = [
   'monday',
@@ -70,34 +71,6 @@ const mealSchema = z.object({
   estimatedCalories: z.union([z.number(), z.string(), z.null()]).optional().default(null),
 }).passthrough();
 
-const ALLERGEN_EXPANSIONS: Record<string, string[]> = {
-  fish: [
-    'fish', 'seafood', 'anchovy', 'anchovies', 'bass', 'bonito', 'carp', 'catfish',
-    'caviar', 'cod', 'dashi', 'flounder', 'grouper', 'haddock', 'halibut', 'herring',
-    'mackerel', 'mahi mahi', 'perch', 'pollock', 'salmon', 'sardine', 'sardines',
-    'snapper', 'sole', 'swordfish', 'tilapia', 'trout', 'tuna', 'fish sauce',
-    'worcestershire', 'surimi', 'roe',
-  ],
-  shellfish: [
-    'shellfish', 'crab', 'crayfish', 'crawfish', 'lobster', 'prawn', 'prawns',
-    'shrimp', 'scallop', 'scallops', 'clam', 'clams', 'mussel', 'mussels',
-    'oyster', 'oysters',
-  ],
-  peanut: ['peanut', 'peanuts', 'groundnut', 'groundnuts'],
-  'tree nut': [
-    'tree nut', 'tree nuts', 'almond', 'almonds', 'brazil nut', 'cashew', 'cashews',
-    'hazelnut', 'hazelnuts', 'macadamia', 'pecan', 'pecans', 'pistachio',
-    'pistachios', 'walnut', 'walnuts', 'marzipan', 'praline',
-  ],
-  dairy: ['dairy', 'milk', 'butter', 'buttermilk', 'casein', 'cheese', 'cream', 'ghee', 'whey', 'yogurt', 'yoghurt'],
-  milk: ['milk', 'butter', 'buttermilk', 'casein', 'cheese', 'cream', 'ghee', 'whey', 'yogurt', 'yoghurt'],
-  egg: ['egg', 'eggs', 'albumin', 'mayonnaise', 'meringue'],
-  wheat: ['wheat', 'flour', 'bread', 'breadcrumbs', 'couscous', 'farina', 'semolina', 'spelt'],
-  gluten: ['gluten', 'wheat', 'barley', 'rye', 'malt', 'farro', 'spelt', 'semolina'],
-  soy: ['soy', 'soya', 'soybean', 'soybeans', 'tofu', 'tempeh', 'edamame', 'miso', 'tamari'],
-  sesame: ['sesame', 'tahini', 'benne'],
-};
-
 // These patterns intentionally target prepared dishes and meal components, not
 // ordinary grocery staples such as bread, tortillas, canned beans or tomatoes,
 // condiments, broth, or plain frozen fruit and vegetables.
@@ -112,48 +85,13 @@ const PREPARED_SHORTCUT_PATTERNS = [
 ];
 
 function normalizeText(value: string): string {
-  return value
-    .normalize('NFKD')
-    .replace(/[\u0300-\u036f]/g, '')
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, ' ')
-    .trim();
-}
-
-function includesWholeTerm(haystack: string, term: string): boolean {
-  const normalizedTerm = normalizeText(term);
-  if (!normalizedTerm) return false;
-  return ` ${haystack} `.includes(` ${normalizedTerm} `);
-}
-
-function termsForAllergy(allergy: string): string[] {
-  const normalized = normalizeText(allergy);
-  const terms = new Set<string>([normalized]);
-
-  for (const [category, expansions] of Object.entries(ALLERGEN_EXPANSIONS)) {
-    if (normalized === category || normalized.includes(category) || category.includes(normalized)) {
-      expansions.forEach((term) => terms.add(term));
-    }
-  }
-
-  return Array.from(terms).filter(Boolean);
+  return normalizeFoodText(value);
 }
 
 function detectAllergen(meal: ValidatedMeal, allergies: string[]): string | null {
   if (allergies.length === 0) return null;
 
-  const searchable = normalizeText([
-    meal.title,
-    ...meal.ingredients,
-    meal.instructions,
-  ].join(' '));
-
-  for (const allergy of allergies) {
-    const matched = termsForAllergy(allergy).find((term) => includesWholeTerm(searchable, term));
-    if (matched) return matched;
-  }
-
-  return null;
+  return findBlockedFoodInRecipe(meal, allergies, 'allergy');
 }
 
 function containsPreparedShortcut(meal: ValidatedMeal): boolean {
@@ -199,8 +137,8 @@ function titlesDescribeSameMeal(first: string, second: string): boolean {
 }
 
 /** Keep generation instructions aligned with the exclusions validation enforces. */
-export function expandBlockedIngredients(values: string[]): string[] {
-  return Array.from(new Set(values.flatMap(termsForAllergy)));
+export function expandBlockedIngredients(allergies: string[], dislikes: string[] = []): string[] {
+  return expandedFoodTerms(allergies, dislikes);
 }
 
 export type MealValidationResult =
@@ -242,7 +180,7 @@ export function validateMeal(
   if (detectAllergen(meal, options.allergies)) {
     return { success: false, error: { code: 'allergen_detected', message: 'The meal contains a blocked allergen term.', day: options.day, mealType: options.mealType } };
   }
-  if (detectAllergen(meal, options.dislikedIngredients ?? [])) {
+  if (findBlockedFoodInRecipe(meal, options.dislikedIngredients ?? [], 'dislike')) {
     return { success: false, error: { code: 'disliked_ingredient', message: 'The meal contains a disliked ingredient.', day: options.day, mealType: options.mealType } };
   }
   if (containsPreparedShortcut(meal)) {

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
+import { Prisma } from '@prisma/client';
 import { authOptions } from '@/lib/auth-options';
 import { prisma } from '@/lib/db';
 import { rateLimit, getClientIp } from '@/lib/rate-limit';
@@ -9,6 +10,61 @@ import { resolvePartnerTrial } from '@/lib/partner-offer-server';
 export const dynamic = 'force-dynamic';
 
 const INVALID = 'That code is not recognised. Check the spelling and try again.';
+
+type LifetimeRedemptionResult = 'granted' | 'already-premium' | 'taken' | 'missing';
+
+async function redeemLifetimeOffer(
+  userId: string,
+  offer: NonNullable<ReturnType<typeof findPartnerOffer>>,
+): Promise<LifetimeRedemptionResult> {
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    try {
+      return await prisma.$transaction(
+        async (tx) => {
+          const current = await tx.user.findUnique({
+            where: { id: userId },
+            select: { subscriptionTier: true },
+          });
+
+          if (!current) return 'missing';
+          if (current.subscriptionTier !== 'free') return 'already-premium';
+
+          const taken = await tx.user.count({
+            where: {
+              partnerOfferRedeemedCode: { equals: offer.slug, mode: 'insensitive' },
+              id: { not: userId },
+            },
+          });
+
+          if (taken >= offer.maxRedemptions) return 'taken';
+
+          const redeemedAt = new Date();
+          await tx.user.update({
+            where: { id: userId },
+            data: {
+              signupSource: offer.slug,
+              subscriptionTier: 'premium',
+              subscriptionStatus: 'active',
+              currentPeriodEnd: null,
+              partnerOfferRedeemedCode: offer.slug,
+              partnerOfferRedeemedAt: redeemedAt,
+            },
+          });
+
+          return 'granted';
+        },
+        { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
+      );
+    } catch (error) {
+      const retryable =
+        error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2034';
+      if (retryable && attempt < 2) continue;
+      throw error;
+    }
+  }
+
+  return 'taken';
+}
 
 /**
  * Redeem a community code on an existing account.
@@ -118,38 +174,28 @@ export async function POST(request: NextRequest) {
       });
     }
 
-    if (user.signupSource !== offer.slug) {
-      await prisma.user.update({
-        where: { id: user.id },
-        data: { signupSource: offer.slug },
-      });
-    }
-
     // A lifetime comp is granted here and then simply exists. No Stripe
     // subscription, so there is no renewal to fail and no webhook that can
     // later revoke it — currentPeriodEnd stays null, which every entitlement
     // check already treats as "not time-limited".
     if (offer.lifetime) {
-      const taken = await prisma.user.count({
-        where: {
-          signupSource: { equals: offer.slug, mode: 'insensitive' },
-          subscriptionTier: 'premium',
-          stripeSubscriptionId: null,
-          id: { not: user.id },
-        },
-      });
+      const result = await redeemLifetimeOffer(user.id, offer);
 
-      if (taken >= offer.maxRedemptions) {
+      if (result === 'missing') {
+        return NextResponse.json({ error: 'Account not found' }, { status: 404 });
+      }
+      if (result === 'already-premium') {
+        return NextResponse.json(
+          { error: 'Your account is already on Premium.' },
+          { status: 400 }
+        );
+      }
+      if (result === 'taken') {
         return NextResponse.json(
           { error: 'That code has already been used.' },
           { status: 409 }
         );
       }
-
-      await prisma.user.update({
-        where: { id: user.id },
-        data: { subscriptionTier: 'premium', subscriptionStatus: 'active' },
-      });
 
       return NextResponse.json({
         message: `${offer.label} — Premium unlocked for good. No trial, no card, nothing to renew.`,
@@ -160,6 +206,13 @@ export async function POST(request: NextRequest) {
           trialDays: 0,
           trialRecipeLimit: offer.trialRecipeLimit,
         },
+      });
+    }
+
+    if (user.signupSource !== offer.slug) {
+      await prisma.user.update({
+        where: { id: user.id },
+        data: { signupSource: offer.slug },
       });
     }
 

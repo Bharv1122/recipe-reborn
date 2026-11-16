@@ -1,9 +1,9 @@
 export function useAuth(){return {user:{id:'qa',name:'Preview',allergies:[],dislikedIngredients:[]}};}
 export const fixture={id:'qa-recipe',title:'Homemade Cinnamon Oatmeal',freshIngredients:['1 cup rolled oats','2 cups milk, or water','1 teaspoon cinnamon'],instructions:['Bring the liquid to a simmer.','Stir in oats and cook for five minutes.'],prepTime:'2 minutes',cookTime:'5 minutes',servings:'2',dietaryTags:[]};
 export async function generateRecipe(input,options){window.qaGeneration={input,source:options.source};await new Promise(r=>setTimeout(r,100));return {recipe:fixture};}
-export async function saveGeneratedRecipe(){window.qaSaved=true;return {recipe:fixture};}
-export async function listRecipes(){return {recipes:window.qaSaved?[fixture]:[]};}
-export async function getRecipe(){return {recipe:{...fixture,freshIngredients:JSON.stringify(fixture.freshIngredients),instructions:JSON.stringify(fixture.instructions)}};}
+export async function saveGeneratedRecipe(originalIngredients,recipe,comparisonSnapshot){window.qaSaved=true;const saved={...recipe,id:fixture.id,originalIngredients,comparisonSnapshot,freshIngredients:JSON.stringify(recipe.freshIngredients),instructions:JSON.stringify(recipe.instructions)};sessionStorage.setItem('rr-preview-saved',JSON.stringify(saved));return {recipe:saved};}
+export async function listRecipes(){return {recipes:sessionStorage.getItem('rr-preview-saved')?[JSON.parse(sessionStorage.getItem('rr-preview-saved'))]:[]};}
+export async function getRecipe(){return {recipe:JSON.parse(sessionStorage.getItem('rr-preview-saved')||'null')||{...fixture,freshIngredients:JSON.stringify(fixture.freshIngredients),instructions:JSON.stringify(fixture.instructions)}};}
 export async function cancelRecipeGeneration(){}
 let lists=[{id:'qa-list',name:'This week',items:[]}];
 let nutritionAttempts=0;
@@ -23,6 +23,7 @@ export async function apiRequest(path,options={}){
  if(path.endsWith('/barcode/missing'))return {found:false,name:'',ingredients_text:''};
  if(path.includes('/barcode/'))return {found:true,name:'Cinnamon Oats (sample)',ingredients_text:'Rolled oats, high fructose corn syrup, artificial flavor, salt',originalNutrition:scenario==='no-nutrition'?null:{values:{calories:160,protein:4,carbs:33,fat:2,fiber:3,sodium:240},basisLabel:'Per 40 g packet',source:scenario==='review'?'label_scan':'barcode',sourceLabel:'Sample package record',accuracy:'exact',servingsPerContainer:null,reviewRequired:scenario==='review'}};
  if(path==='/api/nutrition/estimate'){
+  window.qaNutritionCalls=(window.qaNutritionCalls||0)+1;
   if(scenario==='nutrition-error' && nutritionAttempts++===0)throw new Error('Preview estimate failure');
   return {calories:220,protein:9,carbs:30,fat:7,fiber:4,sodium:100,perServing:true,accuracy:'estimated',basisLabel:'Per recipe serving (recipe makes 2)',sourceLabel:'Preview estimate'};
  }

@@ -9,6 +9,7 @@ import { logServerError } from '@/lib/server-error-log';
 import { clearGenerationCancellation, wasGenerationCanceled } from '@/lib/generation-cancellation';
 import { getRequestUserId } from '@/lib/request-auth';
 import { buildIngredientReconciliationPrompt, validateIngredientReconciliation } from '@/lib/recipe-ingredient-integrity';
+import { findBlockedFoodInRecipe } from '@/lib/food-preferences';
 
 export const dynamic = 'force-dynamic';
 export const maxDuration = 60;
@@ -23,17 +24,6 @@ const recipeResultSchema = z.object({
   estimatedCostPerServing: z.number().nonnegative().optional(),
   storeBoughtCost: z.number().nonnegative().optional(),
 }).passthrough();
-
-function findIncludedAllergen(ingredients: string[], allergies: string[]) {
-  const ingredientText = ingredients.join(' ').toLowerCase();
-
-  return allergies.find((rawAllergen) => {
-    const allergen = rawAllergen.trim().toLowerCase();
-    if (allergen.length < 2) return false;
-    const escaped = allergen.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-    return new RegExp(`(^|[^a-z])${escaped}([^a-z]|$)`, 'i').test(ingredientText);
-  });
-}
 
 // Tier limits
 const TIER_LIMITS = {
@@ -87,6 +77,7 @@ export async function POST(request: NextRequest) {
         lastGenerationReset: true,
         allergies: true,
         dislikedIngredients: true,
+        likedIngredients: true,
         signupSource: true,
         createdAt: true,
         currentPeriodEnd: true,
@@ -353,8 +344,11 @@ The legacy field name "freshIngredients" means the COMPLETE recipe ingredient li
     }
     if (user.dislikedIngredients.length > 0) {
       prefLines.push(
-        `DISLIKED INGREDIENTS: The user dislikes: ${user.dislikedIngredients.join(', ')}. Avoid them unless truly essential to the dish concept; prefer substitutes.`
+        `DISLIKED INGREDIENTS: The user dislikes: ${user.dislikedIngredients.join(', ')}. Do not include them in the title, ingredients, instructions, garnish, or optional suggestions. Use a different dish or substitute.`
       );
+    }
+    if (user.likedIngredients.length > 0) {
+      prefLines.push(`LIKED INGREDIENTS: When they fit naturally, favor: ${user.likedIngredients.join(', ')}. Likes never override allergies, dislikes, or the requested dish.`);
     }
     if (prefLines.length > 0) {
       prompt += `\n\nUSER FOOD PREFERENCES (must be respected):\n${prefLines.join('\n')}`;
@@ -531,12 +525,20 @@ The legacy field name "freshIngredients" means the COMPLETE recipe ingredient li
                       modelStream.cleanup();
                       finalResult.freshIngredients = await reconcilePantryIngredients(finalResult);
                     }
-                    const includedAllergen = findIncludedAllergen(
-                      [...finalResult.freshIngredients, ...finalResult.instructions],
-                      user.allergies
+                    const includedAllergen = findBlockedFoodInRecipe(
+                      { title: finalResult.title, ingredients: finalResult.freshIngredients, instructions: finalResult.instructions },
+                      user.allergies,
+                      'allergy',
                     );
                     if (includedAllergen) {
                       throw new Error('Recipe response included a saved allergen');
+                    }
+                    if (findBlockedFoodInRecipe(
+                      { title: finalResult.title, ingredients: finalResult.freshIngredients, instructions: finalResult.instructions },
+                      user.dislikedIngredients,
+                      'dislike',
+                    )) {
+                      throw new Error('Recipe response included a saved disliked ingredient');
                     }
                     if (outputCanceled || request.signal.aborted || await wasGenerationCanceled(user.id, generationId.data)) {
                       throw new DOMException('Recipe generation canceled', 'AbortError');

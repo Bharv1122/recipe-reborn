@@ -1,0 +1,16 @@
+{
+  "files": [
+    {
+      "file": "mobile/src/app/generate.tsx",
+      "sha256": "c6d7f554bb26649944c98c3bd792a162cf9b09e8865f1e210e13a14b0931d046"
+    },
+    {
+      "file": "mobile/src/components/recipe-comparison.tsx",
+      "sha256": "ef66e73b453eb96c0fe291245348e3c58db67e541126d9860e7fee436133bd36"
+    },
+    {
+      "file": "shared/nutrition-facts.ts",
+      "sha256": "14c428abd96096a271a3581519fcc8c1726b64cfc28ac68543a48fb0f461db91"
+    }
+  ]
+}

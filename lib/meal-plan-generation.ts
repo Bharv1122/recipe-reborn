@@ -12,6 +12,7 @@ export interface GeneratePlanOptions {
   servings: number;
   allergies: string[];
   dislikedIngredients: string[];
+  preferredIngredients?: string[];
 }
 
 const mealJsonSchema = {
@@ -35,7 +36,7 @@ function structuredFormat(name: string, schema: Record<string, unknown>) {
 }
 
 function blockedIngredientInstruction(options: GeneratePlanOptions): string {
-  const terms = expandBlockedIngredients([...options.allergies, ...options.dislikedIngredients]);
+  const terms = expandBlockedIngredients(options.allergies, options.dislikedIngredients);
   return terms.length ? `Validation also excludes these ingredient names and aliases: ${terms.join(', ')}. Use alternatives; do not include these names in recipe titles, ingredients, or instructions, even as a negation or optional suggestion.` : '';
 }
 
@@ -105,6 +106,9 @@ function buildPrompt(options: GeneratePlanOptions): string {
   const dislikeInfo = options.dislikedIngredients.length > 0
     ? `Disliked ingredients: ${options.dislikedIngredients.join(', ')}. Avoid them and use alternatives.`
     : 'No disliked ingredients were supplied';
+  const likedInfo = options.preferredIngredients?.length
+    ? `Preferred ingredients: ${options.preferredIngredients.join(', ')}. Favor these only when they fit naturally; never let them override allergies, dislikes, or dietary requirements.`
+    : 'No preferred ingredients were supplied';
   const mealKeys = options.mealTypes.join(', ');
   const mealTemplate = options.mealTypes.map((mealType) => `
     "${mealType}": {
@@ -129,6 +133,7 @@ Requirements:
 - Exactly ${options.servings} serving${options.servings === 1 ? '' : 's'} per recipe
 - ${allergyInfo}
 - ${dislikeInfo}
+- ${likedInfo}
 - ${blockedIngredientInstruction(options)}
 - Use varied, achievable home-cooking recipes with measured ingredient quantities
 - Every recipe must be distinct across the week. Never repeat the same dish on multiple days or disguise a repeated dish with a minor title change. Vary the main ingredient, preparation, and accompaniments.

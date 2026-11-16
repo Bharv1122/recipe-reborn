@@ -176,7 +176,6 @@ export function InteractiveIngredient({
   const handleDelete = () => {
     if (onDelete) {
       onDelete(index);
-      toast.success('Ingredient removed');
     }
   };
 

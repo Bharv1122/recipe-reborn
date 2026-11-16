@@ -1,0 +1,14 @@
+{
+  "requestedAt": "2026-09-24T04:04:19.276Z",
+  "buildId": "bc75c794-1646-4a98-85b7-38c2073fd009",
+  "profile": "play-alpha-draft",
+  "androidConfig": {
+    "applicationId": "com.recipereborn.app",
+    "track": "alpha",
+    "releaseStatus": "draft",
+    "changesNotSentForReview": true
+  },
+  "sourceCommit": "0e094ccc0af6dfa4992528480ce726d24b7f6308",
+  "sha256": "B7E837B4CCF0DE6C913886400EB37A66B8EA7A6F6E480184877C665183C0B575",
+  "authorization": "User-authorized Play testing; root delegated this exact code14 alpha draft upload only, with changesNotSentForReview:true. No review request, rollout, purchase, new build or credential change."
+}

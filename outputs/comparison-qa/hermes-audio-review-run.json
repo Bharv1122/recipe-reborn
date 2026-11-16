@@ -1,0 +1,12 @@
+{
+  "exitCode": 0,
+  "elapsedSeconds": 40.48,
+  "provider": "openai-codex",
+  "configuredModel": "gpt-5.5",
+  "hermesVersion": "0.15.1",
+  "maxTurns": 1,
+  "toolset": "todo",
+  "ignoreRulesAndMemory": true,
+  "stdoutFile": "hermes-audio-review.stdout.txt",
+  "stderrFile": "hermes-audio-review.stderr.txt"
+}

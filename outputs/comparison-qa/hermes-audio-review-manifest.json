@@ -1,0 +1,17 @@
+{
+  "createdAt": "2026-09-24T00:58:29.812Z",
+  "provider": "openai-codex",
+  "configuredModel": "gpt-5.5",
+  "files": [
+    {
+      "file": "app/api/transcribe-audio/route.ts",
+      "bytes": 6288,
+      "sha256": "a591e014005fdc3c0c9afa50954969c85ee2bd0ec934060e7b0bcd0978383507"
+    },
+    {
+      "file": "lib/ai.ts",
+      "bytes": 832,
+      "sha256": "01624449ed4a1f7abb1d2b04434d72661c5f3e6aca03b53d2bb07dd279b9fa41"
+    }
+  ]
+}

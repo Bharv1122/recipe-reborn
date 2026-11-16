@@ -1,0 +1,89 @@
+{
+  "checkedAt": "2026-09-24T01:16:03.208Z",
+  "installedCliVersion": "23.2.0",
+  "command": "eas submit:list -p android --limit 20 --json --non-interactive",
+  "note": "Selected nonsecret release metadata only; signed log URLs and unrelated fields excluded. No submissions, credential changes, or uploads performed.",
+  "submissions": [
+    {
+      "id": "34c03506-30ce-48c1-8ccc-01fb800562da",
+      "status": "FINISHED",
+      "platform": "ANDROID",
+      "projectId": "56cc462a-d0a6-4cc7-8ca8-907bcb76f2fd",
+      "account": "reciperebornmobile",
+      "androidConfig": {
+        "track": "alpha",
+        "releaseStatus": "COMPLETED"
+      },
+      "createdAt": "2026-09-07T18:44:06.728Z",
+      "completedAt": "2026-09-07T18:46:38.544Z",
+      "error": null,
+      "build": {
+        "id": "1d70ab02-5d26-4493-8e19-0e9d522da2eb",
+        "status": "FINISHED",
+        "packageName": "com.recipereborn.app",
+        "distribution": "STORE",
+        "profile": "play-internal",
+        "version": "1.0.0",
+        "versionCode": "8",
+        "createdAt": "2026-09-07T11:03:04.047Z",
+        "completedAt": "2026-09-07T11:23:48.681Z"
+      }
+    },
+    {
+      "id": "c441244f-30c3-41f9-88a3-e590e3b8dc6a",
+      "status": "ERRORED",
+      "platform": "ANDROID",
+      "projectId": "56cc462a-d0a6-4cc7-8ca8-907bcb76f2fd",
+      "account": "reciperebornmobile",
+      "androidConfig": {
+        "track": "alpha",
+        "releaseStatus": "COMPLETED"
+      },
+      "createdAt": "2026-09-07T18:32:35.920Z",
+      "completedAt": "2026-09-07T18:33:52.024Z",
+      "error": {
+        "code": "SUBMISSION_SERVICE_ANDROID_SERVICE_ACCOUNT_IS_MISSING_PERMISSIONS",
+        "message": "The service account is missing the necessary permissions to submit the app to Google Play Store. Make sure the service account has the necessary app permissions.\nLearn more at https://expo.fyi/creating-google-service-account and https://github.com/fastlane/fastlane/issues/16164"
+      },
+      "build": {
+        "id": "1d70ab02-5d26-4493-8e19-0e9d522da2eb",
+        "status": "FINISHED",
+        "packageName": "com.recipereborn.app",
+        "distribution": "STORE",
+        "profile": "play-internal",
+        "version": "1.0.0",
+        "versionCode": "8",
+        "createdAt": "2026-09-07T11:03:04.047Z",
+        "completedAt": "2026-09-07T11:23:48.681Z"
+      }
+    },
+    {
+      "id": "2be1df35-3c8d-430d-965d-7562b5e00cb2",
+      "status": "ERRORED",
+      "platform": "ANDROID",
+      "projectId": "56cc462a-d0a6-4cc7-8ca8-907bcb76f2fd",
+      "account": "reciperebornmobile",
+      "androidConfig": {
+        "track": "alpha",
+        "releaseStatus": "COMPLETED"
+      },
+      "createdAt": "2026-09-07T18:29:26.394Z",
+      "completedAt": "2026-09-07T18:30:42.026Z",
+      "error": {
+        "code": "SUBMISSION_SERVICE_ANDROID_UNKNOWN_ERROR",
+        "message": "Fastlane supply failed\nWe couldn't figure out what went wrong. See logs to learn more."
+      },
+      "build": {
+        "id": "1d70ab02-5d26-4493-8e19-0e9d522da2eb",
+        "status": "FINISHED",
+        "packageName": "com.recipereborn.app",
+        "distribution": "STORE",
+        "profile": "play-internal",
+        "version": "1.0.0",
+        "versionCode": "8",
+        "createdAt": "2026-09-07T11:03:04.047Z",
+        "completedAt": "2026-09-07T11:23:48.681Z"
+      }
+    }
+  ]
+}

@@ -1,0 +1,8 @@
+{
+  "reproduced": true,
+  "saveEnabledWhileEstimatePending": true,
+  "savedFreshNutrition": null,
+  "navigationRequested": true,
+  "pendingEstimateAbortedOnNavigation": true,
+  "source": "actual GenerateScreen and RecipeComparison mounted with deferred API double"
+}

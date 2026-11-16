@@ -63,7 +63,7 @@ export async function clearTokens(expectedRevision?: number): Promise<void> {
 export async function saveCachedUser(user: MobileUser, expectedRevision = sessionRevision): Promise<boolean> {
   const identity: MobileUser = {
     id: user.id, email: user.email, name: user.name,
-    allergies: user.allergies, dislikedIngredients: user.dislikedIngredients,
+    allergies: user.allergies, dislikedIngredients: user.dislikedIngredients, likedIngredients: user.likedIngredients,
   };
   return writeSession(async () => {
     if (expectedRevision !== sessionRevision) return false;
@@ -87,7 +87,7 @@ export async function readCachedUser(): Promise<MobileUser | null> {
     const nullableString = (field: unknown) => field === null || typeof field === 'string';
     const optionalList = (field: unknown) => field === undefined || (Array.isArray(field) && field.every(item => typeof item === 'string'));
     if (typeof value.id !== 'string' || !value.id || !nullableString(value.email) || !nullableString(value.name)
-      || !optionalList(value.allergies) || !optionalList(value.dislikedIngredients)) return null;
+      || !optionalList(value.allergies) || !optionalList(value.dislikedIngredients) || !optionalList(value.likedIngredients)) return null;
     return value as unknown as MobileUser;
   } catch { return null; }
 }

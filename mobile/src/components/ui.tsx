@@ -1,4 +1,4 @@
-import type { PropsWithChildren } from 'react';
+import { useRef, useState, type PropsWithChildren } from 'react';
 import { ActivityIndicator, Pressable, StyleSheet, Text, TextInput, View, type TextInputProps } from 'react-native';
 import { colors } from '@/theme';
 
@@ -11,7 +11,19 @@ export function Card({ children }: PropsWithChildren) {
 }
 
 export function Field(props: TextInputProps) {
-  return <TextInput placeholderTextColor={colors.muted} {...props} style={[styles.field, props.style]} />;
+  const [visible, setVisible] = useState(false);
+  const input = useRef<TextInput>(null);
+  if (!props.secureTextEntry) return <TextInput placeholderTextColor={colors.muted} {...props} style={[styles.field, props.style]} />;
+  const label = props.accessibilityLabel || 'Password';
+  return <View style={styles.passwordContainer}>
+    <TextInput ref={input} placeholderTextColor={colors.muted} autoCapitalize="none" autoCorrect={false} {...props}
+      secureTextEntry={!visible} style={[styles.field, props.style, styles.passwordField]} />
+    <Pressable accessibilityRole="button" accessibilityLabel={`${visible ? 'Hide' : 'Show'} ${label.toLowerCase()}`}
+      accessibilityState={{ disabled: props.editable === false }} disabled={props.editable === false}
+      onPress={() => { setVisible(value => !value); input.current?.focus(); }} style={styles.passwordToggle}>
+      <Text style={styles.passwordToggleText}>{visible ? 'Hide' : 'Show'}</Text>
+    </Pressable>
+  </View>;
 }
 
 export function Button({ label, onPress, loading, secondary, disabled }: {
@@ -40,6 +52,10 @@ export function InlineError({ message }: { message: string | null }) {
 const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: colors.cream, padding: 20 },
   card: { backgroundColor: colors.white, borderRadius: 18, padding: 18, borderWidth: 1, borderColor: colors.line, gap: 12 },
+  passwordContainer: { position: 'relative' },
+  passwordField: { paddingRight: 76 },
+  passwordToggle: { position: 'absolute', right: 2, top: 2, bottom: 2, minWidth: 64, minHeight: 44, alignItems: 'center', justifyContent: 'center' },
+  passwordToggleText: { color: colors.green, fontWeight: '700' },
   field: { minHeight: 50, borderWidth: 1, borderColor: colors.line, borderRadius: 12, paddingHorizontal: 14, color: colors.ink, backgroundColor: colors.white },
   button: { minHeight: 50, borderRadius: 12, backgroundColor: colors.green, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 16 },
   secondary: { backgroundColor: colors.white, borderWidth: 1, borderColor: colors.green },

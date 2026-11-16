@@ -55,6 +55,16 @@ assert.equal(
   'cancel',
 );
 
+const hunterOffer = findPartnerOffer('  HUNTER  ');
+assert.equal(hunterOffer?.slug, 'hunter');
+assert.equal(hunterOffer?.label, 'Hunter');
+assert.equal(hunterOffer?.lifetime, true);
+assert.equal(hunterOffer?.trialDays, 0);
+assert.equal(hunterOffer?.trialRecipeLimit, 100);
+assert.equal(hunterOffer?.fullPremium, true);
+assert.equal(hunterOffer?.maxRedemptions, 1);
+assert.equal(hunterOffer?.singleUse, true);
+
 const finnstersCheckout = buildTrialCheckoutSettings(true, typed.typedOffer!.trialDays);
 assert.equal(finnstersCheckout.payment_method_collection, 'if_required');
 assert.equal(finnstersCheckout.subscription_data.trial_period_days, 30);
@@ -70,4 +80,4 @@ assert.equal(
   'create_invoice',
 );
 
-console.log('Partner-code verification passed. Finnsters remains 30 days; 3DAYFREE grants 3 no-card days; PLAYTEST14 grants 14 capped no-card days.');
+console.log('Partner-code verification passed. Finnsters remains 30 days; 3DAYFREE grants 3 no-card days; PLAYTEST14 grants 14 capped no-card days; HUNTER grants one lifetime Premium comp.');

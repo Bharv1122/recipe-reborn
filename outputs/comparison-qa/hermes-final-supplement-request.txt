@@ -1,0 +1,389 @@
+Perform a read-only final focused review of the exact source below. Use no tools. This is a supplement to a previous review that approved the pending-estimate save fix. Check only actual actionable defects, with file and trigger. The last two edits were removal of redundant setBusy/setFailed/setNutrition synchronous resets in the effect (initial state and retry event already set them), and normalization of scanned servingsPerContainer <= 0, missing, nonfinite or unreadable to null while preserving positive fractions. Both Save buttons and handler must be blocked pending, success saves the estimate, definite failure/45s timeout can intentionally save null, cleanup must reject late results, reopen must not request a new estimate. Actual-component isolated service tests passed pending/handler rejection, save/reopen, failed save, retry, timeout and late response, replacement recipe late response. Actual API handler tests with a repository double passed scan count conversion/save/reopen for missing/null/zero/negative/NaN/infinity/unreadable/2.5/string 3.5/8. Mobile tsc and lint pass. No physical-device verification of this patch is claimed. Report approve or actual defects, briefly. Do not suggest broad refactors or other tasks. Source is task-scoped project code only.
+
+FILE mobile/src/app/generate.tsx
+1: import { useCallback, useRef, useState } from 'react';
+2: import { ScrollView, StyleSheet, Text } from 'react-native';
+3: import * as Crypto from 'expo-crypto';
+4: import { Stack, useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
+5: import { Button, Card, Field, InlineError, Screen } from '@/components/ui';
+6: import { cancelRecipeGeneration, generateRecipe, saveGeneratedRecipe } from '@/services/recipes';
+7: import { takeScanRecipeHandoff } from '@/services/scan-recipe-handoff';
+8: import type { GeneratedRecipe } from '@/types';
+9: import { colors } from '@/theme';
+10: import { PackageNutritionReview, RecipeComparison, type NutritionEstimateStatus } from '@/components/recipe-comparison';
+11: import { VoiceInput } from '@/components/voice-input';
+12: import type { FreshNutritionEstimate, OriginalNutrition } from '../../../shared/nutrition-facts';
+13: 
+14: type Source = 'label' | 'pantry' | 'dish';
+15: export default function GenerateScreen() {
+16:   const params = useLocalSearchParams<{ source?: string }>();
+17:   const router = useRouter();
+18:   const [source, setSource] = useState<Source | null>(() => ['label', 'pantry', 'dish'].includes(params.source || '') ? params.source as Source : null);
+19:   const [ingredients, setIngredients] = useState('');
+20:   const [dietaryRestriction, setDietaryRestriction] = useState('');
+21:   const [showPreferences, setShowPreferences] = useState(false);
+22:   const [recipe, setRecipe] = useState<GeneratedRecipe | null>(null);
+23:   const [busy, setBusy] = useState(false);
+24:   const [voiceBusy, setVoiceBusy] = useState(false);
+25:   const [saving, setSaving] = useState(false);
+26:   const [generatedFrom, setGeneratedFrom] = useState('');
+27:   const [scanContext, setScanContext] = useState('');
+28:   const [originalNutrition, setOriginalNutrition] = useState<OriginalNutrition | null>(null);
+29:   const [freshNutrition, setFreshNutrition] = useState<FreshNutritionEstimate | null>(null);
+30:   const [nutritionStatus, setNutritionStatus] = useState<NutritionEstimateStatus>('pending');
+31:   const [error, setError] = useState<string | null>(null);
+32:   const abortRef = useRef<AbortController | null>(null);
+33:   const generationIdRef = useRef<string | null>(null);
+34:   const savingRef = useRef(false);
+35: 
+36:   useFocusEffect(useCallback(() => {
+37:     const handoff = takeScanRecipeHandoff();
+38:     if (!handoff) return;
+39:     setSource(handoff.source);
+40:     setIngredients(handoff.ingredients);
+41:     setScanContext(handoff.context || 'Your reviewed ingredients');
+42:     setOriginalNutrition(handoff.originalNutrition ?? null);
+43:     setRecipe(null); setFreshNutrition(null); setNutritionStatus('pending'); setGeneratedFrom(''); setError(null);
+44:   }, []));
+45: 
+46:   const run = async () => {
+47:     const input = ingredients.trim();
+48:     if (!input || !source || abortRef.current || voiceBusy) return;
+49:     const controller = new AbortController();
+50:     const generationId = Crypto.randomUUID();
+51:     abortRef.current = controller; generationIdRef.current = generationId;
+52:     setGeneratedFrom(input); setBusy(true); setError(null); setRecipe(null); setFreshNutrition(null); setNutritionStatus('pending');
+53:     try {
+54:       const result = await generateRecipe(input, { source, dietaryRestriction: dietaryRestriction.trim() || undefined, signal: controller.signal, generationId });
+55:       setRecipe(result.recipe);
+56:     } catch (value) {
+57:       setError(controller.signal.aborted ? 'Canceled. Your ingredients are still here.' : value instanceof Error ? value.message : 'Could not create your recipe. Please try again.');
+58:     } finally {
+59:       if (abortRef.current === controller) abortRef.current = null;
+60:       generationIdRef.current = null; setBusy(false);
+61:     }
+62:   };
+63:   const cancel = async () => {
+64:     try { if (generationIdRef.current) await cancelRecipeGeneration(generationIdRef.current); }
+65:     catch (value) { setError(value instanceof Error ? value.message : 'Cancellation could not be confirmed.'); }
+66:     finally { abortRef.current?.abort(); }
+67:   };
+68:   const save = async () => {
+69:     if (!recipe || !source || savingRef.current || nutritionStatus === 'pending') return;
+70:     savingRef.current = true; setSaving(true); setError(null);
+71:     try {
+72:       const result = await saveGeneratedRecipe(generatedFrom, recipe, {
+73:         version: 1, source,
+74:         originalNutrition: source === 'label' ? originalNutrition : null,
+75:         freshNutrition,
+76:       });
+77:       router.replace({ pathname: '/recipes/[id]', params: { id: result.recipe.id, justSaved: '1' } });
+78:     } catch (value) { setError(value instanceof Error ? value.message : 'Could not save recipe. Please try again.'); }
+79:     finally { savingRef.current = false; setSaving(false); }
+80:   };
+81:   const title = scanContext ? 'Check your ingredients' : source === 'label' ? 'Enter the label ingredients' : source === 'pantry' ? 'What ingredients do you have?' : 'What would you like to make?';
+82:   const saveLabel = nutritionStatus === 'pending' ? 'Finishing nutrition estimate…' : nutritionStatus === 'failed' ? 'Save without nutrition estimate' : 'Save to My recipes';
+83:   return <Screen>
+84:     <Stack.Screen options={{ headerShown: true, title: recipe ? 'Your recipe' : source === 'pantry' ? 'Use my ingredients' : source === 'dish' ? 'Choose a dish' : 'Make a recipe', headerTintColor: colors.green }} />
+85:     <ScrollView key={recipe ? 'result' : busy ? 'working' : 'input'} contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
+86:       <InlineError message={error} />
+87:       {busy ? <Card>
+88:         <Text style={styles.title}>Making your recipe…</Text>
+89:         <Text style={styles.body}>This can take a moment. Your recipe will appear here when it is ready.</Text>
+90:         <Button label="Cancel" secondary onPress={cancel} />
+91:       </Card> : recipe ? <>
+92:         <Card>
+93:           <Text style={styles.eyebrow}>READY TO COOK</Text>
+94:           <Text style={styles.recipeTitle}>{recipe.title}</Text>
+95:           <Text style={styles.body}>{recipe.prepTime} prep · {recipe.cookTime} cook · {recipe.servings} servings</Text>
+96:           <Text style={styles.body}>Save it to keep it in My recipes and add it to a meal plan.</Text>
+97:           <Button label={saveLabel} onPress={save} loading={saving} disabled={nutritionStatus === 'pending'} />
+98:         </Card>
+99:         <RecipeComparison recipe={recipe} originalIngredients={generatedFrom} original={originalNutrition} isPackage={source === 'label'} onNutrition={setFreshNutrition} onStatusChange={setNutritionStatus} />
+100:         <Card>
+101:           <Text style={styles.heading}>Ingredients</Text>
+102:           {recipe.freshIngredients.map((item, index) => <Text key={`${index}-${item}`} style={styles.body}>• {item}</Text>)}
+103:           <Text style={styles.heading}>Cooking steps</Text>
+104:           {recipe.instructions.map((item, index) => <Text key={`${index}-${item}`} style={styles.body}>{index + 1}. {item}</Text>)}
+105:           <Button label={saveLabel} onPress={save} loading={saving} disabled={nutritionStatus === 'pending'} />
+106:           <Button label="Change ingredients" secondary disabled={saving} onPress={() => { setRecipe(null); setError(null); }} />
+107:         </Card>
+108:       </> : !source ? <Card>
+109:         <Text style={styles.title}>Where would you like to start?</Text>
+110:         <Button label="Scan a package" onPress={() => router.replace('/(tabs)/scan')} />
+111:         <Button label="Use my ingredients" secondary onPress={() => setSource('pantry')} />
+112:         <Button label="Choose a dish" secondary onPress={() => setSource('dish')} />
+113:       </Card> : <Card>
+114:         <Text style={styles.title}>{title}</Text>
+115:         {scanContext ? <Text style={styles.body}>{scanContext}</Text> : null}
+116:         <Text style={styles.body}>{source === 'label' ? 'Check the ingredient list below. You can correct it before we make a homemade version.' : source === 'pantry' ? 'List a few things in your kitchen, such as eggs, spinach and rice.' : 'Type a dish you love, such as chicken enchiladas.'}</Text>
+117:         {source === 'pantry' && !scanContext ? <Button label="Photograph my fridge or pantry" secondary disabled={voiceBusy} onPress={() => router.push('/pantry-review')} /> : null}
+118:         <Field accessibilityLabel={source === 'dish' ? 'Dish name' : 'Ingredients'} editable={!voiceBusy} multiline textAlignVertical="top" placeholder={source === 'dish' ? 'What would you like to cook?' : 'Enter ingredients here'} value={ingredients} onChangeText={setIngredients} style={styles.multiline} />
+119:         <VoiceInput label={source === 'dish' ? 'Speak my recipe request' : 'Speak my ingredients'} onBusyChange={setVoiceBusy} onTranscript={(text) => setIngredients((current) => [current.trim(), text].filter(Boolean).join('\n'))} />
+120:         {source === 'label' && originalNutrition ? <PackageNutritionReview value={originalNutrition} onChange={setOriginalNutrition} /> : null}
+121:         <Text style={styles.note}>Your saved allergies and food preferences apply.</Text>
+122:         <Button label={showPreferences ? 'Hide optional requests' : 'Add a dietary request (optional)'} secondary onPress={() => setShowPreferences(!showPreferences)} />
+123:         {showPreferences ? <Field accessibilityLabel="Dietary request" placeholder="For example, vegetarian" value={dietaryRestriction} onChangeText={setDietaryRestriction} /> : null}
+124:         <Button label="Make my recipe" onPress={run} disabled={!ingredients.trim() || voiceBusy} />
+125:       </Card>}
+126:     </ScrollView>
+127:   </Screen>;
+128: }
+129: const styles = StyleSheet.create({
+130:   content: { gap: 14, paddingBottom: 24 }, title: { fontSize: 22, fontWeight: '800', color: colors.greenDark },
+131:   multiline: { minHeight: 115, paddingTop: 14 }, body: { color: colors.ink, lineHeight: 23 }, note: { color: colors.muted, lineHeight: 20 },
+132:   eyebrow: { color: colors.orange, fontWeight: '800', fontSize: 12 }, recipeTitle: { color: colors.greenDark, fontSize: 25, fontWeight: '800' }, heading: { color: colors.ink, fontSize: 18, fontWeight: '800', marginTop: 6 },
+133: });
+
+FILE mobile/src/components/recipe-comparison.tsx
+1: import { useEffect, useState } from 'react';
+2: import { StyleSheet, Text, View } from 'react-native';
+3: import { Button, Card, Field } from '@/components/ui';
+4: import { apiRequest } from '@/services/api';
+5: import { colors } from '@/theme';
+6: import type { GeneratedRecipe } from '@/types';
+7: import { detectAdditives } from '../../../shared/additives';
+8: import { NUTRIENT_FIELDS, hasNutritionValues, nullableNutritionNumber, type FreshNutritionEstimate, type OriginalNutrition } from '../../../shared/nutrition-facts';
+9: 
+10: export function PackageNutritionReview({ value, onChange }: { value: OriginalNutrition; onChange(value: OriginalNutrition): void }) {
+11:   const [open, setOpen] = useState(false);
+12:   const [draftValues, setDraftValues] = useState(() => Object.fromEntries(NUTRIENT_FIELDS.map(({ key }) => [key, value.values[key] === null ? '' : String(value.values[key])])));
+13:   return <>
+14:     <Button label={open ? 'Hide package nutrition' : value.reviewRequired ? 'Check scanned nutrition (optional)' : 'View package nutrition (optional)'} secondary onPress={() => setOpen(!open)} />
+15:     {open ? <View style={styles.review}>
+16:       <Text style={styles.note}>Check these values against the package. Leave missing values blank.</Text>
+17:       <Text style={styles.label}>Serving size</Text>
+18:       <Field accessibilityLabel="Package nutrition serving size" value={value.basisLabel} onChangeText={(basisLabel) => onChange({ ...value, basisLabel, reviewRequired: true })} />
+19:       {NUTRIENT_FIELDS.map(({ key, label, unit }) => <View key={key} style={styles.review}>
+20:         <Text style={styles.label}>{label} ({unit})</Text>
+21:         <Field accessibilityLabel={`Package ${label} (${unit})`} keyboardType="decimal-pad" value={draftValues[key]} onChangeText={(input) => { setDraftValues((current) => ({ ...current, [key]: input })); onChange({ ...value, values: { ...value.values, [key]: nullableNutritionNumber(input) }, reviewRequired: true }); }} />
+22:       </View>)}
+23:       <Button label="These match my package" disabled={!value.basisLabel.trim() || !hasNutritionValues(value.values)} onPress={() => { onChange({ ...value, reviewRequired: false }); setOpen(false); }} />
+24:     </View> : null}
+25:   </>;
+26: }
+27: 
+28: export type NutritionEstimateStatus = 'pending' | 'ready' | 'failed';
+29: 
+30: export function RecipeComparison({ recipe, originalIngredients, original, isPackage, savedNutrition = null, estimateOnMount = true, onNutrition, onStatusChange }: {
+31:   recipe: GeneratedRecipe;
+32:   originalIngredients: string;
+33:   original: OriginalNutrition | null;
+34:   isPackage: boolean;
+35:   savedNutrition?: FreshNutritionEstimate | null;
+36:   estimateOnMount?: boolean;
+37:   onNutrition?: (value: FreshNutritionEstimate) => void;
+38:   onStatusChange?: (status: NutritionEstimateStatus) => void;
+39: }) {
+40:   const [nutrition, setNutrition] = useState<FreshNutritionEstimate | null>(savedNutrition);
+41:   const [busy, setBusy] = useState(!savedNutrition && estimateOnMount);
+42:   const [failed, setFailed] = useState(false);
+43:   const [attempt, setAttempt] = useState(0);
+44:   const requestBody = JSON.stringify({ title: recipe.title, freshIngredients: recipe.freshIngredients, instructions: recipe.instructions, servings: recipe.servings });
+45:   useEffect(() => {
+46:     if (attempt === 0 && (savedNutrition || !estimateOnMount)) return;
+47:     const controller = new AbortController();
+48:     let active = true;
+49:     let settled = false;
+50:     onStatusChange?.('pending');
+51:     const fail = () => {
+52:       if (!active || settled) return;
+53:       settled = true; setFailed(true); setBusy(false); onStatusChange?.('failed');
+54:     };
+55:     const timeout = setTimeout(() => { fail(); controller.abort(); }, 45_000);
+56:     apiRequest<FreshNutritionEstimate>('/api/nutrition/estimate', {
+57:       method: 'POST', signal: controller.signal,
+58:       body: requestBody,
+59:     }).then((value) => {
+60:       if (active && !settled) {
+61:         settled = true; setNutrition(value); setBusy(false); onNutrition?.(value); onStatusChange?.('ready');
+62:       }
+63:     }).catch(fail).finally(() => clearTimeout(timeout));
+64:     return () => { active = false; clearTimeout(timeout); controller.abort(); };
+65:   }, [requestBody, attempt, savedNutrition, estimateOnMount, onNutrition, onStatusChange]);
+66: 
+67:   const before = isPackage ? detectAdditives(originalIngredients) : [];
+68:   const after = isPackage ? detectAdditives(recipe.freshIngredients.join(', ')) : [];
+69:   const readyOriginal = original && !original.reviewRequired ? original : null;
+70:   return <>
+71:     {isPackage ? <Card>
+72:       <Text style={styles.heading}>What changed?</Text>
+73:       <View style={styles.columns}>
+74:         <View style={[styles.panel, styles.before]}>
+75:           <Text style={styles.label}>Original package</Text>
+76:           <Text style={styles.count}>{before.length}</Text>
+77:           <Text style={styles.note}>matched additives</Text>
+78:           {before.map((item) => <Text key={item.name} style={styles.body}>{item.name}</Text>)}
+79:           {!before.length ? <Text style={styles.body}>No matches in the ingredient list.</Text> : null}
+80:         </View>
+81:         <View style={[styles.panel, styles.after]}>
+82:           <Text style={styles.label}>Homemade</Text>
+83:           <Text style={styles.count}>{after.length}</Text>
+84:           <Text style={styles.note}>matched additives</Text>
+85:           {after.map((item) => <Text key={item.name} style={styles.body}>{item.name}</Text>)}
+86:           {!after.length ? <Text style={styles.body}>No matches in this recipe.</Text> : null}
+87:         </View>
+88:       </View>
+89:       <Text style={styles.note}>Matches a list of common additives against the ingredient names. Check labels on the ingredients you use; no matches does not mean additive-free.</Text>
+90:     </Card> : null}
+91:     <Card>
+92:       <Text style={styles.heading}>Nutrition</Text>
+93:       {isPackage ? <Text style={styles.note}>Package: {readyOriginal ? `${readyOriginal.basisLabel} · ${readyOriginal.sourceLabel}` : original?.reviewRequired ? 'Confirm the scanned values in the ingredient review to include them here.' : 'No package Nutrition Facts were provided.'}</Text> : null}
+94:       <Text style={styles.note}>Homemade: {nutrition?.basisLabel || 'Per recipe serving'} · estimated</Text>
+95:       {busy ? <Text accessibilityLiveRegion="polite" style={styles.note}>Estimating homemade nutrition…</Text> : null}
+96:       {!estimateOnMount && !nutrition && !busy && !failed ? <Text style={styles.note}>No homemade nutrition estimate was saved with this recipe.</Text> : null}
+97:       <View style={styles.nutrient}>
+98:         <Text style={styles.nutrientName}>Nutrient</Text>
+99:         {isPackage ? <Text style={styles.number}>Package</Text> : null}
+100:         <Text style={styles.number}>Homemade</Text>
+101:       </View>
+102:       {NUTRIENT_FIELDS.map(({ key, label, unit }) => <View key={key} style={styles.nutrient}>
+103:         <Text style={styles.nutrientName}>{label}</Text>
+104:         {isPackage ? <Text style={styles.number}>{readyOriginal?.values[key] == null ? '—' : `${readyOriginal.values[key]} ${unit}`}</Text> : null}
+105:         <Text style={styles.number}>{nutrition?.[key] == null ? '—' : `${nutrition[key]} ${unit}`}</Text>
+106:       </View>)}
+107:       <Text style={styles.note}>Homemade values are estimates and vary with ingredients and portions.{isPackage ? ' Serving sizes may differ; these are not equal-portion comparisons.' : ''} — means unavailable.</Text>
+108:       {failed ? <><Text style={styles.note}>Nutrition could not load. Your recipe is ready to use.</Text><Button label="Retry nutrition" secondary onPress={() => { setBusy(true); setFailed(false); setNutrition(null); onStatusChange?.('pending'); setAttempt((value) => value + 1); }} /></> : null}
+109:     </Card>
+110:   </>;
+111: }
+112: 
+113: const styles = StyleSheet.create({
+114:   heading: { color: colors.greenDark, fontSize: 21, fontWeight: '800' },
+115:   columns: { flexDirection: 'row', gap: 10 }, column: { flex: 1, gap: 5 },
+116:   panel: { flex: 1, borderRadius: 12, padding: 12, gap: 6 }, before: { backgroundColor: '#FFF3E5' }, after: { backgroundColor: '#EEF5EF' },
+117:   count: { color: colors.greenDark, fontSize: 32, fontWeight: '800' },
+118:   label: { color: colors.ink, fontWeight: '700', lineHeight: 20 }, body: { color: colors.ink, lineHeight: 20 }, note: { color: colors.muted, fontSize: 12, lineHeight: 18 },
+119:   nutrient: { flexDirection: 'row', alignItems: 'center', gap: 6, borderTopWidth: 1, borderColor: colors.line, paddingTop: 8 },
+120:   nutrientName: { flex: 1.1, color: colors.ink, fontSize: 13 }, number: { flex: 1, textAlign: 'right', color: colors.ink, fontWeight: '600', fontSize: 13 }, review: { gap: 8 },
+121: });
+
+FILE shared/nutrition-facts.ts
+1: // Pure nutrition data helpers shared by the web and native apps.
+2: export interface NutritionValues {
+3:   calories: number | null;
+4:   protein: number | null;
+5:   carbs: number | null;
+6:   fat: number | null;
+7:   fiber: number | null;
+8:   sodium: number | null;
+9: }
+10: 
+11: export interface FreshNutritionEstimate extends NutritionValues {
+12:   perServing: true;
+13:   accuracy: 'estimated';
+14:   basisLabel: string;
+15:   sourceLabel: string;
+16: }
+17: 
+18: export type OriginalNutritionSource = 'label_scan' | 'barcode' | 'typed';
+19: 
+20: export interface OriginalNutrition {
+21:   values: NutritionValues;
+22:   basisLabel: string;
+23:   servingsPerContainer: number | null;
+24:   source: OriginalNutritionSource;
+25:   sourceLabel: string;
+26:   accuracy: 'exact';
+27:   reviewRequired?: boolean;
+28: }
+29: 
+30: export const EMPTY_NUTRITION_VALUES: NutritionValues = {
+31:   calories: null,
+32:   protein: null,
+33:   carbs: null,
+34:   fat: null,
+35:   fiber: null,
+36:   sodium: null,
+37: };
+38: 
+39: export const NUTRIENT_FIELDS = [
+40:   { key: 'calories', label: 'Calories', unit: 'kcal' },
+41:   { key: 'protein', label: 'Protein', unit: 'g' },
+42:   { key: 'carbs', label: 'Carbohydrates', unit: 'g' },
+43:   { key: 'fat', label: 'Fat', unit: 'g' },
+44:   { key: 'fiber', label: 'Fiber', unit: 'g' },
+45:   { key: 'sodium', label: 'Sodium', unit: 'mg' },
+46: ] as const;
+47: 
+48: export function nullableNutritionNumber(value: unknown): number | null {
+49:   if (typeof value !== 'number' && typeof value !== 'string') return null;
+50:   if (typeof value === 'string' && !value.trim()) return null;
+51:   const parsed = typeof value === 'number' ? value : Number(value);
+52:   return Number.isFinite(parsed) && parsed >= 0 ? parsed : null;
+53: }
+54: 
+55: export function hasNutritionValues(values: NutritionValues | null | undefined): boolean {
+56:   return Boolean(values && Object.values(values).some((value) => value != null));
+57: }
+58: 
+59: export function originalNutritionFromOpenFoodFactsProduct(
+60:   product: Record<string, unknown>
+61: ): OriginalNutrition | null {
+62:   const nutriments = (product.nutriments && typeof product.nutriments === 'object')
+63:     ? product.nutriments as Record<string, unknown>
+64:     : {};
+65:   const servingSize = String(product.serving_size ?? '').trim();
+66:   const productName = String(product.product_name ?? '').trim();
+67:   const numeric = (key: string, multiplier = 1) => {
+68:     const value = nullableNutritionNumber(nutriments[key]);
+69:     return value !== null
+70:       ? Math.round(value * multiplier * 10) / 10
+71:       : null;
+72:   };
+73:   const valuesFor = (suffix: 'serving' | '100g'): NutritionValues => ({
+74:     calories: numeric(`energy-kcal_${suffix}`),
+75:     protein: numeric(`proteins_${suffix}`),
+76:     carbs: numeric(`carbohydrates_${suffix}`),
+77:     fat: numeric(`fat_${suffix}`),
+78:     fiber: numeric(`fiber_${suffix}`),
+79:     // OpenFoodFacts stores sodium in grams; Recipe Reborn displays milligrams.
+80:     sodium: numeric(`sodium_${suffix}`, 1000),
+81:   });
+82: 
+83:   const perServingValues = valuesFor('serving');
+84:   const per100gValues = valuesFor('100g');
+85:   const useServing = Boolean(servingSize && hasNutritionValues(perServingValues));
+86:   const values = useServing ? perServingValues : per100gValues;
+87:   if (!hasNutritionValues(values)) return null;
+88: 
+89:   return {
+90:     values,
+91:     basisLabel: useServing ? `Per ${servingSize}` : 'Per 100 g',
+92:     servingsPerContainer: null,
+93:     source: 'barcode',
+94:     sourceLabel: productName
+95:       ? `${productName} • OpenFoodFacts product record`
+96:       : 'OpenFoodFacts product record',
+97:     accuracy: 'exact',
+98:     reviewRequired: false,
+99:   };
+100: }
+101: 
+102: export function originalNutritionFromLabelScan(scanned: unknown): OriginalNutrition | null {
+103:   if (!scanned || typeof scanned !== 'object') return null;
+104:   const facts = scanned as Record<string, unknown>;
+105:   const values: NutritionValues = {
+106:     calories: nullableNutritionNumber(facts.calories),
+107:     protein: nullableNutritionNumber(facts.protein),
+108:     carbs: nullableNutritionNumber(facts.carbs),
+109:     fat: nullableNutritionNumber(facts.fat),
+110:     fiber: nullableNutritionNumber(facts.fiber),
+111:     sodium: nullableNutritionNumber(facts.sodium),
+112:   };
+113:   if (!hasNutritionValues(values)) return null;
+114:   const servingsPerContainer = nullableNutritionNumber(facts.servingsPerContainer);
+115: 
+116:   return {
+117:     values,
+118:     basisLabel:
+119:       typeof facts.basisLabel === 'string' && facts.basisLabel.trim()
+120:         ? facts.basisLabel.trim()
+121:         : 'Per labeled serving (serving size unreadable)',
+122:     servingsPerContainer: servingsPerContainer !== null && servingsPerContainer > 0 ? servingsPerContainer : null,
+123:     source: 'label_scan',
+124:     sourceLabel: 'Nutrition Facts label scan',
+125:     accuracy: 'exact',
+126:     reviewRequired: true,
+127:   };
+128: }

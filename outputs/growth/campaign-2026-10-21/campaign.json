@@ -1,0 +1,42 @@
+{
+  "campaign": "one_label_oct2026",
+  "preparedDatePacific": "2026-10-21",
+  "budget": 0,
+  "channels": [
+    {
+      "channel": "facebook",
+      "url": "https://recipereborn.com/?src=rr-oct21-facebook&utm_source=facebook&utm_medium=organic_social&utm_campaign=one_label_oct2026",
+      "status": "pending",
+      "account": null,
+      "permalink": null
+    },
+    {
+      "channel": "instagram",
+      "url": "https://recipereborn.com/?src=rr-oct21-instagram&utm_source=instagram&utm_medium=organic_social&utm_campaign=one_label_oct2026",
+      "status": "pending",
+      "account": null,
+      "permalink": null
+    },
+    {
+      "channel": "x",
+      "url": "https://recipereborn.com/?src=rr-oct21-x&utm_source=x&utm_medium=organic_social&utm_campaign=one_label_oct2026",
+      "status": "pending",
+      "account": null,
+      "permalink": null
+    },
+    {
+      "channel": "reddit",
+      "url": "https://recipereborn.com/?src=rr-oct21-reddit&utm_source=reddit&utm_medium=organic_social&utm_campaign=one_label_oct2026",
+      "status": "pending",
+      "account": null,
+      "permalink": null
+    },
+    {
+      "channel": "linkedin",
+      "url": "https://recipereborn.com/?src=rr-oct21-linkedin&utm_source=linkedin&utm_medium=organic_social&utm_campaign=one_label_oct2026",
+      "status": "pending",
+      "account": null,
+      "permalink": null
+    }
+  ]
+}

@@ -1,0 +1,3 @@
+<en-US>
+Speak ingredients or scan pantry and food-label photos. Saved recipes retain nutrition comparisons. Shopping check-offs work offline and sync after reconnecting. Report a generated recipe, saved recipe or individual AI Chef reply directly in the app. Clear connection messages keep reporting drafts available for retry. Includes account recovery, deletion-cleanup and privacy improvements. New accounts confirm they are 18 or older.
+</en-US>

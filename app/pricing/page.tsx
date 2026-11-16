@@ -95,6 +95,17 @@ export default function PricingPage() {
   // create, so a partner member never reads "7-day" and then gets 30.
   const applyOffer = (tier: PricingTier): PricingTier => {
     if (!partnerOffer || tier.priceId === null) return tier;
+    if (partnerOffer.lifetime) {
+      return {
+        ...tier,
+        features: tier.features.map((f) =>
+          f === '7-day free trial'
+            ? `Lifetime Premium included (${partnerOffer.label})`
+            : f
+        ),
+        buttonText: 'Continue with Premium',
+      };
+    }
     return {
       ...tier,
       features: tier.features.map((f) =>
@@ -119,6 +130,11 @@ export default function PricingPage() {
 
     if (status === 'unauthenticated') {
       router.push('/login?callbackUrl=/pricing');
+      return;
+    }
+
+    if (partnerOffer?.lifetime) {
+      router.push('/generator');
       return;
     }
 
@@ -297,7 +313,14 @@ export default function PricingPage() {
               <h3 className="text-lg font-semibold text-gray-900 mb-2">
                 Is there a free trial?
               </h3>
-              {partnerOffer ? (
+              {partnerOffer?.lifetime ? (
+                <p className="text-gray-600">
+                  Your {partnerOffer.label} code includes full Premium permanently:
+                  {' '}{partnerOffer.trialRecipeLimit} recipes a month, meal plans,
+                  shopping lists, and everything else on the paid plan. No trial,
+                  card, or renewal is required.
+                </p>
+              ) : partnerOffer ? (
                 <p className="text-gray-600">
                   Yes — your {partnerOffer.label} invite gives you{' '}
                   {partnerOffer.trialDays} days of full Premium:{' '}

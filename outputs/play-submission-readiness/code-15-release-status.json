@@ -1,0 +1,60 @@
+{
+  "updatedAt": "2026-09-24T10:44:15.8561623Z",
+  "package": "com.recipereborn.app",
+  "versionCode": 15,
+  "sourceCommit": "94226c31dafec3772b3890e56da1684ce7e14835",
+  "easBuildId": "3c8b6af1-3aa6-45dc-9b53-488c90aa8282",
+  "buildStatus": "FINISHED",
+  "targetTrack": "Existing closed alpha",
+  "consoleDraftReleaseId": "4",
+  "consoleDraftCurrentVersionCode": 15,
+  "dataSafety": {
+    "status": "PUBLISHED",
+    "consoleSubmissionId": "4",
+    "submittedPacific": "2026-09-23 21:06",
+    "publishedPacific": "2026-09-23 21:17",
+    "scope": "Data Safety declaration only, distinct from the Android release"
+  },
+  "reviewer": {
+    "existingAccountFound": true,
+    "subscriptionTier": "premium",
+    "subscriptionStatus": "active",
+    "expiryRecorded": false,
+    "credentialsInConsoleForm": "Credential values hidden by browser; reading a known entered username also returns empty. Discard changes remained disabled, so original username matched and no saved changes were made. Modal closed unchanged.",
+    "successfulSignIn": "Existing authenticated Recipe session loads active Premium 8/100, matching reviewer entitlement; fresh password sign-in not performed because saved password is not exposed.",
+    "accountWrites": 0
+  },
+  "opusReview": "Explicitly deferred by owner; not a release gate",
+  "remaining": [
+    "Tester installation and verification from Google Play",
+    "12 opted-in testers for 14 days before applying for public production access",
+    "Opus review later, explicitly deferred"
+  ],
+  "submittedForReview": true,
+  "newPurchaseAuthorized": false,
+  "credentialsIncluded": false,
+  "bundleVerification": "outputs/releases/android-code-15-play-artifact-verification.json",
+  "consoleState": "Available to selected testers; Closed testing - Alpha is Active; no unpublished changes",
+  "rollout": "100 percent of existing Closed testing - Alpha; not public production",
+  "publishingUrl": "https://play.google.com/console/u/0/developers/6418142518539719933/app/4975390055276517153/publishing",
+  "supportedDevices": {
+    "tv": 3,
+    "androidXR": 1,
+    "tablets": 6460,
+    "lostAcrossAllFormFactors": 0,
+    "newlyAdded": 0,
+    "phones": 12268,
+    "chromebook": 10
+  },
+  "warnings": [
+    "Informational no-deobfuscation-file warning; actual bundle uses D8 and no R8 mapping is applicable"
+  ],
+  "blockingErrors": 0,
+  "ageConfirmation": "Archived code15 has unchecked adult confirmation and sends adultConfirmed; screenshot lacks this current UI. Live website signup checkbox verified. No age declaration made for anyone.",
+  "costs": {
+    "newPurchases": 0,
+    "includedRemainingUsd": 22,
+    "includedBuildCreditsUsedUsd": 1,
+    "overageUsd": 0
+  }
+}

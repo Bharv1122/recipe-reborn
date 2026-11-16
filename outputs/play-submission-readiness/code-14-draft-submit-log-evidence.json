@@ -1,0 +1,31 @@
+{
+  "checkedAt": "2026-09-24T04:09:04.837Z",
+  "submissionId": "d9a9464e-5460-4602-84b9-0e59f612b34b",
+  "status": "FINISHED",
+  "logs": [
+    {
+      "bytes": 894,
+      "sha256": "545F7A933AE09E89EB8E68CCE5F5DAEDA6173545D66F87FC815A273E74FE0A88",
+      "selectedLines": []
+    },
+    {
+      "bytes": 14439,
+      "sha256": "199CDC48788574CD4C2B537D05AE4F3EDF42D0AA0CAA292500D8C21BF2D790C4",
+      "selectedLines": [
+        "{\"name\":\"submission-service\",\"hostname\":\"turtle-worker-d9a9464e54\",\"pid\":744,\"service\":\"submission-worker\",\"submissionId\":\"d9a9464e-5460-4602-84b9-0e59f612b34b\",\"phase\":\"SUBMIT_TO_PLAY_STORE\",\"level\":30,\"submissionConfig\":{\"track\":\"alpha\",\"releaseStatus\":\"draft\",\"changesNotSentForReview\":true,\"isVerboseFastlaneEnabled\":false},\"msg\":\"Starting the submit process\",\"time\":\"2026-09-24T04:05:13.735Z\",\"v\":0}",
+        "{\"name\":\"submission-service\",\"hostname\":\"turtle-worker-d9a9464e54\",\"pid\":744,\"service\":\"submission-worker\",\"submissionId\":\"d9a9464e-5460-4602-84b9-0e59f612b34b\",\"phase\":\"SUBMIT_TO_PLAY_STORE\",\"level\":30,\"fastlaneArgs\":[\"supply\",\"--aab\",\"/tmp/submissions/0937f00e-48f7-4f01-9fe1-3559e3fba322/v9aFSyh_MaBRTKCXoqq9H9_IifG0DlPGX_qYeA2GIy8.aab\",\"--track\",\"alpha\",\"--json_key\",\"/tmp/submissions/0937f00e-48f7-4f01-9fe1-3559e3fba322/service-account.json\",\"--package\",\"com.recipereborn.app\",\"--changes_not_sent_for_review\",\"true\",\"--release_status\",\"draft\"],\"msg\":\"Submitting the app with fastlane supply\",\"time\":\"2026-09-24T04:05:17.906Z\",\"v\":0}",
+        "{\"name\":\"submission-service\",\"hostname\":\"turtle-worker-d9a9464e54\",\"pid\":744,\"service\":\"submission-worker\",\"submissionId\":\"d9a9464e-5460-4602-84b9-0e59f612b34b\",\"phase\":\"SUBMIT_TO_PLAY_STORE\",\"source\":\"stdout\",\"level\":30,\"msg\":\"| track                              | alpha                                                                                                 |\",\"time\":\"2026-09-24T04:05:22.082Z\",\"v\":0}",
+        "{\"name\":\"submission-service\",\"hostname\":\"turtle-worker-d9a9464e54\",\"pid\":744,\"service\":\"submission-worker\",\"submissionId\":\"d9a9464e-5460-4602-84b9-0e59f612b34b\",\"phase\":\"SUBMIT_TO_PLAY_STORE\",\"source\":\"stdout\",\"level\":30,\"msg\":\"| changes_not_sent_for_review        | true                                                                                                  |\",\"time\":\"2026-09-24T04:05:22.082Z\",\"v\":0}",
+        "{\"name\":\"submission-service\",\"hostname\":\"turtle-worker-d9a9464e54\",\"pid\":744,\"service\":\"submission-worker\",\"submissionId\":\"d9a9464e-5460-4602-84b9-0e59f612b34b\",\"phase\":\"SUBMIT_TO_PLAY_STORE\",\"source\":\"stdout\",\"level\":30,\"msg\":\"| release_status                     | draft                                                                                                 |\",\"time\":\"2026-09-24T04:05:22.082Z\",\"v\":0}",
+        "{\"name\":\"submission-service\",\"hostname\":\"turtle-worker-d9a9464e54\",\"pid\":744,\"service\":\"submission-worker\",\"submissionId\":\"d9a9464e-5460-4602-84b9-0e59f612b34b\",\"phase\":\"SUBMIT_TO_PLAY_STORE\",\"source\":\"stdout\",\"level\":30,\"msg\":\"| track_promote_release_status       | completed                                                                                             |\",\"time\":\"2026-09-24T04:05:22.082Z\",\"v\":0}",
+        "{\"name\":\"submission-service\",\"hostname\":\"turtle-worker-d9a9464e54\",\"pid\":744,\"service\":\"submission-worker\",\"submissionId\":\"d9a9464e-5460-4602-84b9-0e59f612b34b\",\"phase\":\"SUBMIT_TO_PLAY_STORE\",\"source\":\"stdout\",\"level\":30,\"msg\":\"| check_superseded_tracks            | false                                                                                                 |\",\"time\":\"2026-09-24T04:05:22.083Z\",\"v\":0}",
+        "{\"name\":\"submission-service\",\"hostname\":\"turtle-worker-d9a9464e54\",\"pid\":744,\"service\":\"submission-worker\",\"submissionId\":\"d9a9464e-5460-4602-84b9-0e59f612b34b\",\"phase\":\"SUBMIT_TO_PLAY_STORE\",\"source\":\"stdout\",\"level\":30,\"msg\":\"| rescue_changes_not_sent_for_review | true                                                                                                  |\",\"time\":\"2026-09-24T04:05:22.083Z\",\"v\":0}",
+        "{\"name\":\"submission-service\",\"hostname\":\"turtle-worker-d9a9464e54\",\"pid\":744,\"service\":\"submission-worker\",\"submissionId\":\"d9a9464e-5460-4602-84b9-0e59f612b34b\",\"phase\":\"SUBMIT_TO_PLAY_STORE\",\"source\":\"stdout\",\"level\":30,\"msg\":\"| ack_bundle_installation_warning    | false                                                                                                 |\",\"time\":\"2026-09-24T04:05:22.083Z\",\"v\":0}",
+        "{\"name\":\"submission-service\",\"hostname\":\"turtle-worker-d9a9464e54\",\"pid\":744,\"service\":\"submission-worker\",\"submissionId\":\"d9a9464e-5460-4602-84b9-0e59f612b34b\",\"phase\":\"SUBMIT_TO_PLAY_STORE\",\"source\":\"stdout\",\"level\":30,\"msg\":\"Updating track 'alpha'...\",\"time\":\"2026-09-24T04:06:39.403Z\",\"v\":0}"
+      ]
+    }
+  ],
+  "rootConsoleObservation": "After upload root observed Changes in review containing Data safety / Complete Data safety questionnaire only, with no app-release row. No root Send for review UI click occurred. Code14 draft needs its separate alpha Console verification.",
+  "action": "Read-only inspection. No mutation, cancellation, withdrawal or retry.",
+  "limitation": "Only release/review/error-related log lines retained; signed log URLs omitted."
+}

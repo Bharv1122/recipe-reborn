@@ -1,0 +1,54 @@
+{
+  "agentRuntime": "Hermes Agent v0.15.1 (2026.5.29)",
+  "source": "Exact review session metadata from local Hermes state.db opened read-only; no transcript, authentication, or unrelated-session fields included.",
+  "sessions": [
+    {
+      "id": "20260923_175609_797d21",
+      "source": "cli",
+      "model": "gpt-5.5",
+      "tool_call_count": 0,
+      "api_call_count": 1,
+      "input_tokens": 16804,
+      "output_tokens": 2929,
+      "billing_provider": "openai-codex",
+      "billing_mode": "subscription_included",
+      "cost_status": "included"
+    },
+    {
+      "id": "20260923_175840_de54cd",
+      "source": "cli",
+      "model": "gpt-5.5",
+      "tool_call_count": 0,
+      "api_call_count": 1,
+      "input_tokens": 4223,
+      "output_tokens": 1292,
+      "billing_provider": "openai-codex",
+      "billing_mode": "subscription_included",
+      "cost_status": "included"
+    },
+    {
+      "id": "20260923_180421_6abf20",
+      "source": "cli",
+      "model": "gpt-5.5",
+      "tool_call_count": 0,
+      "api_call_count": 1,
+      "input_tokens": 7101,
+      "output_tokens": 1406,
+      "billing_provider": "openai-codex",
+      "billing_mode": "subscription_included",
+      "cost_status": "included"
+    },
+    {
+      "id": "20260923_181034_7cc7fa",
+      "source": "cli",
+      "model": "gpt-5.5",
+      "tool_call_count": 0,
+      "api_call_count": 1,
+      "input_tokens": 8333,
+      "output_tokens": 1170,
+      "billing_provider": "openai-codex",
+      "billing_mode": "subscription_included",
+      "cost_status": "included"
+    }
+  ]
+}

@@ -1,0 +1,12 @@
+{
+  "finishedAt": "2026-09-24T04:04:34.437Z",
+  "exitCode": 0,
+  "submissionIds": [
+    "d9a9464e-5460-4602-84b9-0e59f612b34b"
+  ],
+  "logs": [
+    "code-14-draft-upload.stdout.log",
+    "code-14-draft-upload.stderr.log"
+  ],
+  "noAutomaticRetry": true
+}

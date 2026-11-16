@@ -1,0 +1,76 @@
+{
+  "createdAt": "2026-09-24T00:55:30.324Z",
+  "hermesVersion": "0.15.1",
+  "provider": "openai-codex",
+  "configuredModel": "gpt-5.5",
+  "authStatus": "logged in",
+  "rulesAndMemory": "disabled",
+  "toolset": "todo only; prompt explicitly forbids calls",
+  "files": [
+    {
+      "file": "shared/recipe-comparison.ts",
+      "bytes": 291,
+      "sha256": "5dfcbdfdea88da18da0ff454bdd8534ddb5702b1f4076d53d0898f49a86ded70"
+    },
+    {
+      "file": "shared/nutrition-facts.ts",
+      "bytes": 4395,
+      "sha256": "bcd2fdd630e189a5af895addcc7ff0af2739973629df9e939f9ff1fdb79725c1"
+    },
+    {
+      "file": "lib/recipe-comparison-validation.ts",
+      "bytes": 1108,
+      "sha256": "2cf5fce4559db3331b8e40200082fc4487373922245b77546b28e3ecde979a40"
+    },
+    {
+      "file": "app/api/mobile/recipes/route.ts",
+      "bytes": 2905,
+      "sha256": "398fb7ec40b0767499ed74cb6988d1ebce54c60232d807989b8e600d6c11eb58"
+    },
+    {
+      "file": "app/api/mobile/recipes/[id]/route.ts",
+      "bytes": 2574,
+      "sha256": "ef1e18b0201aead27a75801f9e9bde793599e4c66ae171b169b40e04b5c1bdf0"
+    },
+    {
+      "file": "app/api/recipes/[id]/route.ts",
+      "bytes": 5132,
+      "sha256": "dd12d9d558547a1cc1945bfdf1aaf23369d1fbcd5c2d7339baadceaf18c126f0"
+    },
+    {
+      "file": "mobile/src/app/generate.tsx",
+      "bytes": 9311,
+      "sha256": "cf1ce36352ecd9852eec89d40297d187cd2d54e9f5b629355a28ad7fc8b31312"
+    },
+    {
+      "file": "mobile/src/app/recipes/[id].tsx",
+      "bytes": 4657,
+      "sha256": "4be8687d9aa5eeb8fe30febaf77fc1169f5646e152841819adc09b0178d86503"
+    },
+    {
+      "file": "mobile/src/components/recipe-comparison.tsx",
+      "bytes": 7908,
+      "sha256": "a231e5d349b23a972bfcf961af929c6b1a2c841ab070723113a5acf630a0413f"
+    },
+    {
+      "file": "mobile/src/services/recipes.ts",
+      "bytes": 2488,
+      "sha256": "b0a955c56a23d0499c3d2ec19873601af8ad51745f22fbaaea164ed9fd345f7a"
+    },
+    {
+      "file": "mobile/src/types.ts",
+      "bytes": 1495,
+      "sha256": "67584ea00708c4dcfd64b82398a6c5a1753266b489b3331b4b757ec56866b8bf"
+    },
+    {
+      "file": "prisma/migrations/20260923225209_save_recipe_comparison/migration.sql",
+      "bytes": 78,
+      "sha256": "d26d53305ecf2eb895a6afe88cfffdf6fcc79a56f19d0dc6244e80a17d0aeda7"
+    },
+    {
+      "file": "scripts/verify-recipe-comparison.ts",
+      "bytes": 6751,
+      "sha256": "b332a1db73d42e8598b9a915d0df91f5d4d744fd88052956db4e08852c61f67b"
+    }
+  ]
+}

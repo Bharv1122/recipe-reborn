@@ -5,7 +5,7 @@ import { apiRequest } from '@/services/api';
 import { Button, Card, InlineError, Screen } from '@/components/ui';
 import { colors } from '@/theme';
 
-interface PlanEntry { id: string; day: string; mealType: string; servings: number; recipe: { id: string; title: string; prepTime?: string | null; cookTime?: string | null; calories?: number | null } }
+interface PlanEntry { id: string; day: string; mealType: string; servings: number; recipe: { id: string; title: string; prepTime?: string | null; cookTime?: string | null; calories?: number | null; savedAt?: string | null } }
 interface PlanDetail { id: string; name: string; weekStartDate: string; description?: string | null; mealPlanRecipes: PlanEntry[] }
 const days = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'] as const;
 
@@ -15,6 +15,7 @@ export default function MealPlanDetailScreen() {
   const [plan, setPlan] = useState<PlanDetail | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [replacingId, setReplacingId] = useState<string | null>(null);
+  const [savingId, setSavingId] = useState<string | null>(null);
   useEffect(() => { if (id) apiRequest<{ mealPlan: PlanDetail }>(`/api/mobile/meal-plans/${id}`).then((data) => setPlan(data.mealPlan)).catch((value) => setError(value.message)); }, [id]);
   const replaceMeal = async (entryId: string) => {
     if (!id || replacingId) return;
@@ -29,12 +30,21 @@ export default function MealPlanDetailScreen() {
   const confirmReplaceMeal = (entry: PlanEntry) => {
     Alert.alert(
       'Try another recipe?',
-      `Replace ${entry.recipe.title} in this meal plan? The recipe will stay saved in your recipes.`,
+      `Replace ${entry.recipe.title} in this meal plan? Recipes you explicitly saved stay in My recipes.`,
       [
         { text: 'Cancel', style: 'cancel' },
         { text: 'Replace meal', onPress: () => replaceMeal(entry.id) },
       ],
     );
+  };
+  const saveRecipe = async (entry: PlanEntry) => {
+    if (savingId) return;
+    setSavingId(entry.recipe.id); setError(null);
+    try {
+      const result = await apiRequest<{ recipe: PlanEntry['recipe'] }>(`/api/mobile/recipes/${entry.recipe.id}`, { method: 'PATCH', body: JSON.stringify({ saveToLibrary: true }) });
+      setPlan((current) => current ? { ...current, mealPlanRecipes: current.mealPlanRecipes.map((item) => item.recipe.id === entry.recipe.id ? { ...item, recipe: { ...item.recipe, savedAt: result.recipe.savedAt } } : item) } : current);
+    } catch (value) { setError(value instanceof Error ? value.message : 'Could not save this recipe.'); }
+    finally { setSavingId(null); }
   };
   return <Screen><Stack.Screen options={{ headerShown: true, title: plan?.name || 'Meal plan', headerTintColor: colors.green }} />
     <ScrollView contentContainerStyle={styles.content}><InlineError message={error} />
@@ -53,6 +63,7 @@ export default function MealPlanDetailScreen() {
               <Text style={styles.body}>{entry.servings} serving{entry.servings === 1 ? '' : 's'}{entry.recipe.calories ? ` · ${entry.recipe.calories} cal/serving` : ''}</Text>
             </Pressable>
             <Button label="Try another recipe" secondary loading={replacingId === entry.id} disabled={replacingId !== null} onPress={() => confirmReplaceMeal(entry)} />
+            {!entry.recipe.savedAt ? <Button label="Save to My recipes" secondary loading={savingId === entry.recipe.id} disabled={savingId !== null} onPress={() => saveRecipe(entry)} /> : <Text style={styles.saved}>Saved in My recipes</Text>}
           </View>)}
         </Card>;
       }) : null}
@@ -64,4 +75,4 @@ export default function MealPlanDetailScreen() {
     </ScrollView></Screen>;
 }
 
-const styles = StyleSheet.create({ content: { gap: 12, paddingBottom: 30 }, day: { color: colors.orange, fontSize: 19, fontWeight: '800', textTransform: 'capitalize' }, meal: { minHeight: 44, borderTopWidth: 1, borderTopColor: colors.line, paddingTop: 11, gap: 3 }, mealType: { color: colors.green, fontWeight: '800', textTransform: 'capitalize' }, title: { color: colors.ink, fontSize: 18, fontWeight: '800' }, body: { color: colors.muted, lineHeight: 20 } });
+const styles = StyleSheet.create({ content: { gap: 12, paddingBottom: 30 }, day: { color: colors.orange, fontSize: 19, fontWeight: '800', textTransform: 'capitalize' }, meal: { minHeight: 44, borderTopWidth: 1, borderTopColor: colors.line, paddingTop: 11, gap: 3 }, mealType: { color: colors.green, fontWeight: '800', textTransform: 'capitalize' }, title: { color: colors.ink, fontSize: 18, fontWeight: '800' }, body: { color: colors.muted, lineHeight: 20 }, saved: { color: colors.green, fontWeight: '700' } });

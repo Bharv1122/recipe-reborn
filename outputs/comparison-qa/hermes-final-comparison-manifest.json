@@ -1,0 +1,15 @@
+{
+  "createdAt": "2026-09-24T01:03:24.897Z",
+  "provider": "openai-codex",
+  "configuredModel": "gpt-5.5",
+  "files": [
+    {
+      "file": "mobile/src/app/generate.tsx",
+      "sha256": "c6d7f554bb26649944c98c3bd792a162cf9b09e8865f1e210e13a14b0931d046"
+    },
+    {
+      "file": "mobile/src/components/recipe-comparison.tsx",
+      "sha256": "b440fb75c4953ca080e4d112cfc60f5c60d227a3610423aa1604c076f6d95869"
+    }
+  ]
+}

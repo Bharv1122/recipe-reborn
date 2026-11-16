@@ -1,8 +1,57 @@
 import { NextRequest, NextResponse } from 'next/server';
 import bcrypt from 'bcryptjs';
+import { Prisma } from '@prisma/client';
 import { prisma } from '@/lib/db';
 import { rateLimit, getClientIp } from '@/lib/rate-limit';
-import { isOfferLive, partnerTrialEndsAt, resolveSignupAttribution } from '@/lib/partner-offers';
+import {
+  isOfferLive,
+  partnerTrialEndsAt,
+  resolveSignupAttribution,
+  type PartnerOffer,
+} from '@/lib/partner-offers';
+
+async function createLifetimeSignup(email: string, password: string, offer: PartnerOffer) {
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    try {
+      return await prisma.$transaction(
+        async (tx) => {
+          const taken = await tx.user.count({
+            where: {
+              partnerOfferRedeemedCode: { equals: offer.slug, mode: 'insensitive' },
+            },
+          });
+          const offerGranted = taken < offer.maxRedemptions;
+          if (!offerGranted) return { user: null, offerGranted };
+
+          const grantedAt = new Date();
+
+          const user = await tx.user.create({
+            data: {
+              email,
+              password,
+              signupSource: offer.slug,
+              subscriptionTier: 'premium',
+              subscriptionStatus: 'active',
+              currentPeriodEnd: null,
+              partnerOfferRedeemedCode: offer.slug,
+              partnerOfferRedeemedAt: grantedAt,
+            },
+          });
+
+          return { user, offerGranted };
+        },
+        { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
+      );
+    } catch (error) {
+      const retryable =
+        error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2034';
+      if (retryable && attempt < 2) continue;
+      throw error;
+    }
+  }
+
+  throw new Error('Unable to safely redeem lifetime offer');
+}
 
 export async function POST(request: NextRequest) {
   try {
@@ -70,17 +119,30 @@ export async function POST(request: NextRequest) {
       typeof src === 'string' ? src : null,
     );
 
-    // Direct-access and lifetime offers land the account on Premium at signup.
-    // Capacity is checked here too, otherwise signup could bypass redemption
-    // limits.
+    // Lifetime offers are claimed in the same serializable transaction that
+    // creates the account. Two simultaneous signups can therefore never both
+    // consume a one-use code.
+    if (typedOffer?.lifetime && isOfferLive(typedOffer)) {
+      const { user, offerGranted } = await createLifetimeSignup(email, hashedPassword, typedOffer);
+      if (!offerGranted || !user) {
+        return NextResponse.json(
+          { error: 'That code has already been used.' },
+          { status: 409 }
+        );
+      }
+      return NextResponse.json(
+        { message: 'User created successfully', user: { id: user.id, email: user.email } },
+        { status: 201 }
+      );
+    }
+
+    // Direct-access offers land the account on Premium at signup. Capacity is
+    // checked here too, otherwise signup could bypass redemption limits.
     let offerGranted = false;
-    if ((typedOffer?.lifetime || typedOffer?.directAccess) && isOfferLive(typedOffer)) {
+    if (typedOffer?.directAccess && isOfferLive(typedOffer)) {
       const taken = await prisma.user.count({
         where: {
           signupSource: { equals: typedOffer.slug, mode: 'insensitive' },
-          ...(typedOffer.lifetime
-            ? { subscriptionTier: 'premium', stripeSubscriptionId: null }
-            : {}),
         },
       });
       offerGranted = taken < typedOffer.maxRedemptions;
@@ -96,10 +158,8 @@ export async function POST(request: NextRequest) {
         ...(offerGranted
           ? {
               subscriptionTier: 'premium',
-              subscriptionStatus: typedOffer?.lifetime ? 'active' : 'trialing',
-              currentPeriodEnd: typedOffer?.directAccess
-                ? partnerTrialEndsAt(typedOffer, grantedAt)
-                : null,
+              subscriptionStatus: 'trialing',
+              currentPeriodEnd: partnerTrialEndsAt(typedOffer!, grantedAt),
               partnerOfferRedeemedCode: typedOffer!.slug,
               partnerOfferRedeemedAt: grantedAt,
             }

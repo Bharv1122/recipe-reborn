@@ -1,0 +1,16 @@
+{
+  "versionCode": 15,
+  "releaseName": "15 (1.0.0) - Android testing",
+  "track": "Closed testing - Alpha",
+  "trackStatus": "Active",
+  "releaseStatus": "Available to selected testers",
+  "releasedConsoleLocal": "Sep23 10:42PM",
+  "verifiedDate": "2026-09-24",
+  "publicProduction": false,
+  "optedInTesters": 2,
+  "invitedEmailListSize": 14,
+  "requiredTesters": 12,
+  "requiredDays": 14,
+  "testerOptInUrl": "https://play.google.com/apps/testing/com.recipereborn.app",
+  "physicalDeviceConnected": false
+}

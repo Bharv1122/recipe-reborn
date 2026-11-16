@@ -1,0 +1,10 @@
+{
+  "checkedAt": "2026-09-24T04:03:46.478Z",
+  "id": "bc75c794-1646-4a98-85b7-38c2073fd009",
+  "status": "FINISHED",
+  "package": "com.recipereborn.app",
+  "versionCode": "14",
+  "gitCommitHash": "0e094ccc0af6dfa4992528480ce726d24b7f6308",
+  "buildProfile": "play-internal",
+  "platform": "ANDROID"
+}

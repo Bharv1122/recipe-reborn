@@ -1,0 +1,12 @@
+Approve.
+
+I found no actual actionable defects in the provided task-scoped source for the stated requirements.
+
+Checked focus areas:
+- Both Save buttons are disabled while nutrition is pending, and save() also returns early while pending.
+- Success saves freshNutrition.
+- Failed/timeout path intentionally permits save with null freshNutrition.
+- Timeout and cleanup reject late estimate results via settled/active guards plus abort.
+- Reopen/no-estimate path is guarded by estimateOnMount/savedNutrition.
+- servingsPerContainer normalization preserves positive fractions and converts missing, unreadable, nonfinite, zero, and negative values to null.
+- No physical-device verification is claimed.

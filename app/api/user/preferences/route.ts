@@ -1,7 +1,6 @@
 import { NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/auth-options';
 import { prisma } from '@/lib/db';
+import { getRequestUserId } from '@/lib/request-auth';
 
 export const dynamic = 'force-dynamic';
 
@@ -24,15 +23,15 @@ function cleanList(value: unknown): string[] | null {
 }
 
 // GET /api/user/preferences - fetch saved food preferences
-export async function GET() {
-  const session = await getServerSession(authOptions);
-  if (!session?.user?.id) {
+export async function GET(request: Request) {
+  const userId = await getRequestUserId(request);
+  if (!userId) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
   const user = await prisma.user.findUnique({
-    where: { id: session.user.id },
-    select: { allergies: true, dislikedIngredients: true },
+    where: { id: userId },
+    select: { allergies: true, dislikedIngredients: true, likedIngredients: true },
   });
 
   if (!user) {
@@ -44,29 +43,32 @@ export async function GET() {
 
 // PUT /api/user/preferences - update food preferences
 export async function PUT(req: Request) {
-  const session = await getServerSession(authOptions);
-  if (!session?.user?.id) {
+  const userId = await getRequestUserId(req);
+  if (!userId) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
-  const body = await req.json();
-  const allergies = cleanList(body.allergies);
-  const dislikedIngredients = cleanList(body.dislikedIngredients);
-
-  if (allergies === null && dislikedIngredients === null) {
+  const body = await req.json().catch(() => null);
+  if (!body || typeof body !== 'object' || Array.isArray(body)) {
+    return NextResponse.json({ error: 'Invalid food preferences.' }, { status: 400 });
+  }
+  const value = body as Record<string, unknown>;
+  const supplied = ['allergies', 'dislikedIngredients', 'likedIngredients'].filter((key) => Object.prototype.hasOwnProperty.call(value, key));
+  if (!supplied.length) {
     return NextResponse.json(
-      { error: 'Provide allergies and/or dislikedIngredients as arrays of strings' },
+      { error: 'Provide at least one food preference field.' },
       { status: 400 }
     );
   }
+  const cleaned = Object.fromEntries(supplied.map((key) => [key, cleanList(value[key])]));
+  if (Object.values(cleaned).some((list) => list === null)) {
+    return NextResponse.json({ error: 'Food preference fields must be arrays of short ingredient names.' }, { status: 400 });
+  }
 
   const user = await prisma.user.update({
-    where: { id: session.user.id },
-    data: {
-      ...(allergies !== null && { allergies }),
-      ...(dislikedIngredients !== null && { dislikedIngredients }),
-    },
-    select: { allergies: true, dislikedIngredients: true },
+    where: { id: userId },
+    data: cleaned as { allergies?: string[]; dislikedIngredients?: string[]; likedIngredients?: string[] },
+    select: { allergies: true, dislikedIngredients: true, likedIngredients: true },
   });
 
   return NextResponse.json(user);

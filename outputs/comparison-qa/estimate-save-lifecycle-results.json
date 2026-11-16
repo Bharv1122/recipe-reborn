@@ -1,0 +1,14 @@
+{
+  "passed": true,
+  "checks": [
+    "pending save blocked at both buttons and handler; successful result saved and reopened without another request",
+    "definite failure intentionally allows a null estimate",
+    "retry returns both buttons to pending and saves its new successful result",
+    "45-second timeout permits intentional save without estimate; late response ignored",
+    "late result from prior generation cannot unlock or contaminate a new recipe"
+  ],
+  "estimateCalls": 7,
+  "saves": 5,
+  "usesActualComponents": true,
+  "services": "isolated doubles; no network or database"
+}
