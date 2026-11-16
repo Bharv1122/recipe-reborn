@@ -4,7 +4,8 @@ import { useState, useRef, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { Mic, Loader2, Send, Trash2, Volume2, StopCircle } from 'lucide-react';
+import { Textarea } from '@/components/ui/textarea';
+import { Mic, Loader2, Send, Trash2, Volume2, StopCircle, ChefHat, Pencil, RotateCcw } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
@@ -22,9 +23,12 @@ interface Message {
 
 interface VoiceChatProps {
   onIngredientExtracted?: (ingredients: string) => void;
+  // Generates straight from the spoken words, so the recipe appears below
+  // without sending the cook off to another tab.
+  onGenerate?: (ingredients: string) => void;
 }
 
-export function VoiceChat({ onIngredientExtracted }: VoiceChatProps) {
+export function VoiceChat({ onIngredientExtracted, onGenerate }: VoiceChatProps) {
   const [messages, setMessages] = useState<Message[]>([]);
   // "Starting" covers the wait for the browser's microphone permission prompt.
   const [isStarting, setIsStarting] = useState(false);
@@ -34,6 +38,8 @@ export function VoiceChat({ onIngredientExtracted }: VoiceChatProps) {
   const [audioLevel, setAudioLevel] = useState(0);
   const [recordingDuration, setRecordingDuration] = useState(0);
   const [mode, setMode] = useState<'quick' | 'conversational'>('quick');
+  // The last transcript, held here so it can be reviewed and corrected in place.
+  const [spokenIngredients, setSpokenIngredients] = useState('');
   // The most recent voice problem, kept on screen after the toast disappears.
   const [voiceNotice, setVoiceNotice] = useState<string | null>(null);
 
@@ -118,8 +124,8 @@ export function VoiceChat({ onIngredientExtracted }: VoiceChatProps) {
     setMessages((prev) => [...(prev ?? []), userMessage]);
 
     if (modeRef.current === 'quick') {
-      onIngredientExtractedRef.current?.(transcribedText);
-      toast.success('Ingredients extracted! Check the Generate tab.');
+      setSpokenIngredients(transcribedText);
+      toast.success('Got it — check the words below, then generate.');
     } else {
       await sendChatMessage([...messagesRef.current, userMessage]);
     }
@@ -335,11 +341,56 @@ export function VoiceChat({ onIngredientExtracted }: VoiceChatProps) {
         <CardContent className="pt-4">
           <p className="text-sm text-emerald-800">
             {mode === 'quick'
-              ? '🎯 Quick Mode: Speak your ingredients, and we\'ll extract them directly to the Generate tab.'
+              ? '🎯 Quick Mode: Speak your ingredients, and you\'ll see the words right here, so you can fix anything we mis-heard and generate without leaving this tab.'
               : '💬 Conversational Mode: Have a natural conversation with our AI chef about recipes, cooking tips, and ingredient suggestions.'}
           </p>
         </CardContent>
       </Card>
+
+      {/* The spoken ingredients land here, editable, so a recipe is one button
+          away and a mis-heard word can be fixed where it was said. */}
+      {mode === 'quick' && spokenIngredients.trim() !== '' && (
+        <Card className="border-emerald-300 shadow-md">
+          <CardHeader className="pb-3">
+            <CardTitle className="text-lg">What we heard</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            <Textarea
+              value={spokenIngredients}
+              onChange={(event) => setSpokenIngredients(event.target.value)}
+              rows={4}
+              disabled={isBusy}
+              aria-label="Ingredients we heard - edit any word that came through wrong"
+              className="resize-y"
+            />
+            <p className="text-sm text-gray-600">
+              Fix anything that came through wrong, then generate - no need to switch tabs.
+            </p>
+            <div className="flex flex-wrap gap-2">
+              <Button
+                onClick={() => onGenerate?.(spokenIngredients)}
+                disabled={isBusy || spokenIngredients.trim() === ''}
+                className="bg-emerald-600 hover:bg-emerald-700"
+              >
+                <ChefHat className="mr-2 h-4 w-4" />
+                Generate Recipe
+              </Button>
+              <Button variant="outline" onClick={() => setSpokenIngredients('')} disabled={isBusy}>
+                <RotateCcw className="mr-2 h-4 w-4" />
+                Record Again
+              </Button>
+              <Button
+                variant="outline"
+                onClick={() => onIngredientExtracted?.(spokenIngredients)}
+                disabled={isBusy || spokenIngredients.trim() === ''}
+              >
+                <Pencil className="mr-2 h-4 w-4" />
+                Edit in Type Ingredients
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       {/* The last voice problem (microphone, recording or transcription),
           cleared when the next recording starts. */}
