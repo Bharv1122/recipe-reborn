@@ -204,6 +204,7 @@ export default async function HomePage() {
             <ul className="space-y-2 text-sm text-emerald-50/90">
               <li><Link href="/generator" className="hover:text-orange-300">Generate Recipe</Link></li>
               <li><Link href="/recipes" className="hover:text-orange-300">My Recipes</Link></li>
+              <li><Link href="/homemade" className="hover:text-orange-300">Free Homemade Recipes</Link></li>
               {!session && (
                 <>
                   <li><Link href="/signup" className="hover:text-orange-300">Sign Up</Link></li>

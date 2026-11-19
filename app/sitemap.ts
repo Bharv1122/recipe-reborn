@@ -1,4 +1,5 @@
 import type { MetadataRoute } from 'next';
+import { PUBLIC_RECIPES } from '@/lib/public-recipes';
 
 const SITE_URL = 'https://recipereborn.com';
 
@@ -18,6 +19,18 @@ export default function sitemap(): MetadataRoute.Sitemap {
       changeFrequency: 'weekly',
       priority: 0.9,
     },
+    {
+      url: `${SITE_URL}/homemade`,
+      lastModified,
+      changeFrequency: 'weekly',
+      priority: 0.9,
+    },
+    ...PUBLIC_RECIPES.map((recipe) => ({
+      url: `${SITE_URL}/homemade/${recipe.slug}`,
+      lastModified,
+      changeFrequency: 'monthly' as const,
+      priority: 0.8,
+    })),
     {
       url: `${SITE_URL}/pricing`,
       lastModified,
