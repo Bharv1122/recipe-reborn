@@ -1073,6 +1073,10 @@ export function RecipeGenerator({ savedRecipeCount = 0, recentIngredients = [], 
                 <ScanBarcode className="h-4 w-4 mr-2" />
                 Scan Barcode
               </TabsTrigger>
+              <TabsTrigger value="voice">
+                <Mic className="h-4 w-4 mr-2" />
+                Speak Ingredients
+              </TabsTrigger>
               <TabsTrigger value="generate">
                 <Sparkles className="h-4 w-4 mr-2" />
                 Type Ingredients
@@ -1080,10 +1084,6 @@ export function RecipeGenerator({ savedRecipeCount = 0, recentIngredients = [], 
               <TabsTrigger value="import">
                 <LinkIcon className="h-4 w-4 mr-2" />
                 Import from URL
-              </TabsTrigger>
-              <TabsTrigger value="voice">
-                <Mic className="h-4 w-4 mr-2" />
-                Voice Chat
               </TabsTrigger>
             </TabsList>
 
@@ -1197,7 +1197,7 @@ export function RecipeGenerator({ savedRecipeCount = 0, recentIngredients = [], 
               </Button>
             </TabsContent>
 
-            {/* Voice Chat Tab */}
+            {/* Speak Ingredients Tab */}
             <TabsContent value="voice" className="space-y-4">
               <VoiceChat
                 onIngredientExtracted={(extractedIngredients) => {
@@ -1205,6 +1205,13 @@ export function RecipeGenerator({ savedRecipeCount = 0, recentIngredients = [], 
                   setOriginalNutrition(null);
                   setInputMode('pantry');
                   setActiveTab('generate');
+                }}
+                onGenerate={(spokenIngredients) => {
+                  setIngredients(spokenIngredients);
+                  setOriginalNutrition(null);
+                  setInputMode('pantry');
+                  // Stay on this tab - the recipe renders below the tab strip.
+                  void generateRecipe(undefined, spokenIngredients, 'pantry');
                 }}
               />
             </TabsContent>
