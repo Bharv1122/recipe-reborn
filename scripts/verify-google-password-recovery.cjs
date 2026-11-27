@@ -1,0 +1,9 @@
+const assert=require('node:assert/strict'),fs=require('node:fs'),vm=require('node:vm'),esbuild=require('esbuild'),crypto=require('node:crypto');
+let user={id:'controlled',password:null},stored=null,sent=0,raw='';
+const deps={'next/server':{NextResponse:{json:(b,i)=>Response.json(b,i)}},crypto,
+ '@/lib/db':{prisma:{user:{findUnique:async()=>user},verificationToken:{deleteMany:async()=>({count:0}),create:async({data})=>{stored=data;}}}},
+ '@/lib/rate-limit':{getClientIp:()=> 'test',rateLimit:async()=>({success:true})},
+ '@/lib/password-reset':{TOKEN_TTL_MINUTES:60,resetIdentifier:e=>'password-reset:'+e,hashResetToken:t=>crypto.createHash('sha256').update(t).digest('hex')},
+ '@/lib/email':{appUrl:()=> 'https://example.test',isEmailConfigured:()=>true,passwordResetEmail:url=>{raw=new URL(url).searchParams.get('token');return{subject:'test',text:'test',html:'test'}},sendEmail:async()=>{sent++;return true;}}};
+const box={module:{exports:{}},Response,Date,console,process:{env:{NODE_ENV:'test'}}};box.exports=box.module.exports;box.require=n=>{assert(Object.hasOwn(deps,n),n);return deps[n]};vm.runInNewContext(esbuild.transformSync(fs.readFileSync('app/api/password-reset/request/route.ts','utf8'),{loader:'ts',format:'cjs'}).code,box);
+(async()=>{const call=()=>box.module.exports.POST({json:async()=>({email:'controlled@example.test'})});const a=await call();assert.equal(a.status,200);assert.equal(sent,1);assert.equal(raw.length,64);assert.notEqual(stored.token,raw);assert.equal(stored.token,crypto.createHash('sha256').update(raw).digest('hex'));user=null;const b=await call();assert.deepEqual(await a.json(),await b.json());assert.equal(sent,1);console.log('PASS: passwordless account can request inbox-proof recovery; unknown account receives identical response; only token hash stored. Mock delivery, no real email.');})().catch(e=>{console.error(e);process.exitCode=1;});
