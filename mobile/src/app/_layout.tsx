@@ -4,6 +4,7 @@ import { Stack, useRouter, useSegments } from 'expo-router';
 import { SQLiteProvider } from 'expo-sqlite';
 import { AuthProvider, useAuth } from '@/providers/auth-provider';
 import { migrateShoppingCache } from '@/services/shopping-cache';
+import { migrateRecipeCache } from '@/services/recipe-cache';
 import { colors } from '@/theme';
 
 export { ErrorBoundary } from 'expo-router';
@@ -16,7 +17,7 @@ function SessionRouter() {
   useEffect(() => {
     if (loading) return;
     const inAuth = segments[0] === '(auth)';
-    const publicReset = segments[0] === 'forgot-password' || segments[0] === 'reset-password';
+    const publicReset = segments[0] === 'forgot-password' || segments[0] === 'reset-password' || segments[0] === 'walkthrough';
     if (!user && !inAuth && !publicReset) router.replace('/(auth)/sign-in');
     if (user && inAuth) router.replace('/(tabs)');
   }, [user, loading, segments, router]);
@@ -32,7 +33,7 @@ function SessionRouter() {
 
 export default function RootLayout() {
   return (
-    <SQLiteProvider databaseName="recipe-reborn-mobile.db" onInit={migrateShoppingCache}>
+    <SQLiteProvider databaseName="recipe-reborn-mobile.db" onInit={async db => { await migrateShoppingCache(db); await migrateRecipeCache(db); }}>
       <AuthProvider><SessionRouter /></AuthProvider>
     </SQLiteProvider>
   );

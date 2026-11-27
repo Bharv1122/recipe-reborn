@@ -4,7 +4,10 @@ import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
 import { Button, Card, InlineError, Screen } from '@/components/ui';
 import { RecipeDetail, type DetailSave } from '@/components/recipe-detail';
 import { apiRequest } from '@/services/api';
-import { getRecipe } from '@/services/recipes';
+import { getRecipeWithCache } from '@/services/recipes';
+import { useSQLiteContext } from 'expo-sqlite';
+import { useAuth } from '@/providers/auth-provider';
+import { forgetCachedRecipe } from '@/services/recipe-cache';
 import { stageShoppingDraft } from '@/services/shopping-handoff';
 import { importDraft, importSnapshot } from '@/services/recipe-import';
 import { ReportContentAction } from '@/components/report-content';
@@ -14,15 +17,19 @@ import { colors } from '@/theme';
 export default function RecipeDetailScreen() {
   const { id, justSaved } = useLocalSearchParams<{ id: string; justSaved?: string }>();
   const router = useRouter();
+  const db = useSQLiteContext();
+  const { user } = useAuth();
+  const [offline, setOffline] = useState(false);
+  const [reload, setReload] = useState(0);
   const [recipe, setRecipe] = useState<Recipe | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [showMore, setShowMore] = useState(false);
   const [changed, setChanged] = useState(false);
   useEffect(() => {
     let active = true;
-    if (id) getRecipe(id).then(data => { if (active) { importSnapshot(importDraft(data.recipe)); setRecipe(data.recipe); } }).catch(value => { if (active) setError(value.message); });
+    if (id) getRecipeWithCache(db, id).then(data => { if (active) { importSnapshot(importDraft(data.recipe)); setRecipe(data.recipe); setOffline(data.offline); setError(null); } }).catch(value => { if (active) setError(value.message); });
     return () => { active = false; };
-  }, [id]);
+  }, [id, db, reload]);
   const initial = useMemo(() => recipe ? importSnapshot(importDraft(recipe)) : null, [recipe]);
   const save = async ({ recipe: shown, nutrition, changed: edited, allowLeave }: DetailSave) => {
     if (!recipe) return;
@@ -46,11 +53,27 @@ export default function RecipeDetailScreen() {
   const remove = () => Alert.alert('Remove from My recipes?', 'The recipe stays in meal plans and collections that already use it.', [
     { text: 'Cancel', style: 'cancel' },
     { text: 'Remove', style: 'destructive', onPress: async () => {
-      try { await apiRequest('/api/mobile/recipes/' + encodeURIComponent(id), { method: 'DELETE' }); router.back(); }
+      try { await apiRequest('/api/mobile/recipes/' + encodeURIComponent(id), { method: 'DELETE' }); if (user?.id) await forgetCachedRecipe(db, user.id, id); router.back(); }
       catch (value) { setError(value instanceof Error ? value.message : 'Could not remove the saved recipe.'); }
     } },
   ]);
   if (!recipe || recipe.id !== id || !initial) return <Screen><InlineError message={error} /><Text>Loading recipe…</Text></Screen>;
+  if (offline) return <Screen>
+    <Stack.Screen options={{ headerShown: true, title: 'Offline recipe', headerTintColor: colors.green }} />
+    <ScrollView contentContainerStyle={{ gap: 16, paddingBottom: 30 }}>
+      <InlineError message={error} />
+      <Text style={{ color: colors.muted }}>Saved copy from your last online visit. Reconnect to refresh, edit, plan meals or report a problem.</Text>
+      <Button label="Try reconnecting" secondary onPress={() => setReload(value => value + 1)} />
+      <Text accessibilityRole="header" style={styles.heading}>{initial.title}</Text>
+      <Text>{[initial.prepTime, initial.cookTime, initial.servings && `${initial.servings} servings`].filter(Boolean).join(' · ')}</Text>
+      <Text accessibilityRole="header" style={styles.heading}>Ingredients</Text>
+      {initial.freshIngredients.map((line, index) => <Text key={index}>{line}</Text>)}
+      <Text accessibilityRole="header" style={styles.heading}>Instructions</Text>
+      {initial.instructions.map((line, index) => <Text key={index}>{line}</Text>)}
+      {recipe.notes ? <Text>{recipe.notes}</Text> : null}
+      <Text style={{ color: colors.muted }}>Review ingredients, allergens and food safety before cooking.</Text>
+    </ScrollView>
+  </Screen>;
   return <>
     <Stack.Screen options={{ headerShown: true, title: 'Your recipe', headerTintColor: colors.white, headerStyle: { backgroundColor: colors.green }, headerRight: () => <Pressable accessibilityRole="button" accessibilityLabel="Recipe options" onPress={() => setShowMore(true)} style={styles.menuTrigger}><Text style={styles.menuIcon}>⋮</Text></Pressable> }} />
     <RecipeDetail key={recipe.id} initial={initial} sourceRecipe={recipe.importSourceSnapshot} saved={Boolean(recipe.savedAt)} originalIngredients={recipe.originalIngredients} savedNutrition={recipe.comparisonSnapshot?.freshNutrition} packageNutrition={recipe.comparisonSnapshot?.originalNutrition} isPackage={recipe.comparisonSnapshot?.source === 'label'} onSave={save} onChange={setChanged}

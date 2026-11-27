@@ -65,7 +65,14 @@ export default function AccountScreen() {
     finally { setBusy(false); }
   };
 
+  const shareFeedback = async () => {
+    setError(null);
+    try { await Linking.openURL('mailto:support@recipereborn.com?subject=' + encodeURIComponent('Recipe Reborn app feedback')); }
+    catch { setError('No email app opened. You can send your suggestion to support@recipereborn.com.'); }
+  };
+
   return <Screen><ScrollView contentContainerStyle={styles.content}>
+    <Card><Text style={styles.title}>Help improve Recipe Reborn</Text><Text style={styles.body}>What worked well? What would make cooking easier? Opens your email app so you can review and send your suggestion. No account data or diagnostics are attached.</Text><Button label="Share an idea or feedback" secondary onPress={shareFeedback} /></Card>
     <Card>
       <Text style={styles.title}>{user?.name || 'Recipe Reborn account'}</Text><Text style={styles.body}>{user?.email}</Text>
       <Text style={styles.plan}>{subscription ? `${subscription.tier.toUpperCase()} · ${subscription.status}` : 'Loading plan…'}</Text>
@@ -73,7 +80,7 @@ export default function AccountScreen() {
       <Text style={styles.body}>Your membership is linked to this account.</Text>
       <Text style={styles.body}>Purchases are not available in this app. Sign in with your existing membership account.</Text>
     </Card>
-    <Card><Text style={styles.title}>Your Recipe Reborn</Text><Button label="Saved recipes" secondary onPress={() => router.push('/recipes')} /><Button label="Collections" secondary onPress={() => router.push('/collections')} /><Button label="Meal plans" secondary onPress={() => router.push('/meal-plans')} /><Button label="Reviewed pantry inventory" secondary onPress={() => router.push('/pantry-review')} /></Card>
+    <Card><Text style={styles.title}>Your Recipe Reborn</Text><Button label="Replay guided practice" secondary onPress={() => router.push('/walkthrough')} /><Button label="Saved recipes" secondary onPress={() => router.push('/recipes')} /><Button label="Collections" secondary onPress={() => router.push('/collections')} /><Button label="Meal plans" secondary onPress={() => router.push('/meal-plans')} /><Button label="Reviewed pantry inventory" secondary onPress={() => router.push('/pantry-review')} /></Card>
     <Card>
       <Text style={styles.title}>Your food preferences</Text>
       <Text style={styles.body}>Saved to your account and used on web and Android.</Text>

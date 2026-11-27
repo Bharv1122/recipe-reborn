@@ -14,10 +14,10 @@ import type { OriginalNutrition } from '../../../shared/nutrition-facts';
 
 type Source = 'label' | 'pantry' | 'dish';
 export default function GenerateScreen() {
-  const params = useLocalSearchParams<{ source?: string }>();
+  const params = useLocalSearchParams<{ source?: string; idea?: string }>();
   const router = useRouter();
   const [source, setSource] = useState<Source | null>(() => ['label', 'pantry', 'dish'].includes(params.source || '') ? params.source as Source : null);
-  const [ingredients, setIngredients] = useState('');
+  const [ingredients, setIngredients] = useState(() => params.source === 'dish' && typeof params.idea === 'string' ? params.idea.slice(0, 200) : '');
   const [recipe, setRecipe] = useState<GeneratedRecipe | null>(null);
   const [busy, setBusy] = useState(false);
   const [voiceBusy, setVoiceBusy] = useState(false);

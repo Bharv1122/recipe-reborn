@@ -68,7 +68,9 @@ function find(node, predicate) {
       '@/services/api': 'export const apiRequest=async()=>({}); export const publicRequest=async(url,init)=>{globalThis.mobileSignupRequests.push({url,body:JSON.parse(init.body)}); return {tokens:{accessToken:"synthetic",refreshToken:"synthetic"},user:{id:"synthetic",email:"adult@example.com",name:null}};};',
       '@/services/auth-storage': 'export const getSessionRevision=()=>0; export const clearRegisteredPushToken=async()=>{},clearTokens=async()=>{},readRegisteredPushToken=async()=>null,readTokens=async()=>null,saveCachedUser=async()=>true,saveTokens=async()=>true;',
       '@/services/shopping-cache': 'export const clearShoppingCache=async()=>{};',
+      '@/services/recipe-cache': 'export const clearRecipeCache=async()=>{};',
       '@/services/session-recovery': 'export const restoreStoredSession=async()=>null;',
+      '@/services/google-sign-in': 'export const requestGoogleIdentity=async()=>null,clearGoogleSession=async()=>{};',
     });
     const auth = provider.AuthProvider({ children: null }).props.value;
     await auth.signUp('adult@example.com', 'synthetic-password', 'CODE', true);

@@ -6,12 +6,15 @@ import { apiRequest, publicRequest } from '@/services/api';
 import { clearRegisteredPushToken, clearTokens, getSessionRevision, readRegisteredPushToken, readTokens, saveCachedUser, saveTokens } from '@/services/auth-storage';
 import type { MobileUser, TokenPair } from '@/types';
 import { clearShoppingCache } from '@/services/shopping-cache';
+import { clearRecipeCache } from '@/services/recipe-cache';
 import { restoreStoredSession } from '@/services/session-recovery';
+import { requestGoogleIdentity, clearGoogleSession } from '@/services/google-sign-in';
 
 interface AuthContextValue {
   user: MobileUser | null;
   loading: boolean;
   signIn(email: string, password: string): Promise<void>;
+  signInWithGoogle(adultConfirmed: boolean, linkPassword?: string): Promise<boolean>;
   signUp(email: string, password: string, code?: string, adultConfirmed?: boolean): Promise<void>;
   signOut(): Promise<void>;
   refreshAccount(): Promise<void>;
@@ -69,10 +72,27 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       }),
     });
     await clearShoppingCache(db);
+    await clearRecipeCache(db);
     await clearTokens();
     await saveTokens(data.tokens);
     await saveCachedUser(data.user);
     setUser(data.user);
+  }, [db]);
+
+  const signInWithGoogle = useCallback(async (adultConfirmed: boolean, linkPassword?: string) => {
+    const identity = await requestGoogleIdentity();
+    if (!identity) return false;
+    const data = await publicRequest<{ tokens: TokenPair; user: MobileUser }>('/api/mobile/auth/google', {
+      method: 'POST', body: JSON.stringify({ ...identity, adultConfirmed, linkPassword: linkPassword || undefined,
+        deviceName: Device.deviceName || Device.modelName || undefined, platform: Platform.OS }),
+    });
+    await clearShoppingCache(db);
+    await clearRecipeCache(db);
+    await clearTokens();
+    await saveTokens(data.tokens);
+    await saveCachedUser(data.user);
+    setUser(data.user);
+    return true;
   }, [db]);
 
   const signUp = useCallback(async (email: string, password: string, code?: string, adultConfirmed = false) => {
@@ -92,7 +112,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
     await clearTokens();
     await clearShoppingCache(db);
+    await clearRecipeCache(db);
     setUser(null);
+    await clearGoogleSession();
     if (tokens) {
       publicRequest('/api/mobile/auth/logout', {
         method: 'POST', body: JSON.stringify({ refreshToken: tokens.refreshToken }),
@@ -101,8 +123,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, [db]);
 
   const value = useMemo(
-    () => ({ user, loading, signIn, signUp, signOut, refreshAccount }),
-    [user, loading, signIn, signUp, signOut, refreshAccount],
+    () => ({ user, loading, signIn, signInWithGoogle, signUp, signOut, refreshAccount }),
+    [user, loading, signIn, signInWithGoogle, signUp, signOut, refreshAccount],
   );
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }

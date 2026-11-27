@@ -41,6 +41,7 @@
   "exclude": [
     "node_modules",
     "mobile",
+    "scripts/verify-recipe-cache.ts",
     "outputs/releases"
   ]
 }

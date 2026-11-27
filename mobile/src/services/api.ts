@@ -7,7 +7,7 @@ const baseUrl = String(Constants.expoConfig?.extra?.apiBaseUrl || 'https://recip
 let refreshInFlight: { revision: number; promise: Promise<TokenPair | null> } | null = null;
 
 export class ApiError extends Error {
-  constructor(message: string, public status: number) {
+  constructor(message: string, public status: number, public code?: string) {
     super(message);
     this.name = 'ApiError';
   }
@@ -15,7 +15,7 @@ export class ApiError extends Error {
 
 async function parseResponse<T>(response: Response): Promise<T> {
   const body = await response.json().catch(() => ({}));
-  if (!response.ok) throw new ApiError(body.message || body.error || 'Something went wrong.', response.status);
+  if (!response.ok) throw new ApiError(body.message || body.error || 'Something went wrong.', response.status, typeof body.code === 'string' ? body.code : undefined);
   return body as T;
 }
 

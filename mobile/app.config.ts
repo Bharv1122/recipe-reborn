@@ -13,7 +13,7 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
   icon: './assets/images/recipe-reborn-icon.png',
   ios: {
     supportsTablet: false,
-    buildNumber: '33',
+    buildNumber: '34',
     bundleIdentifier: process.env.EXPO_IOS_BUNDLE_IDENTIFIER || 'com.recipereborn.app',
     associatedDomains: ['applinks:recipereborn.com'],
     infoPlist: {
@@ -23,7 +23,7 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
   },
   android: {
     package: process.env.EXPO_ANDROID_PACKAGE || 'com.recipereborn.app',
-    versionCode: 33,
+    versionCode: 34,
     softwareKeyboardLayoutMode: 'resize',
     adaptiveIcon: {
       foregroundImage: './assets/images/recipe-reborn-android-foreground.png',

@@ -1,6 +1,46 @@
 import { ApiError, apiRequest, apiResponse } from '@/services/api';
 import type { GeneratedRecipe, Recipe, RecipeSummary } from '@/types';
 import type { RecipeComparisonSnapshot } from '../../../shared/recipe-comparison';
+import type { SQLiteDatabase } from 'expo-sqlite';
+import { getSessionRevision, readCachedUser } from '@/services/auth-storage';
+import { cacheRecipe, pruneRecipeCache, readCachedRecipes, recipeCacheRevision } from '@/services/recipe-cache';
+
+async function cacheSession(db: SQLiteDatabase) {
+  const revision = getSessionRevision();
+  const cacheRevision = recipeCacheRevision(db);
+  const owner = (await readCachedUser())?.id;
+  const current = () => revision === getSessionRevision() && cacheRevision === recipeCacheRevision(db);
+  return { owner, cacheRevision, current };
+}
+function canReadOffline(error: unknown) {
+  return error instanceof TypeError || (error instanceof ApiError && error.status >= 500);
+}
+export async function listRecipesWithCache(db: SQLiteDatabase) {
+  const session = await cacheSession(db);
+  let result: { recipes: RecipeSummary[] };
+  try { result = await listRecipes(); }
+  catch (error) {
+    if (!session.owner || !session.current() || !canReadOffline(error)) throw error;
+    const recipes = await readCachedRecipes(db, session.owner);
+    if (!session.current()) throw error;
+    return { recipes, offline: true };
+  }
+  if (session.owner) await pruneRecipeCache(db, session.owner, result.recipes.map(recipe => recipe.id), session.cacheRevision, session.current).catch(() => undefined);
+  return { ...result, offline: false };
+}
+export async function getRecipeWithCache(db: SQLiteDatabase, id: string) {
+  const session = await cacheSession(db);
+  let result: { recipe: Recipe };
+  try { result = await getRecipe(id); }
+  catch (error) {
+    if (!session.owner || !session.current() || !canReadOffline(error)) throw error;
+    const recipe = (await readCachedRecipes(db, session.owner)).find(item => item.id === id);
+    if (!recipe || !session.current()) throw error;
+    return { recipe, offline: true };
+  }
+  if (session.owner) await cacheRecipe(db, session.owner, result.recipe, session.cacheRevision, session.current).catch(() => undefined);
+  return { ...result, offline: false };
+}
 
 export async function listRecipes() {
   return apiRequest<{ recipes: RecipeSummary[] }>('/api/mobile/recipes');
