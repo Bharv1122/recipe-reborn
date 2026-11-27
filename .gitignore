@@ -9,3 +9,4 @@ HANDOFF.md
 
 # Local native validation exports
 /mobile/dist-*/
+.vercel

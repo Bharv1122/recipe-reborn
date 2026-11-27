@@ -111,6 +111,7 @@
     "gray-matter": "4.0.3",
     "html5-qrcode": "^2.3.8",
     "input-otp": "1.2.4",
+    "jose": "^6.2.18",
     "jotai": "2.6.0",
     "jsonwebtoken": "9.0.2",
     "jspdf": "^4.2.1",
