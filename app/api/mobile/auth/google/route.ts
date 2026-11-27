@@ -30,8 +30,14 @@ export async function POST(request: Request) {
       const existing = await prisma.user.findUnique({ where: { email: identity.email } });
       if (existing) {
         // Verified email alone never grants access to an existing RecipeReborn account.
-        if (!existing.password || !body.linkPassword || !await bcrypt.compare(body.linkPassword, existing.password)) {
+        if (!existing.password) {
+          return NextResponse.json({ error: 'This existing account has no RecipeReborn password. Use Forgot password to set one before connecting Google.', code: 'LINK_PASSWORD_SETUP_REQUIRED' }, { status: 409 });
+        }
+        if (!body.linkPassword) {
           return NextResponse.json({ error: 'To connect Google to your existing account, enter its RecipeReborn password and try Google again. You can also use email sign-in or reset your password.', code: 'LINK_PASSWORD_REQUIRED' }, { status: 409 });
+        }
+        if (!await bcrypt.compare(body.linkPassword, existing.password)) {
+          return NextResponse.json({ error: 'That RecipeReborn password could not be verified for the selected Google account. Use Forgot password if you are unsure.', code: 'LINK_PASSWORD_INVALID' }, { status: 409 });
         }
         const linkedSafely = await prisma.$transaction(async tx => {
           const otherGoogle = await tx.account.findFirst({ where: { userId: existing.id, provider: 'google' } });

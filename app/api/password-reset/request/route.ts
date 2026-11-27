@@ -44,10 +44,9 @@ export async function POST(request: NextRequest) {
 
     const user = await prisma.user.findUnique({ where: { email } });
 
-    // No account, or an account with no password (shouldn't happen today, but
-    // would exist if an OAuth provider is added later): stop here and return
-    // the same body as the success path.
-    if (!user?.password) {
+    // Inbox proof can also establish a password for an existing OAuth account.
+    // The same generic response preserves account-enumeration protection.
+    if (!user) {
       return NextResponse.json(GENERIC_RESPONSE);
     }
 
