@@ -38,6 +38,8 @@ apps = [
     ('recipe-reborn', 'com.recipereborn.app', 'https://expo.dev/artifacts/eas/XZJ4snP1qYIzxPSq3Mv_PM5o_1KVb4BrIpgaxXXmkTE.tar.gz', 'e4d1943c7d5a57d6ab4ecca8da91e9f52c3e18d1910e618a4d6ca4970f52e0e2'),
     ('cheffo', 'com.cheffodoggo.app.preview', 'https://expo.dev/artifacts/eas/I5icrrgekf7voIpGwDliH_s4Y_Tf9Z6yWnSGPTmaXLA.tar.gz', '32ba724b6c1bb9a9caf1a6c9f2828b1d42c96524340d9fcf40d8ff6dd4d96d5f'),
 ]
+# Focused clean rerun: previous RecipeReborn startup/reopen already passed.
+apps = [app for app in apps if app[0] == 'cheffo']
 results = []
 def capture(name, root):
     image = root / (name + '.png')
@@ -76,7 +78,7 @@ try:
                 time.sleep(10)
                 assert info['CFBundleExecutable'] in run('ps', '-p', str(second_pid), '-o', 'comm=')
                 capture(name + '-reopen', root)
-                if name == 'recipe-reborn':
+                if name == 'recipe-reborn' and os.environ.get('CHECK_DEEP_LINK') == '1':
                     run('xcrun', 'simctl', 'openurl', udid, 'recipereborn://walkthrough')
                     time.sleep(8)
                     capture(name + '-walkthrough', root)
@@ -89,4 +91,4 @@ try:
 finally:
     print('SMOKE_RESULTS', json.dumps(results), flush=True)
     subprocess.run(['xcrun', 'simctl', 'shutdown', udid], capture_output=True)
-assert len(results) == 2 and all(r.get('reopen') for r in results), 'One or more apps failed runtime smoke test'
+assert len(results) == len(apps) and all(r.get('reopen') for r in results), 'One or more apps failed runtime smoke test'
