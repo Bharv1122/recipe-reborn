@@ -52,9 +52,9 @@ try:
         root = Path(temp)
         for name, bundle, url, digest in apps:
             try:
-                archive = root / (name + '.tar.gz')
-                with urllib.request.urlopen(url, timeout=120) as response:
-                    archive.write_bytes(response.read())
+                # Expo rejects unauthenticated cloud-runner downloads. Use the
+                # owner's previously downloaded archives, with the same hashes.
+                archive = Path('test-fixtures/ios') / (name + '.tar.gz')
                 assert hashlib.sha256(archive.read_bytes()).hexdigest() == digest, 'Artifact hash mismatch'
                 folder = root / name
                 folder.mkdir()
